@@ -10,14 +10,10 @@ import FrameworkSelector from "@/components/FrameworkSelector/FrameworkSelector"
 import sidebarLinks from "@/data/sidebarLinks";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { Usable } from "react";
 import { Framework } from "@/types";
 
-export default function FrameworkSectionPage({
-  params,
-}: {
-  params: Usable<unknown>;
-}) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export default function FrameworkSectionPage({ params }: { params: any }) {
   const { framework, section } = React.use(params) as {
     framework: Framework;
     section: string;
