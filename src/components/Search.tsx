@@ -1,32 +1,32 @@
-import { useEffect, useMemo, useState } from "react";
-import FlexSearch, { Index } from "flexsearch";
-import { DOCS } from "../content";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from 'react'
+import FlexSearch, { Index } from 'flexsearch'
+import { DOCS } from '../content'
+import { useNavigate } from 'react-router-dom'
 
 export default function Search() {
-  const nav = useNavigate();
-  const [q, setQ] = useState("");
-  const [results, setResults] = useState<{ slug: string; title: string }[]>([]);
+  const nav = useNavigate()
+  const [q, setQ] = useState('')
+  const [results, setResults] = useState<{ slug: string; title: string }[]>([])
 
   const index = useMemo(() => {
-    const idx = new (FlexSearch as any).Index({ tokenize: "forward" }) as Index;
-    DOCS.forEach((d) => idx.add(d.slug, `${d.title} ${d.tags.join(" ")}`));
-    return idx;
-  }, []);
+    const idx = new FlexSearch.Index({ tokenize: 'forward' }) as Index
+    DOCS.forEach((d) => idx.add(d.slug, `${d.title} ${d.tags.join(' ')}`))
+    return idx
+  }, [])
 
   useEffect(() => {
     if (!q) {
-      setResults([]);
-      return;
+      setResults([])
+      return
     }
-    const ids = (index.search(q) as string[]).slice(0, 8);
+    const ids = (index.search(q) as string[]).slice(0, 8)
     setResults(
       ids.map((slug) => ({
         slug,
         title: DOCS.find((d) => d.slug === slug)!.title,
-      }))
-    );
-  }, [q, index]);
+      })),
+    )
+  }, [q, index])
 
   return (
     <div className="search">
@@ -46,5 +46,5 @@ export default function Search() {
         </ul>
       )}
     </div>
-  );
+  )
 }

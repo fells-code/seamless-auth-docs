@@ -4,11 +4,11 @@ import { DOC_INDEX, DOCS } from '../content'
 import Toc from './Toc'
 
 const components = {
-  h2: (props: any) => <h2 id={slugify(props.children)} {...props} />,
-  h3: (props: any) => <h3 id={slugify(props.children)} {...props} />,
+  h2: (props) => <h2 id={slugify(props.children)} {...props} />,
+  h3: (props) => <h3 id={slugify(props.children)} {...props} />,
 }
 
-function slugify(text: any) {
+function slugify(text) {
   return String(text)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')

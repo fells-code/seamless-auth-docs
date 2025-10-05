@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link } from 'react-router-dom'
 export default function Home() {
   return (
     <div className="home">
@@ -9,14 +9,10 @@ export default function Home() {
         <a href="https://seamlessauth.com" target="_blank" rel="noreferrer">
           Website
         </a>
-        <a
-          href="https://dashboard.seamlessauth.com"
-          target="_blank"
-          rel="noreferrer"
-        >
+        <a href="https://dashboard.seamlessauth.com" target="_blank" rel="noreferrer">
           Dashboard
         </a>
       </div>
     </div>
-  );
+  )
 }

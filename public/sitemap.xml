@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<url><loc>https://docs.seamlessauth.com/</loc></url>
+<url><loc>https://docs.seamlessauth.com/docs</loc></url>
+<url><loc>https://docs.seamlessauth.com/docs/introduction</loc></url>
+<url><loc>https://docs.seamlessauth.com/docs/getting-started</loc></url>
+<url><loc>https://docs.seamlessauth.com/docs/react-sdk</loc></url>
+<url><loc>https://docs.seamlessauth.com/docs/nextjs-server</loc></url>
+<url><loc>https://docs.seamlessauth.com/docs/self-hosting</loc></url>
+</urlset>

@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link } from 'react-router-dom'
 export default function NotFound() {
   return (
     <div className="not-found">
@@ -6,5 +6,5 @@ export default function NotFound() {
       <p>We couldn't find that page.</p>
       <Link to="/">Go home</Link>
     </div>
-  );
+  )
 }

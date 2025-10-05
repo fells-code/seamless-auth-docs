@@ -1,15 +1,15 @@
-import { Outlet, NavLink, useLocation } from "react-router-dom";
-import Sidebar from "../components/Sidebar";
-import Search from "../components/Search";
-import { useEffect } from "react";
+import { Outlet, NavLink, useLocation } from 'react-router-dom'
+import Sidebar from '../components/Sidebar'
+import Search from '../components/Search'
+import { useEffect } from 'react'
 
 export default function DocsLayout() {
-  const { pathname } = useLocation();
+  const { pathname } = useLocation()
 
   // Scroll to top on route change
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }, [pathname]);
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [pathname])
 
   return (
     <div className="app">
@@ -23,11 +23,7 @@ export default function DocsLayout() {
           <nav>
             <NavLink to="/">Home</NavLink>
             <NavLink to="/docs">Docs</NavLink>
-            <a
-              href="https://dashboard.seamlessauth.com"
-              target="_blank"
-              rel="noreferrer"
-            >
+            <a href="https://dashboard.seamlessauth.com" target="_blank" rel="noreferrer">
               Dashboard
             </a>
           </nav>
@@ -38,7 +34,7 @@ export default function DocsLayout() {
         </article>
       </main>
     </div>
-  );
+  )
 }
 
 function ThemeToggle() {
@@ -46,13 +42,12 @@ function ThemeToggle() {
     <button
       className="theme-toggle"
       onClick={() => {
-        const next =
-          document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-        document.documentElement.dataset.theme = next;
-        localStorage.setItem("theme", next);
+        const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        document.documentElement.dataset.theme = next
+        localStorage.setItem('theme', next)
       }}
     >
       🌓
     </button>
-  );
+  )
 }

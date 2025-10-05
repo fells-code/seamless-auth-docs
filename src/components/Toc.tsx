@@ -1,16 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState } from 'react'
 
 export default function Toc() {
-  const [headings, setHeadings] = useState<{ id: string; text: string }[]>([]);
+  const [headings, setHeadings] = useState<{ id: string; text: string }[]>([])
 
   useEffect(() => {
-    const nodes = Array.from(
-      document.querySelectorAll(".doc h2, .doc h3")
-    ) as HTMLHeadingElement[];
-    setHeadings(nodes.map((n) => ({ id: n.id, text: n.textContent || "" })));
-  }, []);
+    const nodes = Array.from(document.querySelectorAll('.doc h2, .doc h3')) as HTMLHeadingElement[]
+    setHeadings(nodes.map((n) => ({ id: n.id, text: n.textContent || '' })))
+  }, [])
 
-  if (!headings.length) return null;
+  if (!headings.length) return null
 
   return (
     <nav className="toc">
@@ -23,5 +21,5 @@ export default function Toc() {
         ))}
       </ul>
     </nav>
-  );
+  )
 }
