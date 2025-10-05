@@ -1,0 +1,39 @@
+/\*_ @jsxImportSource react _/
+
+export const meta = {
+  title: 'Getting Started',
+  order: 2,
+  tags: ['install'],
+}
+
+# Getting Started
+
+## Install
+
+```bash
+npm i @seamless-auth/react
+```
+
+```
+import { AuthProvider, useAuth } from "@seamless-auth/react";
+
+export default function App() {
+  return (
+    <AuthProvider apiHost={import.meta.env.VITE_API_HOST}>
+      <MyPage />
+    </AuthProvider>
+  );
+}
+
+function MyPage() {
+  const { user, isAuthenticated, logout } = useAuth();
+  return isAuthenticated ? (
+    <>
+      <div>Hello {user?.email}</div>
+      <button onClick={logout}>Log out</button>
+    </>
+  ) : (
+    <div>Please sign in</div>
+  );
+}
+```
