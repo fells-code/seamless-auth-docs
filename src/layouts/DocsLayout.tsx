@@ -27,27 +27,11 @@ export default function DocsLayout() {
               Dashboard
             </a>
           </nav>
-          <ThemeToggle />
         </header>
         <article className="doc">
           <Outlet />
         </article>
       </main>
     </div>
-  )
-}
-
-function ThemeToggle() {
-  return (
-    <button
-      className="theme-toggle"
-      onClick={() => {
-        const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
-        document.documentElement.dataset.theme = next
-        localStorage.setItem('theme', next)
-      }}
-    >
-      🌓
-    </button>
   )
 }

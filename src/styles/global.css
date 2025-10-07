@@ -1,11 +1,4 @@
 :root {
-  --bg: #ffffff;
-  --text: #111827;
-  --muted: #6b7280;
-  --primary: #6d28d9; /* deep purple accent */
-  --border: #e5e7eb;
-}
-:root[data-theme='dark'] {
   --bg: #0b0f19;
   --text: #f3f4f6;
   --muted: #9ca3af;
@@ -13,9 +6,8 @@
   --border: #1f2937;
 }
 
-/* Persist theme */
 html {
-  color-scheme: light dark;
+  color-scheme: dark;
 }
 html {
   font-family:
@@ -89,13 +81,6 @@ body {
   margin-right: 12px;
   text-decoration: none;
   color: var(--text);
-}
-.theme-toggle {
-  border: 1px solid var(--border);
-  background: transparent;
-  padding: 6px 8px;
-  border-radius: 8px;
-  cursor: pointer;
 }
 
 .doc {
