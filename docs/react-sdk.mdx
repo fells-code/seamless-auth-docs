@@ -1,0 +1,229 @@
+export const meta = {
+  title: 'React SDK',
+  order: 3,
+  tags: ['react', 'sdk', 'frontend'],
+}
+
+# React SDK
+
+The **SeamlessAuth React SDK** makes it simple to embed passwordless authentication directly into your React application.  
+It provides context, hooks, and components that handle session management, protected routes, and user state automatically.
+
+---
+
+## Installing the SDK
+
+If you haven’t installed it already, add the React SDK to your project:
+
+```bash
+npm install @seamless-auth/react
+```
+
+If you’re using TypeScript, typings are included out of the box — no extra packages required.
+
+Once installed, wrap your app in the `AuthProvider` (as shown in the [Getting Started](/docs/getting-started) guide).
+
+---
+
+## The `useAuth()` Hook
+
+The **`useAuth()`** hook is your main interface to the SeamlessAuth SDK.  
+It exposes user data, session information, and helper methods to manage authentication.
+
+```tsx
+import { useAuth } from '@seamless-auth/react'
+
+function Example() {
+  const { user, isAuthenticated, login, logout, deleteUser, hasRole, token } = useAuth()
+}
+```
+
+---
+
+## Available Properties and Methods
+
+### 🔹 `user`
+
+Represents the authenticated user object.
+
+```tsx
+const { user } = useAuth()
+console.log(user?.email)
+```
+
+| Type | Description |
+|------|--------------|
+| `User \| null` | The active user record, or `null` if not signed in. |
+
+**Example:**
+
+```tsx
+if (user) {
+  console.log(`Logged in as ${user.email}`)
+}
+```
+
+---
+
+### 🔹 `isAuthenticated`
+
+A boolean indicating if a user is currently authenticated.
+
+```tsx
+const { isAuthenticated } = useAuth()
+
+return isAuthenticated ? <Dashboard /> : <LoginPage />
+```
+
+| Type | Description |
+|------|--------------|
+| `boolean` | `true` when the user has an active session. |
+
+---
+
+### 🔹 `login()`
+
+Triggers the SeamlessAuth **passwordless** sign-in flow (using WebAuthn and Passkeys).
+
+```tsx
+const { login } = useAuth()
+
+function SignIn() {
+  return (
+    <button onClick={() => login({ email: 'user@example.com' })}>
+      Sign In with Passkey
+    </button>
+  )
+}
+```
+
+| Parameter | Type | Description |
+|------------|------|-------------|
+| `options.email` | `string` | Email or identifier used to initiate sign-in |
+| returns | `Promise<void>` | Resolves once the session is established |
+
+---
+
+### 🔹 `logout()`
+
+Ends the user session and clears all auth cookies.
+
+```tsx
+const { logout } = useAuth()
+
+<button onClick={logout}>Log out</button>
+```
+
+| Type | Description |
+|------|--------------|
+| `() => void` | Clears session cookies and invalidates the user. |
+
+---
+
+### 🔹 `deleteUser()`
+
+Deletes the currently authenticated user from your SeamlessAuth backend.
+
+```tsx
+const { deleteUser } = useAuth()
+
+async function handleDelete() {
+  const confirmed = confirm('Are you sure you want to delete your account?')
+  if (confirmed) await deleteUser()
+}
+```
+
+| Type | Description |
+|------|--------------|
+| `() => Promise<void>` | Permanently deletes the active user. |
+
+---
+
+### 🔹 `hasRole()`
+
+Checks if the current user has a specific role.
+
+```tsx
+const { hasRole } = useAuth()
+
+if (hasRole('admin')) {
+  console.log('User has admin privileges')
+}
+```
+
+| Parameter | Type | Description |
+|------------|------|-------------|
+| `role` | `string` | Role identifier to check. |
+| returns | `boolean` | `true` if the user’s role matches. |
+
+---
+
+### 🔹 `token`
+
+Returns the user’s current access token (JWT).  
+Use this when making authenticated requests to your own backend.
+
+```tsx
+const { token } = useAuth()
+
+fetch('/api/data', {
+  headers: { Authorization: `Bearer ${token}` },
+})
+```
+
+| Type | Description |
+|------|--------------|
+| `string \| null` | A short-lived JWT identifying the current user. |
+
+> **Note:** SeamlessAuth rotates tokens automatically — you rarely need to refresh them manually.
+
+---
+
+## Putting It All Together
+
+Here’s a minimal example showing a protected dashboard using `useAuth()`:
+
+```tsx
+import { useAuth } from '@seamless-auth/react'
+
+export default function Dashboard() {
+  const { user, isAuthenticated, login, logout } = useAuth()
+
+  if (!isAuthenticated) {
+    return (
+      <div className="signin">
+        <p>Welcome! Please sign in to continue.</p>
+        <button onClick={() => login({ email: 'demo@seamlessauth.com' })}>
+          Sign in with Passkey
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <h1>Welcome, {user?.email}</h1>
+      <button onClick={logout}>Log out</button>
+    </div>
+  )
+}
+```
+
+---
+
+## Best Practices
+
+- Keep your `AuthProvider` mounted at the top level of your app (e.g., above your router).
+- Use `AuthRoutes` for protected navigation (see [Getting Started](/docs/getting-started)).
+- Always read `isAuthenticated` before assuming a user session.
+- Never expose tokens in client logs or public scripts.
+- Use `hasRole()` to gate admin-only views or actions.
+
+---
+
+## Next Steps
+
+- Dive into **Next.js integration** via the `@seamless-auth/nextjs-server` package.  
+- Learn about **self-hosting SeamlessAuth** for full control of your auth environment.  
+
+👉 Continue: **[Next.js Server →](/docs/nextjs-server)**
