@@ -51,8 +51,8 @@ const { user } = useAuth()
 console.log(user?.email)
 ```
 
-| Type | Description |
-|------|--------------|
+| Type           | Description                                         |
+| -------------- | --------------------------------------------------- |
 | `User \| null` | The active user record, or `null` if not signed in. |
 
 **Example:**
@@ -75,8 +75,8 @@ const { isAuthenticated } = useAuth()
 return isAuthenticated ? <Dashboard /> : <LoginPage />
 ```
 
-| Type | Description |
-|------|--------------|
+| Type      | Description                                 |
+| --------- | ------------------------------------------- |
 | `boolean` | `true` when the user has an active session. |
 
 ---
@@ -89,18 +89,14 @@ Triggers the SeamlessAuth **passwordless** sign-in flow (using WebAuthn and Pass
 const { login } = useAuth()
 
 function SignIn() {
-  return (
-    <button onClick={() => login({ email: 'user@example.com' })}>
-      Sign In with Passkey
-    </button>
-  )
+  return <button onClick={() => login({ email: 'user@example.com' })}>Sign In with Passkey</button>
 }
 ```
 
-| Parameter | Type | Description |
-|------------|------|-------------|
-| `options.email` | `string` | Email or identifier used to initiate sign-in |
-| returns | `Promise<void>` | Resolves once the session is established |
+| Parameter       | Type            | Description                                  |
+| --------------- | --------------- | -------------------------------------------- |
+| `options.email` | `string`        | Email or identifier used to initiate sign-in |
+| returns         | `Promise<void>` | Resolves once the session is established     |
 
 ---
 
@@ -114,8 +110,8 @@ const { logout } = useAuth()
 <button onClick={logout}>Log out</button>
 ```
 
-| Type | Description |
-|------|--------------|
+| Type         | Description                                      |
+| ------------ | ------------------------------------------------ |
 | `() => void` | Clears session cookies and invalidates the user. |
 
 ---
@@ -133,8 +129,8 @@ async function handleDelete() {
 }
 ```
 
-| Type | Description |
-|------|--------------|
+| Type                  | Description                          |
+| --------------------- | ------------------------------------ |
 | `() => Promise<void>` | Permanently deletes the active user. |
 
 ---
@@ -151,10 +147,10 @@ if (hasRole('admin')) {
 }
 ```
 
-| Parameter | Type | Description |
-|------------|------|-------------|
-| `role` | `string` | Role identifier to check. |
-| returns | `boolean` | `true` if the user’s role matches. |
+| Parameter | Type      | Description                        |
+| --------- | --------- | ---------------------------------- |
+| `role`    | `string`  | Role identifier to check.          |
+| returns   | `boolean` | `true` if the user’s role matches. |
 
 ---
 
@@ -171,8 +167,8 @@ fetch('/api/data', {
 })
 ```
 
-| Type | Description |
-|------|--------------|
+| Type             | Description                                     |
+| ---------------- | ----------------------------------------------- |
 | `string \| null` | A short-lived JWT identifying the current user. |
 
 > **Note:** SeamlessAuth rotates tokens automatically — you rarely need to refresh them manually.
@@ -223,7 +219,7 @@ export default function Dashboard() {
 
 ## Next Steps
 
-- Dive into **Next.js integration** via the `@seamless-auth/nextjs-server` package.  
-- Learn about **self-hosting SeamlessAuth** for full control of your auth environment.  
+- Dive into **Next.js integration** via the `@seamless-auth/nextjs-server` package.
+- Learn about **self-hosting SeamlessAuth** for full control of your auth environment.
 
 👉 Continue: **[Next.js Server →](/docs/nextjs-server)**
