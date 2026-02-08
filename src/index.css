@@ -1,11 +1,21 @@
 :root {
+  --accent: #edb43a;
+  --accent-hover: #f2c14e;
+  --accent-soft: rgba(237, 180, 58, 0.12);
+  --accent-border: rgba(237, 180, 58, 0.5);
+
+  --bg-dark: #242424;
+  --bg-light: #ffffff;
+  --text-dark: rgba(255, 255, 255, 0.87);
+  --text-light: #213547;
+
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
   color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  color: var(--text-dark);
+  background-color: var(--bg-dark);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -13,13 +23,56 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+.app {
+  display: grid;
+  grid-template-columns: 260px 1fr 220px;
+  min-height: 100vh;
+}
+
+.meta-nav {
+  padding: 2rem 1.25rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.9rem;
+}
+
+.meta-section {
+  position: sticky;
+  top: 80px;
+}
+
+.meta-title {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.6;
+  margin-bottom: 0.75rem;
+}
+
+.meta-nav a {
+  display: block;
+  margin-bottom: 0.5rem;
+  opacity: 0.85;
+}
+
+.meta-nav a:hover {
+  opacity: 1;
+}
+
+.meta-nav a::after {
+  content: '↗';
+  font-size: 0.75em;
+  margin-left: 0.25rem;
+  opacity: 0.5;
+}
+
 a {
   font-weight: 500;
-  color: #646cff;
+  color: var(--accent);
   text-decoration: inherit;
 }
+
 a:hover {
-  color: #535bf2;
+  color: var(--accent-hover);
 }
 
 body {
@@ -44,25 +97,163 @@ button {
   font-family: inherit;
   background-color: #1a1a1a;
   cursor: pointer;
-  transition: border-color 0.25s;
+  transition: border-color 0.25s, background-color 0.25s;
 }
+
 button:hover {
-  border-color: #646cff;
+  border-color: var(--accent-border);
 }
+
 button:focus,
 button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
 }
 
 @media (prefers-color-scheme: light) {
   :root {
-    color: #213547;
-    background-color: #ffffff;
+    color: var(--text-light);
+    background-color: var(--bg-light);
   }
+
   a:hover {
-    color: #747bff;
+    color: var(--accent-hover);
   }
+
   button {
     background-color: #f9f9f9;
   }
+}
+
+.doc {
+  line-height: 1.7;
+  font-size: 16px;
+}
+
+.doc h1 {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+}
+
+.doc h2 {
+  margin-top: 3rem;
+  margin-bottom: 1rem;
+  position: relative;
+  padding-left: 0.75rem;
+}
+
+.doc h3 {
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+}
+
+.doc p {
+  margin-bottom: 1.25rem;
+  max-width: 72ch;
+}
+
+.doc ul,
+.doc ol {
+  margin: 1rem 0 1.5rem 1.25rem;
+}
+
+.doc li {
+  margin-bottom: 0.5rem;
+}
+
+.doc h2::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.25em;
+  bottom: 0.25em;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0.9;
+}
+
+.doc h2:hover::after {
+  content: '#';
+  margin-left: 0.5rem;
+  opacity: 0.4;
+  font-size: 0.9em;
+}
+
+.doc blockquote {
+  margin: 2rem 0;
+  padding: 1rem 1.25rem;
+  border-left: 4px solid var(--accent);
+  background: var(--accent-soft);
+  border-radius: 6px;
+}
+
+.doc pre {
+  padding: 1rem 1.25rem;
+  border-radius: 8px;
+  background: #0f172a;
+  overflow-x: auto;
+  font-size: 0.9rem;
+}
+
+.doc code {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.pager {
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  justify-content: space-between;
+}
+
+.pager a {
+  font-size: 0.9rem;
+  opacity: 0.85;
+}
+
+.pager a:hover {
+  opacity: 1;
+}
+
+.doc section {
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+.doc section.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.toc {
+  position: sticky;
+  top: 80px;
+  padding-left: 1rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.toc-title {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.6;
+  margin-bottom: 0.75rem;
+}
+
+.toc-item {
+  font-size: 0.9rem;
+  margin-bottom: 0.4rem;
+}
+
+.toc-item.level-3 {
+  padding-left: 0.75rem;
+  opacity: 0.8;
+}
+
+.toc-item.active > a {
+  color: var(--accent);
+  font-weight: 500;
 }

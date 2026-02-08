@@ -1,0 +1,201 @@
+export const meta = {
+  title: 'Local Development',
+  order: 4,
+  tags: ['development', 'docker', 'local'],
+}
+
+# Local Development
+
+This guide explains how to run Seamless Auth locally and what to expect in a development environment. The goal is to make local development behave as closely as possible to production, while keeping setup fast and predictable.
+
+You can run the stack in two ways:
+
+- **Docker Compose** (recommended for first-time setup)
+- **Manual processes** (useful for debugging individual services)
+
+Both approaches use the same configuration and authentication model.
+
+---
+
+## Components and Ports
+
+A standard local setup includes the following services:
+
+```
+| Service     | Description                           | Default Port |
+| ----------- | ------------------------------------- | ------------ |
+| Web UI      | React (Vite) frontend                 | `5001`       |
+| API         | Application backend (Express example) | `3000`       |
+| Auth Server | Seamless Auth server                  | `5312`       |
+| Database    | Postgres                              | `5432`       |
+```
+
+These ports are configurable via environment variables.
+
+---
+
+## Option 1: Docker Compose (Recommended)
+
+Docker Compose provides the fastest way to get a complete, working environment.
+
+### Requirements
+
+- Docker
+- Docker Compose
+
+### Start the stack
+
+From the project root:
+
+```bash
+docker compose up
+```
+
+This command:
+
+- Starts Postgres
+- Starts the Seamless Auth server
+- Starts the API server
+- Starts the web UI
+
+All services run in development mode with hot reload enabled.
+
+### Access the application
+
+Once all services are running, open:
+
+```
+http://localhost:5001
+```
+
+Changes to the source code are picked up automatically without rebuilding containers.
+
+### Stopping the stack
+
+To stop all services:
+
+```bash
+docker compose down
+```
+
+The database volume is preserved between runs unless explicitly removed.
+
+---
+
+## Option 2: Running Services Manually
+
+You can also run each service directly using Node.js. This is useful when debugging or modifying a single component.
+
+In separate terminals:
+
+### Auth Server
+
+```bash
+cd auth
+npm install
+npm run dev
+```
+
+Runs on:
+
+```
+http://localhost:5312
+```
+
+---
+
+### API Server
+
+```bash
+cd api
+npm install
+npm run dev
+```
+
+Runs on:
+
+```
+http://localhost:3000
+```
+
+---
+
+### Web Application
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+Runs on:
+
+```
+http://localhost:5001
+```
+
+---
+
+## Environment Configuration
+
+Each service uses its own `.env` file:
+
+- `auth/.env`
+- `api/.env`
+- `web/.env`
+
+These files are generated automatically by `create-seamless` and contain sensible defaults for local development.
+
+Common variables include:
+
+- Service ports
+- Database connection strings
+- Cookie signing keys
+- Allowed origins
+
+Changes to environment variables require restarting the affected service.
+
+---
+
+## Development-Only Behavior
+
+Local development includes a few conveniences that are not intended for production:
+
+- One-time passwords (OTPs) may be logged to the console
+- External email and SMS providers are not required
+- Security limits may be relaxed for testing
+
+The authentication and session model remains the same across environments.
+
+---
+
+## Debugging Tips
+
+- If authentication fails, verify that all services are running and ports match your environment configuration
+- Clear cookies if session state becomes inconsistent
+- Check the auth server logs when debugging verification issues
+- Restart services after changing environment variables
+
+---
+
+## Moving to Production
+
+When deploying to production:
+
+- Replace development secrets with secure values
+- Configure real email and SMS delivery providers
+- Lock down allowed origins and cookie settings
+
+The same architecture and integration patterns apply.
+
+---
+
+## What’s Next
+
+After running the system locally, continue with:
+
+- **Authentication Flow** – how verification and sessions work
+- **API Integration** – enforcing authentication and roles
+- **Frontend Integration** – using auth state in the UI
+
+Each guide builds directly on the local setup described here.

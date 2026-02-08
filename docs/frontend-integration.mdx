@@ -1,0 +1,116 @@
+export const meta = {
+  title: 'Frontend Integration',
+  order: 7,
+  tags: ['frontend', 'react'],
+}
+
+# Frontend Integration
+
+This guide explains how to integrate Seamless Auth into a frontend application using the React SDK.
+
+The React SDK is intentionally small. It provides:
+
+- A provider to initialize authentication
+- A hook to access authenticated state
+- Optional UI helpers for common flows
+
+All security-sensitive logic lives on the auth server and API. The frontend consumes verified session state.
+
+---
+
+## Installing the React SDK
+
+Install the SDK and your routing library:
+
+```bash
+npm install @seamless-auth/react react-router-dom
+```
+
+TypeScript types are included out of the box.
+
+---
+
+## Initializing Authentication
+
+Authentication is initialized by wrapping your application in `AuthProvider`.
+
+```tsx
+import { BrowserRouter } from 'react-router-dom'
+import { AuthProvider } from '@seamless-auth/react'
+import App from './App'
+
+export default function Root() {
+  return (
+    <BrowserRouter>
+      <AuthProvider apiHost={import.meta.env.VITE_AUTH_SERVER_URL} mode="server">
+        <App />
+      </AuthProvider>
+    </BrowserRouter>
+  )
+}
+```
+
+The provider:
+
+- Establishes communication with the auth server
+- Synchronizes session state using cookies
+- Makes authentication state available throughout the app
+
+---
+
+## Accessing Authentication State
+
+Authentication state is accessed via the `useAuth()` hook.
+
+```tsx
+import { useAuth } from '@seamless-auth/react'
+
+const { user, isAuthenticated, logout, hasRole } = useAuth()
+```
+
+Common properties:
+
+- `user` – the authenticated user object or `null`
+- `isAuthenticated` – whether the user has an active session
+- `logout()` – clears the current session
+- `hasRole(role)` – checks role membership
+
+The `user` object reflects server-verified identity state.
+
+---
+
+## Signing In
+
+To initiate authentication, call `login()`.
+
+```tsx
+const { login } = useAuth()
+
+<button onClick={() => login({ email: 'user@example.com' })}>
+  Sign in
+</button>
+```
+
+This triggers a passwordless verification flow handled entirely by the auth server.
+
+The frontend does not handle credentials, secrets, or token verification.
+
+---
+
+## Signing Out
+
+To end a session:
+
+```tsx
+const { logout } = useAuth()
+
+<button onClick={logout}>Sign out</button>
+```
+
+This clears authentication cookies and resets local auth state.
+
+---
+
+## Conditional Rendering
+
+Seamless Auth does not

@@ -1,0 +1,189 @@
+export const meta = {
+  title: 'Authentication Flow',
+  order: 5,
+  tags: ['authentication', 'sessions', 'cookies'],
+}
+
+# Authentication Flow
+
+This page explains how authentication works end to end in Seamless Auth. The goal is to make the flow explicit so you can reason about security, debug issues locally, and extend the system with confidence.
+
+Seamless Auth uses passwordless verification to establish a session, then relies on secure cookies and server-side validation for all subsequent requests.
+
+---
+
+## High-Level Overview
+
+At a high level, authentication proceeds in two phases:
+
+1. **Verification** – Prove control of an identity (for example via OTP or WebAuthn)
+2. **Session** – Issue and validate an authenticated session using cookies
+
+Once a session is established, no further verification is required until the session expires or is revoked.
+
+---
+
+## Step-by-Step Flow
+
+### 1. Initiate Authentication
+
+The flow begins in the web application. A user initiates sign-in using the Seamless Auth frontend SDK.
+
+Typical triggers include:
+
+- Submitting an email or phone number for OTP
+- Initiating a WebAuthn / Passkey challenge
+
+The web application sends a request to the Seamless Auth server to begin verification.
+
+---
+
+### 2. Verification
+
+The auth server performs verification based on the configured method.
+
+Examples:
+
+- Generating and validating a one-time password (OTP)
+- Performing a WebAuthn challenge/response
+
+In development mode, OTPs may be logged to the console for convenience. In production, delivery is handled by real email or SMS providers.
+
+Verification always happens on the auth server. The frontend never validates credentials directly.
+
+---
+
+### 3. Session Issuance
+
+On successful verification, the auth server issues a session.
+
+This includes:
+
+- A short-lived access cookie
+- A refresh cookie (if configured)
+
+Key characteristics:
+
+- Cookies are **HTTP-only**
+- Cookies are **same-site** by default
+- Tokens are **signed and verifiable**
+- Cookies are set by the auth server response
+
+The browser stores these cookies automatically.
+
+---
+
+## What the Browser Stores
+
+After authentication, the browser stores:
+
+- One or more HTTP-only cookies
+
+The browser does **not** store:
+
+- Passwords
+- Access tokens in JavaScript
+- Identity provider secrets
+
+This reduces exposure to client-side attacks such as XSS.
+
+---
+
+## Authenticated Requests
+
+Once a session exists, authenticated requests follow a simple pattern.
+
+### Web → API
+
+1. The web application makes a request to your API
+2. The browser automatically includes auth cookies
+3. The API validates the session using Seamless Auth middleware
+4. The request proceeds with authenticated user context
+
+The frontend does not manually attach tokens or headers.
+
+---
+
+## API Session Validation
+
+On the API side, authentication is enforced using middleware.
+
+A typical request lifecycle:
+
+1. `requireAuth` validates the access cookie
+2. The session token is verified using the signing key or JWKS
+3. A normalized user object is attached to the request
+4. Downstream handlers access `req.user`
+
+If validation fails, the request is rejected with `401 Unauthorized`.
+
+---
+
+## Authorization
+
+Authentication establishes identity. Authorization determines access.
+
+After `requireAuth` runs, authorization is enforced explicitly using roles or permissions.
+
+Example:
+
+```ts
+app.get(
+  '/api/beta_users',
+  requireAuth({ cookieSecret: process.env.COOKIE_SIGNING_KEY! }),
+  requireRole('betaUser'),
+  handler,
+)
+```
+
+This separation keeps authorization logic visible and testable.
+
+---
+
+## Session Expiration and Renewal
+
+Sessions are time-bound.
+
+- Access cookies expire after a short TTL
+- Refresh mechanisms may be used to issue new access cookies
+- Expired or invalid sessions result in re-authentication
+
+From the application's perspective, an expired session behaves the same as an unauthenticated request.
+
+---
+
+## Local Development Behavior
+
+In local development:
+
+- OTP values may be logged to the console
+- Cookies are issued locally
+- No external identity providers are required
+
+The session and validation model remains identical to production.
+
+---
+
+## Why This Model
+
+This approach provides several benefits:
+
+- No tokens exposed to JavaScript
+- No redirect-based flows
+- Clear trust boundaries
+- Explicit enforcement in application code
+- Local development that mirrors production
+
+Seamless Auth treats authentication as infrastructure, not a UI flow.
+
+---
+
+## What’s Next
+
+Continue with:
+
+- **API Integration** – enforcing authentication and mapping users
+- **Frontend Integration** – consuming auth state in the UI
+- **Roles and Authorization** – controlling access beyond authentication
+
+Each guide builds directly on the flow described here.

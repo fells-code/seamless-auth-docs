@@ -1,11 +1,169 @@
 export const meta = {
-  title: 'Self-Hosting',
-  order: 5,
-  tags: ['aws', 'terraform', 'ecs'],
+  title: 'Self Hosting',
+  order: 10,
+  tags: ['self-hosting', 'deployment', 'infrastructure'],
 }
 
-# Self-Hosting
+# Self Hosting
 
-- Terraform modules for hybrid vs single-tenant
-- ECS/EC2 vs Fargate trade-offs
-- Cost optimization (NAT, EFS, ALB)
+Seamless Auth is designed to be fully self-hosted. You run the auth server, control the infrastructure, and own all authentication data.
+
+This guide explains what self-hosting means in practice, what components you are responsible for, and how to approach a production deployment without prescribing a specific cloud provider or platform.
+
+---
+
+## What Self Hosting Means
+
+When you self-host Seamless Auth, you are responsible for running the auth server alongside your application infrastructure.
+
+Seamless Auth does not rely on:
+
+- Hosted identity providers
+- Shared multi-tenant services
+- Redirect-based authentication flows
+
+Instead, authentication becomes part of your system, with explicit boundaries and clear ownership.
+
+---
+
+## Required Components
+
+A production deployment typically includes:
+
+- **Auth Server** – Seamless Auth server process
+- **Database** – persistent storage for users, credentials, and sessions
+- **API Server** – your application backend
+- **Web Application** – your frontend UI
+
+These components may run on the same host or be split across multiple services depending on scale and requirements.
+
+---
+
+## Deployment Model
+
+Seamless Auth is infrastructure-agnostic.
+
+Common deployment approaches include:
+
+- Container-based platforms (Docker, ECS, Kubernetes)
+- Virtual machines
+- Platform-as-a-Service offerings
+
+The only hard requirements are:
+
+- Persistent storage for the database
+- Stable networking between services
+- Secure secret management
+
+---
+
+## Environment Configuration
+
+The auth server is configured entirely through environment variables.
+
+Typical production configuration includes:
+
+- Cookie signing keys
+- Allowed origins
+- Token lifetimes
+- Database connection strings
+- Delivery provider credentials (email, SMS)
+
+Keep production secrets out of source control and inject them at runtime using your platform’s secret management system.
+
+---
+
+## Networking and HTTPS
+
+In production, all services should run behind HTTPS.
+
+Recommendations:
+
+- Terminate TLS at a load balancer or reverse proxy
+- Set the `Secure` cookie flag
+- Ensure cookie domain and origin settings match your deployment
+
+Misconfigured networking is a common cause of authentication issues.
+
+---
+
+## Scaling Considerations
+
+Seamless Auth is stateless at the application layer.
+
+Scaling typically involves:
+
+- Running multiple auth server instances
+- Using a shared database
+- Placing a load balancer in front of the auth server
+
+Session state is stored in signed cookies and the database, allowing horizontal scaling without session affinity.
+
+---
+
+## Database Management
+
+The database is a critical component.
+
+Best practices:
+
+- Use managed databases when possible
+- Enable backups and point-in-time recovery
+- Restrict network access
+- Monitor performance and storage
+
+Loss of database data will invalidate sessions and credentials.
+
+---
+
+## Email and SMS Providers
+
+Production deployments require real delivery providers for verification flows.
+
+Seamless Auth integrates with:
+
+- Email providers (SMTP, SES, etc.)
+- SMS providers (Twilio, SNS, etc.)
+
+In development, delivery can be logged or intercepted. This must be disabled in production.
+
+---
+
+## Upgrades and Maintenance
+
+When upgrading Seamless Auth:
+
+- Review release notes carefully
+- Test upgrades in staging
+- Back up the database before deploying
+- Roll out changes gradually
+
+Breaking changes will be documented explicitly.
+
+---
+
+## Responsibility Model
+
+When self-hosting, you are responsible for:
+
+- Infrastructure security
+- Secret management
+- Monitoring and logging
+- Backups and recovery
+
+Seamless Auth provides the software and security primitives, but operational responsibility remains with you.
+
+---
+
+## Summary
+
+Self-hosting Seamless Auth gives you:
+
+- Full control over authentication infrastructure
+- No vendor lock-in
+- Transparent security boundaries
+- Deployment flexibility
+
+It also requires deliberate operational discipline.
+
+Seamless Auth is designed to support both.

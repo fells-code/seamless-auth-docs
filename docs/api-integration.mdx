@@ -1,0 +1,223 @@
+export const meta = {
+  title: 'API Integration',
+  order: 6,
+  tags: ['api', 'server', 'authorization'],
+}
+
+# API Integration
+
+This guide explains how to integrate Seamless Auth into your API and how the core and framework adapters work together.
+
+The key idea is simple:
+
+> **The core package is the source of truth. Adapters translate that logic into framework-specific middleware.**
+
+Your API enforces authentication and authorization explicitly, using small, composable primitives.
+
+---
+
+## Core vs Adapters
+
+Seamless Auth is split into two layers:
+
+### Core (`@seamless-auth/core`)
+
+The core package contains framework-agnostic logic. It is responsible for:
+
+- Verifying signed session cookies
+- Resolving the authenticated user
+- Performing authenticated server-to-server requests
+- Defining shared types and helpers
+
+The core package does **not** depend on Express, Fastify, or any other framework.
+
+It can be used directly in:
+
+- Node.js APIs
+- Server-side rendering environments
+- Edge runtimes
+- Custom adapters
+
+---
+
+### Adapters (`@seamless-auth/*`)
+
+Adapters are thin layers that integrate the core into specific frameworks.
+
+Their responsibilities are:
+
+- Extracting cookies or headers from requests
+- Invoking core verification logic
+- Attaching authenticated user state to the request context
+- Exposing framework-native middleware
+
+Adapters should not reimplement authentication logic. They delegate to the core.
+
+---
+
+## Choosing an Adapter
+
+You select an adapter based on your API framework.
+
+The integration pattern is consistent across adapters, even though the API surface differs slightly.
+
+```
+| Framework     | Package                  |
+| ------------- | ------------------------ |
+| Express       | `@seamless-auth/express` |
+| Fastify       | Planned                  |
+| NestJS        | Planned                  |
+| Python (ASGI) | Planned                  |
+```
+
+Switching adapters does not change how authentication works. It only changes how requests are wired into your framework.
+
+---
+
+## Express Adapter
+
+The Express adapter provides middleware that integrates Seamless Auth into Express applications.
+
+### Installation
+
+```bash
+npm install @seamless-auth/express
+```
+
+---
+
+### Authentication Middleware
+
+Authentication is enforced using `requireAuth`.
+
+```ts
+import { requireAuth } from '@seamless-auth/express'
+
+app.get('/api/me', requireAuth({ cookieSecret: process.env.COOKIE_SIGNING_KEY! }), (req, res) => {
+  res.json({ user: req.user })
+})
+```
+
+What this does:
+
+- Validates the session cookie
+- Verifies the token signature
+- Normalizes the authenticated user
+- Attaches it to `req.user`
+
+If authentication fails, the request is rejected with `401 Unauthorized`.
+
+---
+
+## Authorization
+
+Authentication establishes identity. Authorization controls access.
+
+Authorization is enforced explicitly using roles.
+
+```ts
+import { requireRole } from '@seamless-auth/express'
+
+app.get(
+  '/api/beta_users',
+  requireAuth({ cookieSecret: process.env.COOKIE_SIGNING_KEY! }),
+  requireRole('betaUser'),
+  handler,
+)
+```
+
+Roles are part of the authenticated user object and are issued by the auth server.
+
+Authorization logic remains visible in your API code.
+
+---
+
+## Mapping to Local Application Users
+
+Many applications maintain their own user database for business logic.
+
+A common pattern is:
+
+1. Authenticate the request using Seamless Auth
+2. Use the Seamless Auth user ID as the canonical identifier
+3. Resolve or create a local application user
+
+Example:
+
+```ts
+app.use(async (req, res, next) => {
+  if (!req.user) return res.status(401).end()
+
+  const user = await User.findOne({ where: { id: req.user.sub } })
+
+  if (!user) {
+    await User.create({
+      id: req.user.sub,
+      email: req.user.email,
+    })
+  }
+
+  next()
+})
+```
+
+This keeps authentication separate from application data concerns.
+
+---
+
+## Adapter Swapping
+
+Because the core defines the authentication contract, adapters can be swapped without changing application logic.
+
+Conceptually:
+
+```ts
+switch (adapter) {
+  case 'express':
+    app.use(expressAuthMiddleware)
+    break
+
+  case 'fastify':
+    fastify.addHook('onRequest', fastifyAuthHook)
+    break
+}
+```
+
+While only the Express adapter is currently available, future adapters will follow the same model.
+
+---
+
+## Error Handling
+
+Authentication and authorization errors are handled consistently:
+
+- Missing or invalid session → `401 Unauthorized`
+- Missing required role → `403 Forbidden`
+
+This allows clients to respond appropriately without parsing error strings.
+
+---
+
+## Testing APIs
+
+Because authentication is middleware-based, testing APIs is straightforward.
+
+You can:
+
+- Mock `req.user` in unit tests
+- Use real cookies in integration tests
+- Exercise role-based logic independently of auth verification
+
+This keeps API tests fast and focused.
+
+---
+
+## What’s Next
+
+Continue with:
+
+- **Frontend Integration** – using auth state in the UI
+- **Roles and Authorization** – deeper role management patterns
+- **Extending Adapters** – building custom integrations
+
+Each adapter builds on the same core authentication model.

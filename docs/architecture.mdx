@@ -1,0 +1,211 @@
+export const meta = {
+  title: 'Architecture Overview',
+  order: 2,
+  tags: ['architecture'],
+}
+
+# Architecture Overview
+
+Seamless Auth is designed as explicit, inspectable infrastructure rather than a hosted identity service. Authentication and authorization are treated as first‑class parts of your system, running alongside your API and frontend.
+
+This page explains how the major components fit together and how authentication state flows through the stack.
+
+---
+
+## High‑Level Components
+
+A typical Seamless Auth setup consists of four primary components:
+
+1. **Auth Server**
+   Issues and verifies authentication credentials, manages sessions, and defines identity state.
+2. **API Server**
+   Your application backend. It validates authentication state and enforces authorization rules.
+3. **Web Application**
+   The frontend UI. It initiates authentication flows and consumes authenticated session state.
+4. **Database**
+   Stores user records, credentials, sessions, and application data.
+
+Each component runs independently and communicates over HTTP using well‑defined contracts.
+
+---
+
+## System Diagrams
+
+Below are two common interaction patterns depending on whether your frontend talks directly to the auth server or routes requests through your own API.
+
+---
+
+### Web → Auth → Database
+
+This is the simplest setup. The web application communicates directly with the Seamless Auth server for authentication and session management.
+
+```
++-------------------+        HTTP        +----------------------+
+|                   |  <--------------> |                      |
+|   Web Application |                    |      Auth Server     |
+|                   |                    |                      |
++-------------------+                    +----------+-----------+
+                                                     |
+                                                     |
+                                                     |  Database
+                                                     v
+                                          +----------------------+
+                                          |                      |
+                                          |        Database      |
+                                          |                      |
+                                          +----------------------+
+```
+
+In this model:
+
+- The web application initiates authentication directly with the auth server
+- The auth server performs verification and issues session cookies
+- User and credential data are stored in the database
+- The web application relies on cookies for authenticated state
+
+This pattern is useful for:
+
+- Frontend-only applications
+- Early prototyping and demos
+- Scenarios without a custom backend
+
+---
+
+### Web → API → Auth → Database
+
+This is the most common production setup. The web application interacts with your API, which enforces authentication and authorization using Seamless Auth.
+
+```
++-------------------+        HTTP        +----------------------+
+|                   |  <---------------> |                      |
+|   Web Application |                    |      API Server      |
+|                   |                    |                      |
++---------+---------+                    +----------+-----------+
+                                                        |
+                                                        |
+                           HTTP                         |
+                   +----------------------+             |
+                   |                      | <-----------+
+                   |      Auth Server     |
+                   |                      |
+                   +----------+-----------+
+                              |
+                              |
+                              |
+                              v
+                   +----------------------+
+                   |                      |
+                   |        Database      |
+                   |                      |
+                   +----------------------+
+```
+
+In this model:
+
+- The web application sends requests only to your API
+- Authentication flows are initiated by the frontend but validated by the API
+- The API uses Seamless Auth middleware to validate sessions
+- Authorization decisions are enforced server-side
+- The auth server remains the source of truth for identity
+
+This pattern is recommended for:
+
+- Applications with business logic or private APIs
+- Role-based access control
+- Multi-service or multi-client architectures
+
+The web application never talks directly to the database. All authentication state originates from the auth server and is enforced by the API.
+
+---
+
+## Authentication Flow
+
+A simplified authentication flow looks like this:
+
+1. A user initiates login from the web application
+2. The web app communicates with the auth server to begin authentication
+3. The auth server performs verification (for example, OTP or WebAuthn)
+4. On success, the auth server issues signed session cookies
+5. The browser stores these cookies automatically
+6. Subsequent requests to the API include the session cookies
+7. The API validates the session and populates authenticated user state
+
+At no point are passwords stored or transmitted.
+
+---
+
+## Session and Cookie Model
+
+Seamless Auth uses **HTTP‑only cookies** to represent authenticated sessions.
+
+Key characteristics:
+
+- Cookies are inaccessible to JavaScript
+- Sessions are short‑lived and rotated
+- Verification happens server‑side
+- Tokens are never stored in localStorage or sessionStorage
+
+This model reduces exposure to common client‑side attacks while keeping the integration simple.
+
+---
+
+## API Authentication and Authorization
+
+The API server is responsible for enforcing access control.
+
+A typical request lifecycle:
+
+1. Incoming request includes auth cookies
+2. Authentication middleware validates the session
+3. A normalized user object is attached to the request
+4. Authorization middleware checks roles or permissions
+5. Business logic executes with trusted user context
+
+This keeps authentication and authorization explicit and testable.
+
+---
+
+## Local Development vs Production
+
+The same architecture applies in all environments.
+
+### Local Development
+
+- Services run via Node.js or Docker Compose
+- OTPs may be logged or surfaced for convenience
+- No external email or SMS providers are required
+
+### Production
+
+- Services run in containers or managed compute
+- Email and SMS delivery use real providers
+- Security settings are tightened
+
+The core authentication model does not change between environments.
+
+---
+
+## Why This Architecture Matters
+
+This design provides several advantages:
+
+- Authentication logic is visible and auditable
+- Frontend and backend share a consistent understanding of identity
+- Local development mirrors production behavior
+- Authorization rules live in application code
+- The system is easy to extend to new frameworks
+
+Seamless Auth favors clarity and control over abstraction and indirection.
+
+---
+
+## What’s Next
+
+The next sections dive deeper into:
+
+- Running the stack locally
+- Authentication and verification flows
+- Session validation in the API
+- Role‑based authorization patterns
+
+Each guide builds on this architecture and maps directly to the starter templates.

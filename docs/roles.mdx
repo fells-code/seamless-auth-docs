@@ -1,0 +1,196 @@
+export const meta = {
+  title: 'Roles and Authorization',
+  order: 8,
+  tags: ['authorization', 'roles', 'security'],
+}
+
+# Roles and Authorization
+
+This guide explains how authorization works in Seamless Auth and how roles are issued, propagated, and enforced across your system.
+
+A core principle of Seamless Auth is that **authentication and authorization are separate concerns**:
+
+- Authentication establishes _who_ the user is
+- Authorization determines _what_ the user is allowed to do
+
+Seamless Auth provides the primitives needed for authorization, but enforcement is always explicit in application code.
+
+---
+
+## Roles as Identity Attributes
+
+Roles are attributes of an authenticated user.
+
+They are:
+
+- Issued by the auth server
+- Included in the authenticated session
+- Available to both the API and frontend
+
+A typical user object includes:
+
+```ts
+{
+  sub: 'user_123',
+  email: 'user@example.com',
+  roles: ['user', 'betaUser']
+}
+```
+
+The auth server is the source of truth for which roles a user has.
+
+---
+
+## Issuing Roles
+
+Roles are assigned by the auth server based on your configuration and application logic.
+
+Common patterns include:
+
+- Default roles for new users (for example `user`)
+- Feature flags such as `betaUser`
+- Administrative roles like `admin`
+- Team or organization roles
+
+How roles are issued depends on your setup, but once issued they become part of the authenticated session.
+
+---
+
+## Authorization in the API
+
+Authorization should always be enforced by the API.
+
+After authentication, the API receives a verified user object and applies authorization rules explicitly.
+
+### Role Enforcement
+
+Using the Express adapter:
+
+```ts
+import { requireAuth, requireRole } from '@seamless-auth/express'
+
+app.get(
+  '/api/admin/stats',
+  requireAuth({ cookieSecret: process.env.COOKIE_SIGNING_KEY! }),
+  requireRole('admin'),
+  handler,
+)
+```
+
+In this example:
+
+- `requireAuth` validates the session
+- `requireRole` checks role membership
+- The handler runs only if authorization succeeds
+
+Missing roles result in a `403 Forbidden` response.
+
+---
+
+## Multiple Roles
+
+You can allow access based on any of several roles.
+
+```ts
+requireRole(['admin', 'moderator'])
+```
+
+This grants access if the user has _any_ of the listed roles.
+
+Complex authorization logic can be built on top of these primitives.
+
+---
+
+## Mapping Roles to Business Logic
+
+Roles often map to application-level behavior.
+
+Examples:
+
+- `admin` users can access management endpoints
+- `betaUser` users can access preview features
+- Team roles control access to shared resources
+
+Authorization decisions remain part of your API code, not hidden in configuration.
+
+---
+
+## Role Usage in the Frontend
+
+The frontend has access to roles via `useAuth()`.
+
+```tsx
+const { hasRole } = useAuth()
+
+if (hasRole('betaUser')) {
+  return <BetaFeature />
+}
+```
+
+UI role checks are useful for:
+
+- Hiding or showing features
+- Improving user experience
+- Avoiding unnecessary requests
+
+They should **never** be relied on for security.
+
+---
+
+## Defense in Depth
+
+Seamless Auth encourages defense in depth:
+
+- The frontend gates UI behavior
+- The API enforces authorization
+- The auth server defines identity state
+
+Even if frontend checks are bypassed, the API remains secure.
+
+---
+
+## Testing Authorization
+
+Because authorization is explicit and middleware-based, it is easy to test.
+
+Common approaches:
+
+- Unit tests with mocked `req.user`
+- Integration tests using real cookies
+- Role-specific test fixtures
+
+This keeps authorization logic testable and auditable.
+
+---
+
+## Common Patterns
+
+### Feature Flags
+
+Roles such as `betaUser` can act as feature flags:
+
+- Issued by the auth server
+- Enforced by the API
+- Reflected in the UI
+
+### Administrative Access
+
+Administrative routes should always require explicit roles:
+
+```ts
+requireRole('admin')
+```
+
+Avoid implicit admin behavior.
+
+---
+
+## What’s Next
+
+From here, you may want to explore:
+
+- **Extending Adapters** – building new framework integrations
+- **Deployment** – running Seamless Auth in production
+- **Security Considerations** – hardening your setup
+
+Roles and authorization build directly on the authentication model described in earlier sections.

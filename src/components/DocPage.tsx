@@ -13,7 +13,6 @@ export default function DocPage({ slug: fixedSlug }: { slug?: string }) {
   if (!entry) return <div>Missing doc: {slug}</div>
   const { Component } = entry
 
-  // Previous/Next
   const idx = DOCS.findIndex((d) => d.slug === slug)
   const prev = DOCS[idx - 1]
   const next = DOCS[idx + 1]
@@ -76,7 +75,6 @@ function TableOfContents() {
   }, [activeId])
 
   useEffect(() => {
-    // re-scan headings each time route changes
     const elems = Array.from(document.querySelectorAll('.doc h2, .doc h3')) as HTMLHeadingElement[]
     const data = elems.map((el) => ({
       id: el.id,
@@ -85,7 +83,6 @@ function TableOfContents() {
     }))
     setHeadings(data)
 
-    // scroll spy logic
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
@@ -105,7 +102,6 @@ function TableOfContents() {
   useEffect(() => {
     const onScroll = () => {
       if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 100) {
-        // activate last heading when bottom reached
         const last = headings[headings.length - 1]
         if (last) setActiveId(last.id)
       }
@@ -128,7 +124,6 @@ function TableOfContents() {
     return () => observer.disconnect()
   }, [])
 
-  // Smooth scroll behavior
   useEffect(() => {
     document.documentElement.style.scrollBehavior = 'smooth'
     return () => {
@@ -148,12 +143,11 @@ function TableOfContents() {
             className={`toc-item level-${h.level} ${activeId === h.id ? 'active' : ''}`}
           >
             <a
-              href={`#${h.text}`}
+              href={`#${h.id}`}
               onClick={(e) => {
                 e.preventDefault()
                 const el = document.getElementById(h.id)
                 if (el) {
-                  // Manual smooth scroll ensures consistent offset behavior
                   window.scrollTo({
                     top: el.getBoundingClientRect().top + window.scrollY - 80,
                     behavior: 'smooth',

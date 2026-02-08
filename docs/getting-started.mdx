@@ -1,224 +1,195 @@
 export const meta = {
   title: 'Getting Started',
-  order: 2,
-  tags: ['install', 'setup', 'react'],
+  order: 3,
+  tags: ['install', 'setup'],
 }
 
 # Getting Started
 
-This guide walks you through setting up **SeamlessAuth** for the first time.  
-We’ll cover two approaches — using the CLI quick-start (`npx create-seamless`) or adding SeamlessAuth directly to an existing React project.
+This guide walks through setting up Seamless Auth for local development. It focuses on understanding the system, running it end to end, and integrating it into your application.
+
+There are two supported paths:
+
+- **Quick start** using the [`create-seamless`](https://github.com/fells-code/create-seamless) CLI (recommended)
+- **Manual integration** into an existing application
+
+Both approaches use the same architecture and authentication model.
 
 ---
 
-## Before You Begin
+## Prerequisites
 
-We assume you’re already comfortable with:
+You should be comfortable with:
 
-- Basic **JavaScript/TypeScript** syntax.
-- Working in a **React** environment.
-- Using **npm** or **yarn** for package installation.
-- Familiarity with React Router (for client-side routing).
+- JavaScript or TypeScript
+- Running Node.js applications
+- Using npm or pnpm
+- Basic familiarity with HTTP and cookies
 
-If you already have those skills — you’re ready to go. 🚀
+No prior experience with OAuth, OpenID Connect, or identity providers is required.
 
 ---
 
-## Option 1: Quick Start with `npx create-seamless`
+## Option 1: Quick Start (Recommended)
 
-The easiest way to get started is using our official CLI.  
-This creates a fully configured example project with all SeamlessAuth components and routing built in.
+The fastest way to get a working Seamless Auth environment is with the official CLI.
 
 ```bash
 npx create-seamless my-app
 cd my-app
-npm install
-npm run dev
 ```
 
-You’ll get:
+By default, this generates:
 
-- A working React app using **Vite + TypeScript**
-- Preconfigured `AuthProvider`
-- Protected routes and sign-in flow
-- SeamlessAuth environment configuration
-
-> **Pro tip:** You can pass flags to skip prompts or select specific modes (like `--server` or `--web`):
->
-> ```bash
-> npx create-seamless my-app --web
-> ```
+- Seamless Auth server
+- Express API example
+- React (Vite) web application
+- Optional Docker Compose configuration
 
 ---
 
-## Option 2: Install Manually in an Existing React App
+### Running with Docker (one command)
 
-Already have a React app? You can integrate SeamlessAuth in just a few steps.
+If you have Docker installed, you can start the entire stack with:
 
-### 1️⃣ Install dependencies
+```bash
+docker compose up
+```
+
+This will start:
+
+- Postgres database
+- Seamless Auth server
+- API server
+- Web UI
+
+Once running, open:
+
+```
+http://localhost:5173
+```
+
+All services run in development mode with hot reload enabled.
+
+---
+
+### Running services manually
+
+If you prefer not to use Docker, you can run each service directly.
+
+In separate terminals:
+
+```bash
+cd auth && npm install && npm run dev
+```
+
+```bash
+cd api && npm install && npm run dev
+```
+
+```bash
+cd web && npm install && npm run dev
+```
+
+This approach is useful when debugging or modifying individual services.
+
+---
+
+## Option 2: Integrating into an Existing React App
+
+You can also integrate Seamless Auth into an existing React application.
+
+### Install dependencies
 
 ```bash
 npm install @seamless-auth/react react-router-dom
 ```
 
-If you’re using TypeScript, you might also want the router types:
+---
 
-```bash
-npm install -D @types/react-router-dom
-```
+### Wrap your application with `AuthProvider`
 
-### 2️⃣ Wrap your App with `AuthProvider`
-
-In your main entry file (`main.tsx` or `index.tsx`):
+In your application entry point:
 
 ```tsx
-import React from 'react'
-import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { AuthProvider } from '@seamless-auth/react'
 import App from './App'
 
-createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
+export default function Root() {
+  return (
     <BrowserRouter>
-      <AuthProvider apiHost={import.meta.env.VITE_API_HOST}>
+      <AuthProvider apiHost={import.meta.env.VITE_AUTH_SERVER_URL} mode="server">
         <App />
       </AuthProvider>
     </BrowserRouter>
-  </React.StrictMode>,
-)
+  )
+}
 ```
 
-The `AuthProvider` automatically initializes SeamlessAuth, synchronizes user sessions via secure cookies, and exposes auth context throughout your app.
+The `AuthProvider` initializes authentication, manages cookies, and exposes session state to your application.
 
 ---
 
-## Understanding the Auth Context
+## Using Authentication State
 
-The `AuthProvider` makes a React context available everywhere in your app via the `useAuth()` hook.
-
-You can access common properties like:
-
-```tsx
-const { user, isAuthenticated, logout, hasRole } = useAuth()
-```
-
-| Property                | Type                | Description                           |
-| ----------------------- | ------------------- | ------------------------------------- |
-| `user`                  | `User \| null`      | The authenticated user object         |
-| `isAuthenticated`       | `boolean`           | True when the user is signed in       |
-| `logout()`              | `() => void`        | Clears cookies and signs out the user |
-| `hasRole(role: string)` | `(role) => boolean` | Checks if user has a specific role    |
-
-Example usage:
+Authentication state is accessed via the `useAuth()` hook.
 
 ```tsx
 import { useAuth } from '@seamless-auth/react'
 
-function Dashboard() {
-  const { user, isAuthenticated, logout } = useAuth()
+const { user, isAuthenticated, logout, hasRole } = useAuth()
+```
+
+Common properties:
+
+- `user` – the authenticated user object or `null`
+- `isAuthenticated` – whether the current session is authenticated
+- `logout()` – clears the session
+- `hasRole(role)` – checks role membership
+
+---
+
+## Routing and Protected Views
+
+Seamless Auth does not require special routing primitives. Instead, authentication state is used directly in your components.
+
+Example:
+
+```tsx
+function Home() {
+  const { isAuthenticated } = useAuth()
 
   if (!isAuthenticated) {
-    return <div>Please sign in to continue</div>
+    return <SignIn />
   }
 
-  return (
-    <div>
-      <h1>Welcome {user?.email}</h1>
-      <button onClick={logout}>Log out</button>
-    </div>
-  )
+  return <Dashboard />
 }
 ```
 
----
-
-## Auth Routes
-
-SeamlessAuth provides built-in **`AuthRoutes`** that automatically handle protected and public routes using React Router.
-
-### Example
-
-```tsx
-import { AuthRoutes } from '@seamless-auth/react'
-import Home from './pages/Home'
-import Dashboard from './pages/Dashboard'
-
-export default function App() {
-  return (
-    <AuthRoutes>
-      <Route path="/" element={<Home />} />
-      <Route path="/dashboard" element={<Dashboard />} auth="protected" />
-    </AuthRoutes>
-  )
-}
-```
-
-| Attribute           | Description                                                                     |
-| ------------------- | ------------------------------------------------------------------------------- |
-| `auth="protected"`  | Restricts access to authenticated users. Redirects to sign-in if not logged in. |
-| `auth="public"`     | Always accessible (default).                                                    |
-| `auth="guest-only"` | Redirects _away_ if already signed in (useful for sign-in or register pages).   |
+This keeps routing explicit and easy to reason about.
 
 ---
 
-## Adding Sign-In and Sign-Out
+## Development Behavior
 
-By default, SeamlessAuth gives you two helper methods via `useAuth()`:
+In development:
 
-```tsx
-const { login, logout } = useAuth()
-```
+- OTPs may be logged to the console
+- Cookies are issued locally
+- No external email or SMS providers are required
 
-Example sign-in component:
-
-```tsx
-function SignIn() {
-  const { login } = useAuth()
-  return (
-    <button onClick={() => login({ email: 'user@example.com' })} className="btn-primary">
-      Sign In with Passkey
-    </button>
-  )
-}
-```
-
-> The `login()` method triggers SeamlessAuth’s passwordless flow — using WebAuthn and Passkeys under the hood.
-
----
-
-## Development Environment
-
-In development, you can use your SeamlessAuth sandbox environment (`localhost:5001` by default) for testing.
-
-If your setup includes API Gateway restrictions, make sure to add your local host in the allowed origins list (e.g., `http://localhost:5173`).
-
-```env
-VITE_API_HOST=http://localhost:5001
-```
-
-Then restart your dev server to apply it.
+Production deployments use the same authentication model with real delivery providers.
 
 ---
 
 ## Next Steps
 
-You’re now ready to:
+From here, continue with:
 
-- Customize your sign-in experience
-- Explore advanced configuration options
-- Deploy your app with production-ready auth infrastructure
+- **Local Development** – ports, environment variables, Docker
+- **Authentication Flow** – how sessions and cookies work
+- **API Integration** – enforcing auth and roles
 
-👉 Continue to the next page: **[React SDK →](/docs/react-sdk)**
-
----
-
-## Summary
-
-| Step | Description                                             |
-| ---- | ------------------------------------------------------- |
-| 1    | Use `npx create-seamless` or install manually           |
-| 2    | Wrap your app with `AuthProvider`                       |
-| 3    | Use `useAuth()` to access user data and session methods |
-| 4    | Protect routes with `AuthRoutes`                        |
-| 5    | Configure `VITE_API_HOST` for your backend              |
+Each guide maps directly to the generated starter templates.
