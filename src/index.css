@@ -97,7 +97,9 @@ button {
   font-family: inherit;
   background-color: #1a1a1a;
   cursor: pointer;
-  transition: border-color 0.25s, background-color 0.25s;
+  transition:
+    border-color 0.25s,
+    background-color 0.25s;
 }
 
 button:hover {
@@ -220,7 +222,9 @@ button:focus-visible {
 .doc section {
   opacity: 0;
   transform: translateY(8px);
-  transition: opacity 0.4s ease, transform 0.4s ease;
+  transition:
+    opacity 0.4s ease,
+    transform 0.4s ease;
 }
 
 .doc section.visible {
