@@ -37,7 +37,6 @@ export default function DocPage({ slug: fixedSlug }: { slug?: string }) {
 }
 
 function extractText(node: ReactNode): string {
-  console.log(node)
   if (typeof node === 'string') return node
   if (Array.isArray(node)) return node.map(extractText).join('')
   if (typeof node === 'object' && node && 'props' in node)
