@@ -12,8 +12,8 @@ This guide walks you from zero → working environment with the fewest possible 
 
 You have two setup paths:
 
-* **Docker (recommended)** – fastest, least friction
-* **Manual setup** – for full control or custom environments
+- **Docker (recommended)** – fastest, least friction
+- **Manual setup** – for full control or custom environments
 
 ---
 
@@ -27,8 +27,8 @@ Before generating your project, confirm one of the following setups.
 
 You need:
 
-* Docker
-* Docker Compose
+- Docker
+- Docker Compose
 
 Verify installation:
 
@@ -50,9 +50,9 @@ If not installed, download Docker Desktop:
 
 You need:
 
-* Node.js ≥ 20
-* npm or pnpm
-* PostgreSQL running locally or remotely
+- Node.js ≥ 20
+- npm or pnpm
+- PostgreSQL running locally or remotely
 
 Check Node:
 
@@ -68,9 +68,9 @@ psql --version
 
 If Postgres is not installed:
 
-* macOS: `brew install postgresql`
-* Ubuntu: `sudo apt install postgresql`
-* Windows: Official PostgreSQL installer
+- macOS: `brew install postgresql`
+- Ubuntu: `sudo apt install postgresql`
+- Windows: Official PostgreSQL installer
 
 > ⚠️ If Postgres is not running, Seamless Auth will fail to start.
 
@@ -93,10 +93,10 @@ docker compose up
 
 This launches:
 
-* Postgres
-* Seamless Auth server
-* Express API
-* React (Vite) web app
+- Postgres
+- Seamless Auth server
+- Express API
+- React (Vite) web app
 
 Open:
 
@@ -129,7 +129,7 @@ Fix by editing `docker-compose.yml`:
 
 ```yaml
 ports:
-  - "5433:5432"
+  - '5433:5432'
 ```
 
 Only the **host port** changes. Internal networking remains unchanged.
@@ -176,7 +176,7 @@ npm run migrate:up
 
 ---
 
-###  Start Services
+### Start Services
 
 In separate terminals:
 
@@ -204,24 +204,25 @@ http://localhost:5001
 
 Checklist:
 
-* Is Postgres running?
-* Are credentials correct?
+- Is Postgres running?
+- Are credentials correct?
+
 ---
 
 ### Passkey Not Supported
 
 Ensure:
 
-* You are using a modern browser (Chrome, Safari, Edge, Firefox)
-* You are running on `localhost` or HTTPS
+- You are using a modern browser (Chrome, Safari, Edge, Firefox)
+- You are running on `localhost` or HTTPS
 
 ---
 
 ## Development Notes
 
-* OTP codes will log to console in development
-* No real SMS or email provider required locally
-* Cookies are issued on localhost
+- OTP codes will log to console in development
+- No real SMS or email provider required locally
+- Cookies are issued on localhost
 
 ---
 
@@ -229,10 +230,10 @@ Ensure:
 
 Continue with:
 
-* Local Development Guide
-* Authentication Flow Deep Dive
-* API Integration Guide
-* Production Deployment
+- Local Development Guide
+- Authentication Flow Deep Dive
+- API Integration Guide
+- Production Deployment
 
 Each guide maps directly to the generated starter templates.
 
