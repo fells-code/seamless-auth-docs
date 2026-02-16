@@ -6,80 +6,177 @@ export const meta = {
 
 # Getting Started
 
-This guide walks through setting up Seamless Auth for local development. It focuses on understanding the system, running it end to end, and integrating it into your application.
+Seamless Auth runs a complete passwordless authentication stack locally.
 
-There are two supported paths:
+This guide walks you from zero → working environment with the fewest possible surprises.
 
-- **Quick start** using the [`create-seamless`](https://github.com/fells-code/create-seamless) CLI (recommended)
-- **Manual integration** into an existing application
+You have two setup paths:
 
-Both approaches use the same architecture and authentication model.
-
----
-
-## Prerequisites
-
-You should be comfortable with:
-
-- JavaScript or TypeScript
-- Running Node.js applications
-- Using npm or pnpm
-- Basic familiarity with HTTP and cookies
-
-No prior experience with OAuth, OpenID Connect, or identity providers is required.
-
-You will need node >=20 on you system
-or
-Docker and Docker compose (or your container management software of your choice)
+* **Docker (recommended)** – fastest, least friction
+* **Manual setup** – for full control or custom environments
 
 ---
 
-## Option 1: Quick Start (Recommended)
+## Step 1 — Environment Check
 
-The fastest way to get a working Seamless Auth environment is with the official CLI.
+Before generating your project, confirm one of the following setups.
+
+---
+
+### Option A — Docker (Recommended)
+
+You need:
+
+* Docker
+* Docker Compose
+
+Verify installation:
+
+```bash
+docker --version
+docker compose version
+```
+
+If not installed, download Docker Desktop:
+
+[https://www.docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop)
+
+> **Why Docker?**
+> Docker eliminates local Postgres setup, environment drift, and version conflicts.
+
+---
+
+### Option B — Manual Setup (No Docker)
+
+You need:
+
+* Node.js ≥ 20
+* npm or pnpm
+* PostgreSQL running locally or remotely
+
+Check Node:
+
+```bash
+node -v
+```
+
+Check Postgres:
+
+```bash
+psql --version
+```
+
+If Postgres is not installed:
+
+* macOS: `brew install postgresql`
+* Ubuntu: `sudo apt install postgresql`
+* Windows: Official PostgreSQL installer
+
+> ⚠️ If Postgres is not running, Seamless Auth will fail to start.
+
+---
+
+## Option 1 — Quick Start with Docker
+
+Generate a project:
 
 ```bash
 npx create-seamless my-app
 cd my-app
 ```
 
-By default, this generates:
-
-- Seamless Auth server
-- Express API example
-- React (Vite) web application
-- Optional Docker Compose configuration
-
----
-
-### Running with Docker (one command)
-
-If you have Docker installed, you can start the entire stack with:
+Start the stack:
 
 ```bash
 docker compose up
 ```
 
-This will start:
+This launches:
 
-- Postgres database
-- Seamless Auth server
-- API server
-- Web UI
+* Postgres
+* Seamless Auth server
+* Express API
+* React (Vite) web app
 
-Once running, open:
+Open:
 
 ```
 http://localhost:5001
 ```
 
-All services run in development mode with hot reload enabled.
+---
+
+<div className="my-10 w-half">
+  <img
+    src="/launch.png"
+    alt="Docker compose running"
+    width="800px"
+    height="500px"
+    className="block w-full max-w-3xl h-auto mx-auto rounded-xl border border-white/10 shadow-lg"
+  />
+</div>
+---
+
+### ⚠️ Common Docker Issue: Port 5432 Already In Use
+
+If you already have Postgres running locally, you may see:
+
+```
+Bind for 0.0.0.0:5432 failed: port is already allocated
+```
+
+Fix by editing `docker-compose.yml`:
+
+```yaml
+ports:
+  - "5433:5432"
+```
+
+Only the **host port** changes. Internal networking remains unchanged.
+
+> Containers still connect to Postgres via service name `db`.
 
 ---
 
-### Running services manually
+## Option 2 — Manual Setup (No Docker)
 
-If you prefer not to use Docker, you can run each service directly.
+If not using Docker, follow these steps carefully.
+
+---
+
+### Create Databases
+
+Start Postgres and run:
+
+```bash
+cd auth
+npm run db:create
+```
+
+```bash
+cd api
+npm run db:create
+```
+
+---
+
+### Run Migrations
+
+If tables are not created automatically:
+
+```bash
+cd auth
+npm run migrate:up
+```
+
+```bash
+cd api
+npm run migrate:up
+```
+
+---
+
+###  Start Services
 
 In separate terminals:
 
@@ -95,105 +192,48 @@ cd api && npm install && npm run dev
 cd web && npm install && npm run dev
 ```
 
-This approach is useful when debugging or modifying individual services.
+Open:
 
----
-
-## Option 2: Integrating into an Existing React App
-
-You can also integrate Seamless Auth into an existing React application.
-
-### Install dependencies
-
-```bash
-npm install @seamless-auth/react react-router-dom
+```
+http://localhost:5001
 ```
 
+## Troubleshooting
+
+### Cannot Connect to Database
+
+Checklist:
+
+* Is Postgres running?
+* Are credentials correct?
 ---
 
-### Wrap your application with `AuthProvider`
+### Passkey Not Supported
 
-In your application entry point:
+Ensure:
 
-```tsx
-import { BrowserRouter } from 'react-router-dom'
-import { AuthProvider } from '@seamless-auth/react'
-import App from './App'
-
-export default function Root() {
-  return (
-    <BrowserRouter>
-      <AuthProvider apiHost={import.meta.env.VITE_AUTH_SERVER_URL} mode="server">
-        <App />
-      </AuthProvider>
-    </BrowserRouter>
-  )
-}
-```
-
-The `AuthProvider` initializes authentication, manages cookies, and exposes session state to your application.
+* You are using a modern browser (Chrome, Safari, Edge, Firefox)
+* You are running on `localhost` or HTTPS
 
 ---
 
-## Using Authentication State
+## Development Notes
 
-Authentication state is accessed via the `useAuth()` hook.
-
-```tsx
-import { useAuth } from '@seamless-auth/react'
-
-const { user, isAuthenticated, logout, hasRole } = useAuth()
-```
-
-Common properties:
-
-- `user` – the authenticated user object or `null`
-- `isAuthenticated` – whether the current session is authenticated
-- `logout()` – clears the session
-- `hasRole(role)` – checks role membership
-
----
-
-## Routing and Protected Views
-
-Seamless Auth does not require special routing primitives. Instead, authentication state is used directly in your components.
-
-Example:
-
-```tsx
-function Home() {
-  const { isAuthenticated } = useAuth()
-
-  if (!isAuthenticated) {
-    return <SignIn />
-  }
-
-  return <Dashboard />
-}
-```
-
-This keeps routing explicit and easy to reason about.
-
----
-
-## Development Behavior
-
-In development:
-
-- OTPs may be logged to the console
-- Cookies are issued locally
-- No external email or SMS providers are required
-
-Production deployments use the same authentication model with real delivery providers.
+* OTP codes will log to console in development
+* No real SMS or email provider required locally
+* Cookies are issued on localhost
 
 ---
 
 ## Next Steps
 
-From here, continue with:
+Continue with:
 
-- **Local Development** – ports, environment variables, Docker
-- **Authentication Flow** – how sessions and cookies work
-- **API Integration** – enforcing auth and roles
+* Local Development Guide
+* Authentication Flow Deep Dive
+* API Integration Guide
+* Production Deployment
 
 Each guide maps directly to the generated starter templates.
+
+---
