@@ -5,7 +5,6 @@ import NotFound from './pages/NotFound/NotFound'
 import DocsLayout from './layouts/DocsLayout'
 import DocPage from './components/DocPage'
 
-import './styles/global.css'
 import './index.css'
 const router = createBrowserRouter([
   {

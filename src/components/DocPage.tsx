@@ -18,19 +18,20 @@ export default function DocPage({ slug: fixedSlug }: { slug?: string }) {
   const next = DOCS[idx + 1]
 
   return (
-    <div className="doc-grid">
+    <div className="doc-container">
       <article className="doc">
         <MDXProvider components={components}>
           <Component />
         </MDXProvider>
-      </article>
 
-      <aside className="doc-aside">
-        <TableOfContents />
         <div className="pager">
           {prev && <a href={`/docs/${prev.slug}`}>&larr; {prev.title}</a>}
           {next && <a href={`/docs/${next.slug}`}>{next.title} &rarr;</a>}
         </div>
+      </article>
+
+      <aside className="doc-toc">
+        <TableOfContents />
       </aside>
     </div>
   )
