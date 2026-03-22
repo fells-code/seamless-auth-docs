@@ -1,7 +1,7 @@
 export const meta = {
-title: 'Self Hosting',
-order: 11,
-tags: ['self-hosting', 'deployment', 'infrastructure'],
+  title: 'Self Hosting',
+  order: 11,
+  tags: ['self-hosting', 'deployment', 'infrastructure'],
 }
 
 # Self Hosting
@@ -24,9 +24,9 @@ Run the auth server alongside your API and database using containers.
 
 This provides:
 
-* consistent runtime behavior
-* isolated services
-* reproducible deployments
+- consistent runtime behavior
+- isolated services
+- reproducible deployments
 
 The same model used in development with Docker Compose should carry into production.
 
@@ -36,10 +36,10 @@ The same model used in development with Docker Compose should carry into product
 
 A typical deployment includes:
 
-* Auth server (container)
-* API server (container)
-* Database (managed or containerized)
-* Web application (static host or container)
+- Auth server (container)
+- API server (container)
+- Database (managed or containerized)
+- Web application (static host or container)
 
 All services communicate over a private network.
 
@@ -71,11 +71,11 @@ All configuration is provided through environment variables.
 
 Production requires:
 
-* Cookie signing key
-* API service token
-* JWKS configuration
-* Allowed origins
-* Database connection settings
+- Cookie signing key
+- API service token
+- JWKS configuration
+- Allowed origins
+- Database connection settings
 
 Secrets should be injected at runtime using your platform’s secret management system.
 
@@ -89,9 +89,9 @@ All production traffic should use HTTPS.
 
 Recommendations:
 
-* Terminate TLS at a load balancer or reverse proxy
-* Use a dedicated domain for the auth server
-* Set cookie `Secure` and appropriate `SameSite` values
+- Terminate TLS at a load balancer or reverse proxy
+- Use a dedicated domain for the auth server
+- Set cookie `Secure` and appropriate `SameSite` values
 
 Example:
 
@@ -107,13 +107,13 @@ The API and web application should use this endpoint for authentication.
 
 Services should communicate over an internal network.
 
-* API → Auth via internal hostname
-* Auth → Database via internal hostname
+- API → Auth via internal hostname
+- Auth → Database via internal hostname
 
 The browser should only interact with:
 
-* your web application
-* your API
+- your web application
+- your API
 
 The auth server should not be exposed unnecessarily.
 
@@ -125,9 +125,9 @@ The auth server is stateless.
 
 To scale:
 
-* run multiple auth containers
-* use a shared database
-* place a load balancer in front
+- run multiple auth containers
+- use a shared database
+- place a load balancer in front
 
 Session validation relies on signed tokens and database state, so no session affinity is required.
 
@@ -137,17 +137,17 @@ Session validation relies on signed tokens and database state, so no session aff
 
 The database stores:
 
-* users
-* credentials
-* sessions
+- users
+- credentials
+- sessions
 
 Use a managed database when possible.
 
 Ensure:
 
-* backups are enabled
-* access is restricted
-* connections are encrypted
+- backups are enabled
+- access is restricted
+- connections are encrypted
 
 ---
 
@@ -155,10 +155,10 @@ Ensure:
 
 Seamless Auth works with:
 
-* Docker Compose (small deployments)
-* ECS or Kubernetes (scaled environments)
-* Virtual machines
-* Platform-as-a-Service
+- Docker Compose (small deployments)
+- ECS or Kubernetes (scaled environments)
+- Virtual machines
+- Platform-as-a-Service
 
 The system does not depend on any specific provider.
 
@@ -168,10 +168,10 @@ The system does not depend on any specific provider.
 
 When upgrading:
 
-* pull the latest image
-* review release notes
-* test in staging
-* deploy gradually
+- pull the latest image
+- review release notes
+- test in staging
+- deploy gradually
 
 Database migrations should be applied before or during deployment.
 
@@ -181,10 +181,10 @@ Database migrations should be applied before or during deployment.
 
 When self-hosting, you are responsible for:
 
-* infrastructure security
-* secret management
-* monitoring and logging
-* backups and recovery
+- infrastructure security
+- secret management
+- monitoring and logging
+- backups and recovery
 
 Seamless Auth provides the authentication system. You control how it is run.
 
@@ -194,9 +194,9 @@ Seamless Auth provides the authentication system. You control how it is run.
 
 The recommended production model is:
 
-* run the auth server as a container
-* use the official image
-* manage configuration through environment variables
-* keep all communication inside your infrastructure
+- run the auth server as a container
+- use the official image
+- manage configuration through environment variables
+- keep all communication inside your infrastructure
 
 This keeps authentication predictable and under your control.

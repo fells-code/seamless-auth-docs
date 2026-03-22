@@ -1,7 +1,7 @@
 export const meta = {
-title: 'Data Model',
-order: 9,
-tags: ['database', 'model', 'sessions'],
+  title: 'Data Model',
+  order: 9,
+  tags: ['database', 'model', 'sessions'],
 }
 
 # Data Model
@@ -16,11 +16,11 @@ The data model is designed to keep authentication explicit and inspectable. Each
 
 At a high level, the system is built around five core concepts:
 
-* Users
-* Credentials
-* Sessions
-* Events
-* Configuration
+- Users
+- Credentials
+- Sessions
+- Events
+- Configuration
 
 These map directly to database tables and are used across the auth server and API.
 
@@ -36,11 +36,11 @@ users
 
 Key fields:
 
-* `id` → primary identifier
-* `email` and `phone` → unique identity attributes
-* `roles` → authorization data
-* `verified`, `email_verified`, `phone_verified` → verification state
-* `revoked` → whether the account is disabled
+- `id` → primary identifier
+- `email` and `phone` → unique identity attributes
+- `roles` → authorization data
+- `verified`, `email_verified`, `phone_verified` → verification state
+- `revoked` → whether the account is disabled
 
 Users do not store passwords. Authentication is based on verification methods such as passkeys or magic links.
 
@@ -56,11 +56,11 @@ credentials
 
 Key fields:
 
-* `id` → credential identifier
-* `userId` → associated user
-* `publicKey` → cryptographic public key
-* `counter` → replay protection
-* `transports`, `deviceType`, `browser` → device metadata
+- `id` → credential identifier
+- `userId` → associated user
+- `publicKey` → cryptographic public key
+- `counter` → replay protection
+- `transports`, `deviceType`, `browser` → device metadata
 
 Each credential represents a device or authenticator registered by the user.
 
@@ -76,11 +76,11 @@ sessions
 
 Key fields:
 
-* `id` → session identifier
-* `userId` → associated user
-* `refreshTokenHash` → hashed refresh token
-* `expiresAt` and `idleExpiresAt` → session lifetime
-* `revokedAt`, `revokedReason` → revocation tracking
+- `id` → session identifier
+- `userId` → associated user
+- `refreshTokenHash` → hashed refresh token
+- `expiresAt` and `idleExpiresAt` → session lifetime
+- `revokedAt`, `revokedReason` → revocation tracking
 
 Sessions are issued after successful authentication and are validated on every request.
 
@@ -96,10 +96,10 @@ auth_events
 
 Key fields:
 
-* `user_id` → associated user
-* `type` → event type (login, logout, verification)
-* `ip_address`, `user_agent` → request context
-* `metadata` → additional structured data
+- `user_id` → associated user
+- `type` → event type (login, logout, verification)
+- `ip_address`, `user_agent` → request context
+- `metadata` → additional structured data
 
 This provides an audit trail of authentication behavior.
 
@@ -115,8 +115,8 @@ auth_actions
 
 Key fields:
 
-* `endpoint`, `method` → request signature
-* `count` → number of invocations
+- `endpoint`, `method` → request signature
+- `count` → number of invocations
 
 This is useful for monitoring and rate limiting patterns.
 
@@ -132,10 +132,10 @@ magic_link_tokens
 
 Key fields:
 
-* `token_hash` → stored token reference
-* `user_id` → associated user
-* `expires_at` → expiration time
-* `used_at` → whether the link has been consumed
+- `token_hash` → stored token reference
+- `user_id` → associated user
+- `expires_at` → expiration time
+- `used_at` → whether the link has been consumed
 
 Tokens are single-use and time-bound.
 
@@ -151,9 +151,9 @@ system_config
 
 Key fields:
 
-* `key` → configuration name
-* `value` → JSON payload
-* `updatedBy` → audit reference
+- `key` → configuration name
+- `value` → JSON payload
+- `updatedBy` → audit reference
 
 This allows runtime configuration without redeploying the system.
 
@@ -163,10 +163,10 @@ This allows runtime configuration without redeploying the system.
 
 The main relationships are:
 
-* A user can have many credentials
-* A user can have many sessions
-* A user can have many auth events
-* Magic link tokens belong to a user
+- A user can have many credentials
+- A user can have many sessions
+- A user can have many auth events
+- Magic link tokens belong to a user
 
 All relationships are enforced with foreign keys.
 
@@ -195,10 +195,10 @@ The database reflects each step in the process.
 
 The model follows a few principles:
 
-* Identity is separate from credentials
-* Sessions are explicit and traceable
-* All actions can be audited
-* No secrets are stored in plaintext
+- Identity is separate from credentials
+- Sessions are explicit and traceable
+- All actions can be audited
+- No secrets are stored in plaintext
 
 This structure makes the system easier to reason about and debug.
 

@@ -1,7 +1,7 @@
 export const meta = {
-title: 'Security Considerations',
-order: 10,
-tags: ['security', 'hardening', 'production'],
+  title: 'Security Considerations',
+  order: 10,
+  tags: ['security', 'hardening', 'production'],
 }
 
 # Security Considerations
@@ -16,9 +16,9 @@ This section focuses on the decisions that matter when moving from local develop
 
 Seamless Auth separates responsibility across three layers:
 
-* Auth server → issues identity and sessions
-* API → enforces authentication and authorization
-* Frontend → reads state and renders UI
+- Auth server → issues identity and sessions
+- API → enforces authentication and authorization
+- Frontend → reads state and renders UI
 
 The frontend is not a trusted layer. All security decisions must be enforced by your API.
 
@@ -30,9 +30,9 @@ Authentication state is stored in HTTP-only cookies.
 
 These cookies should always be configured with:
 
-* HttpOnly → prevents access from JavaScript
-* SameSite=Lax or Strict → limits cross-site requests
-* Secure → required when using HTTPS
+- HttpOnly → prevents access from JavaScript
+- SameSite=Lax or Strict → limits cross-site requests
+- Secure → required when using HTTPS
 
 In development, `Secure` may be disabled to allow localhost testing. In production, it must be enabled.
 
@@ -46,9 +46,9 @@ Session cookies are signed by your API.
 
 Requirements:
 
-* Use a strong, randomly generated signing key
-* Do not reuse keys across environments
-* Do not commit keys to source control
+- Use a strong, randomly generated signing key
+- Do not reuse keys across environments
+- Do not commit keys to source control
 
 Changing the signing key invalidates all active sessions.
 
@@ -62,9 +62,9 @@ Your API must explicitly allow the correct origin.
 
 In production:
 
-* Do not use wildcard origins
-* Match UI origin exactly
-* Ensure cookie settings align with origin
+- Do not use wildcard origins
+- Match UI origin exactly
+- Ensure cookie settings align with origin
 
 Incorrect origin configuration is one of the most common causes of authentication failure.
 
@@ -76,9 +76,9 @@ Seamless Auth relies on short-lived verification mechanisms.
 
 For OTP and similar flows:
 
-* Tokens should expire quickly
-* Verification attempts should be limited
-* Endpoints should be rate limited
+- Tokens should expire quickly
+- Verification attempts should be limited
+- Endpoints should be rate limited
 
 In development, OTP values may be logged. This must not be enabled in production.
 
@@ -90,9 +90,9 @@ Authentication identifies the user. Authorization controls access.
 
 Rules:
 
-* Enforce authorization in the API
-* Never rely on frontend checks
-* Treat missing roles as denied access
+- Enforce authorization in the API
+- Never rely on frontend checks
+- Treat missing roles as denied access
 
 Example:
 
@@ -109,10 +109,10 @@ Unauthorized requests should return `403 Forbidden`.
 
 Seamless Auth uses layered security:
 
-* Cookies protect session transport
-* Tokens are verified server-side
-* Authorization is enforced explicitly
-* Roles are part of identity
+- Cookies protect session transport
+- Tokens are verified server-side
+- Authorization is enforced explicitly
+- Roles are part of identity
 
 Each layer reinforces the others.
 
@@ -124,17 +124,17 @@ Development environments are more permissive.
 
 Common differences:
 
-* OTP values may be logged
-* Cookies may not be secure
-* Origins are local
+- OTP values may be logged
+- Cookies may not be secure
+- Origins are local
 
 Production environments should:
 
-* Require HTTPS
-* Use secure cookies
-* Disable all debug logging
-* Configure real delivery providers
-* Restrict allowed origins
+- Require HTTPS
+- Use secure cookies
+- Disable all debug logging
+- Configure real delivery providers
+- Restrict allowed origins
 
 The architecture remains the same. Only the constraints change.
 
@@ -144,10 +144,10 @@ The architecture remains the same. Only the constraints change.
 
 Production systems should record:
 
-* Authentication failures
-* Authorization failures
-* Suspicious login patterns
-* Administrative actions
+- Authentication failures
+- Authorization failures
+- Suspicious login patterns
+- Administrative actions
 
 This data is necessary for auditing and incident response.
 
@@ -155,10 +155,10 @@ This data is necessary for auditing and incident response.
 
 ## Summary
 
-* Enforce all security at the API layer
-* Use secure cookie configuration
-* Keep signing keys private and rotated
-* Define origins explicitly
-* Treat development shortcuts as unsafe in production
+- Enforce all security at the API layer
+- Use secure cookie configuration
+- Keep signing keys private and rotated
+- Define origins explicitly
+- Treat development shortcuts as unsafe in production
 
 Seamless Auth provides the primitives. Security depends on how they are applied.
