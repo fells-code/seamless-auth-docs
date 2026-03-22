@@ -8,24 +8,24 @@ export const meta = {
 
 Seamless Auth runs a complete passwordless authentication stack locally.
 
-This guide walks you from zero → working environment with the fewest possible surprises.
+This guide takes you from zero to a working system with the same architecture used in production.
 
-You have two setup paths:
+There are two ways to run the stack:
 
-- **Docker (recommended)** – fastest, least friction
-- **Manual setup** – for full control or custom environments
+- Docker — fastest setup, no local dependencies
+- Manual setup — more control, requires local services
 
 ---
 
 ## Step 1 — Environment Check
 
-Before generating your project, confirm one of the following setups.
+Before creating a project, confirm your environment.
 
 ---
 
 ### Option A — Docker (Recommended)
 
-You need:
+Requirements:
 
 - Docker
 - Docker Compose
@@ -37,22 +37,21 @@ docker --version
 docker compose version
 ```
 
-If not installed, download Docker Desktop:
+If Docker is not installed:
 
 [https://www.docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop)
 
-> **Why Docker?**
-> Docker eliminates local Postgres setup, environment drift, and version conflicts.
+Docker avoids local database setup and keeps environments consistent.
 
 ---
 
-### Option B — Manual Setup (No Docker)
+### Option B — Manual Setup
 
-You need:
+Requirements:
 
 - Node.js ≥ 20
 - npm or pnpm
-- PostgreSQL running locally or remotely
+- PostgreSQL
 
 Check Node:
 
@@ -72,13 +71,13 @@ If Postgres is not installed:
 - Ubuntu: `sudo apt install postgresql`
 - Windows: Official PostgreSQL installer
 
-> ⚠️ If Postgres is not running, Seamless Auth will fail to start.
+Postgres must be running before starting the auth server.
 
 ---
 
 ## Option 1 — Quick Start with Docker
 
-Generate a project:
+Create a project:
 
 ```bash
 npx create-seamless my-app
@@ -91,20 +90,18 @@ Start the stack:
 docker compose up
 ```
 
-This launches:
+This starts:
 
 - Postgres
-- Seamless Auth server
-- Express API
-- React (Vite) web app
+- Auth server
+- API server
+- Web app
 
 Open:
 
 ```
-http://localhost:5001
+http://localhost:5173
 ```
-
----
 
 <div className="my-10 w-half">
   <img
@@ -115,114 +112,118 @@ http://localhost:5001
     className="block w-full max-w-3xl h-auto mx-auto rounded-xl border border-white/10 shadow-lg"
   />
 </div>
+
 ---
 
-### ⚠️ Common Docker Issue: Port 5432 Already In Use
+### Port Conflict: 5432 Already In Use
 
-If you already have Postgres running locally, you may see:
+If you already have Postgres running locally:
 
 ```
 Bind for 0.0.0.0:5432 failed: port is already allocated
 ```
 
-Fix by editing `docker-compose.yml`:
+Update `docker-compose.yml`:
 
 ```yaml
 ports:
   - '5433:5432'
 ```
 
-Only the **host port** changes. Internal networking remains unchanged.
-
-> Containers still connect to Postgres via service name `db`.
+Only the host port changes. Containers still connect using `db`.
 
 ---
 
-## Option 2 — Manual Setup (No Docker)
+## Option 2 — Manual Setup
 
-If not using Docker, follow these steps carefully.
+If you are not using Docker, run each service directly.
 
 ---
 
-### Create Databases
+### 1. Start PostgreSQL
 
-Start Postgres and run:
+Ensure Postgres is running on:
+
+```
+localhost:5432
+```
+
+---
+
+### 2. Initialize the Auth Server
 
 ```bash
 cd auth
-npm run db:create
-```
+npm install
 
-```bash
-cd api
 npm run db:create
+npm run db:migrate
 ```
 
 ---
 
-### Run Migrations
-
-If tables are not created automatically:
-
-```bash
-cd auth
-npm run migrate:up
-```
+### 3. Initialize the API
 
 ```bash
 cd api
-npm run migrate:up
+npm install
+
+npm run db:create
+npm run db:migrate
 ```
 
 ---
 
-### Start Services
+### 4. Start Services
 
-In separate terminals:
+Run each service in a separate terminal:
 
 ```bash
-cd auth && npm install && npm run dev
+cd auth && npm run dev
 ```
 
 ```bash
-cd api && npm install && npm run dev
+cd api && npm run dev
 ```
 
 ```bash
-cd web && npm install && npm run dev
+cd web && npm run dev
 ```
 
 Open:
 
 ```
-http://localhost:5001
+http://localhost:5173
 ```
+
+---
 
 ## Troubleshooting
 
 ### Cannot Connect to Database
 
-Checklist:
+Check:
 
-- Is Postgres running?
-- Are credentials correct?
+- Postgres is running
+- Database credentials match your `.env`
 
 ---
 
-### Passkey Not Supported
+### Passkeys Not Working
 
 Ensure:
 
-- You are using a modern browser (Chrome, Safari, Edge, Firefox)
-- You are running on `localhost` or HTTPS
+- You are using a modern browser
+- You are on `localhost` or HTTPS
+- You are not inside an unsupported iframe context
 
 ---
 
 ## Development Notes
 
-- OTP codes will log to console in development
-- No real SMS or email provider required locally
-- Cookies are issued on localhost
+- OTP codes are logged to the console in development
+- No external SMS or email provider is required locally
+- Sessions use HTTP-only cookies on localhost
 
 ---
 
@@ -231,10 +232,8 @@ Ensure:
 Continue with:
 
 - Local Development Guide
-- Authentication Flow Deep Dive
-- API Integration Guide
+- Authentication Flow
+- API Integration
 - Production Deployment
 
-Each guide maps directly to the generated starter templates.
-
----
+Each guide builds directly on the generated project.

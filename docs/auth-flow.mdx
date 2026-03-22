@@ -6,7 +6,9 @@ export const meta = {
 
 # Authentication Flow
 
-This page explains how authentication works end to end in Seamless Auth. The goal is to make the flow explicit so you can reason about security, debug issues locally, and extend the system with confidence.
+This page explains how authentication works end to end in Seamless Auth.
+
+The goal is to make the flow explicit so you can reason about security, debug issues locally, and extend the system with confidence.
 
 Seamless Auth uses passwordless verification to establish a session, then relies on secure cookies and server-side validation for all subsequent requests.
 
@@ -14,12 +16,12 @@ Seamless Auth uses passwordless verification to establish a session, then relies
 
 ## High-Level Overview
 
-At a high level, authentication proceeds in two phases:
+Authentication happens in two phases:
 
-1. **Verification** – Prove control of an identity (for example via OTP or WebAuthn)
-2. **Session** – Issue and validate an authenticated session using cookies
+1. Verification — prove control of an identity
+2. Session — establish a trusted session using cookies
 
-Once a session is established, no further verification is required until the session expires or is revoked.
+Once a session is established, the system relies on that session for all future requests.
 
 ---
 
@@ -27,47 +29,49 @@ Once a session is established, no further verification is required until the ses
 
 ### 1. Initiate Authentication
 
-The flow begins in the web application. A user initiates sign-in using the Seamless Auth frontend SDK.
+The flow begins in the web application.
 
-Typical triggers include:
+A user initiates authentication using the Seamless Auth SDK.
 
-- Submitting an email or phone number for OTP
-- Initiating a WebAuthn / Passkey challenge
+Common triggers:
 
-The web application sends a request to the Seamless Auth server to begin verification.
+- Entering an email or phone number for OTP
+- Starting a WebAuthn or passkey challenge
+
+The web application sends a request to the auth server to begin verification.
 
 ---
 
 ### 2. Verification
 
-The auth server performs verification based on the configured method.
+The auth server performs verification.
 
-Examples:
+Examples include:
 
-- Generating and validating a one-time password (OTP)
-- Performing a WebAuthn challenge/response
+- Generating and validating a one-time password
+- Handling a WebAuthn challenge and response
 
-In development mode, OTPs may be logged to the console for convenience. In production, delivery is handled by real email or SMS providers.
+In development, OTPs may be logged to the console. In production, delivery is handled by external providers.
 
-Verification always happens on the auth server. The frontend never validates credentials directly.
+Verification always happens on the auth server. The frontend does not validate credentials.
 
 ---
 
 ### 3. Session Issuance
 
-On successful verification, the auth server issues a session.
+After successful verification, the auth server issues a session.
 
 This includes:
 
 - A short-lived access cookie
-- A refresh cookie (if configured)
+- A refresh cookie if enabled
 
-Key characteristics:
+Key properties:
 
-- Cookies are **HTTP-only**
-- Cookies are **same-site** by default
-- Tokens are **signed and verifiable**
-- Cookies are set by the auth server response
+- Cookies are HTTP-only
+- Cookies are same-site by default
+- Tokens are signed and verifiable
+- Cookies are set in the auth server response
 
 The browser stores these cookies automatically.
 
@@ -75,55 +79,53 @@ The browser stores these cookies automatically.
 
 ## What the Browser Stores
 
-After authentication, the browser stores:
+After authentication, the browser stores only HTTP-only cookies.
 
-- One or more HTTP-only cookies
-
-The browser does **not** store:
+It does not store:
 
 - Passwords
 - Access tokens in JavaScript
 - Identity provider secrets
 
-This reduces exposure to client-side attacks such as XSS.
+This reduces exposure to client-side attacks.
 
 ---
 
 ## Authenticated Requests
 
-Once a session exists, authenticated requests follow a simple pattern.
+Once a session exists, the flow is straightforward.
 
 ### Web → API
 
 1. The web application makes a request to your API
-2. The browser automatically includes auth cookies
-3. The API validates the session using Seamless Auth middleware
+2. The browser includes cookies automatically
+3. The API validates the session using middleware
 4. The request proceeds with authenticated user context
 
-The frontend does not manually attach tokens or headers.
+The frontend does not manually attach tokens.
 
 ---
 
 ## API Session Validation
 
-On the API side, authentication is enforced using middleware.
+Authentication is enforced in the API.
 
 A typical request lifecycle:
 
 1. `requireAuth` validates the access cookie
 2. The session token is verified using the signing key or JWKS
 3. A normalized user object is attached to the request
-4. Downstream handlers access `req.user`
+4. Handlers access `req.user`
 
-If validation fails, the request is rejected with `401 Unauthorized`.
+If validation fails, the request is rejected with a 401 response.
 
 ---
 
 ## Authorization
 
-Authentication establishes identity. Authorization determines access.
+Authentication establishes identity. Authorization controls access.
 
-After `requireAuth` runs, authorization is enforced explicitly using roles or permissions.
+After `requireAuth`, authorization is handled explicitly.
 
 Example:
 
@@ -136,7 +138,7 @@ app.get(
 )
 ```
 
-This separation keeps authorization logic visible and testable.
+Authorization rules are defined in application code.
 
 ---
 
@@ -144,11 +146,11 @@ This separation keeps authorization logic visible and testable.
 
 Sessions are time-bound.
 
-- Access cookies expire after a short TTL
-- Refresh mechanisms may be used to issue new access cookies
-- Expired or invalid sessions result in re-authentication
+- Access cookies expire after a short duration
+- Refresh logic may issue new access cookies
+- Expired sessions require re-authentication
 
-From the application's perspective, an expired session behaves the same as an unauthenticated request.
+From the application’s perspective, an expired session is treated as unauthenticated.
 
 ---
 
@@ -157,33 +159,33 @@ From the application's perspective, an expired session behaves the same as an un
 In local development:
 
 - OTP values may be logged to the console
-- Cookies are issued locally
-- No external identity providers are required
+- Cookies are issued on localhost
+- No external providers are required
 
-The session and validation model remains identical to production.
+The session model and validation flow remain the same as production.
 
 ---
 
 ## Why This Model
 
-This approach provides several benefits:
+This approach provides:
 
 - No tokens exposed to JavaScript
 - No redirect-based flows
 - Clear trust boundaries
-- Explicit enforcement in application code
-- Local development that mirrors production
+- Explicit enforcement in the API
+- Consistent behavior across environments
 
-Seamless Auth treats authentication as infrastructure, not a UI flow.
+Authentication becomes part of your system rather than an external dependency.
 
 ---
 
-## What’s Next
+## Next Steps
 
 Continue with:
 
-- **API Integration** – enforcing authentication and mapping users
-- **Frontend Integration** – consuming auth state in the UI
-- **Roles and Authorization** – controlling access beyond authentication
+- API Integration — enforcing authentication and mapping users
+- Frontend Integration — consuming auth state
+- Roles and Authorization — controlling access
 
-Each guide builds directly on the flow described here.
+Each section builds directly on this flow.

@@ -6,96 +6,100 @@ export const meta = {
 
 # What is Seamless Auth?
 
-Seamless Auth is an open source, passwordless authentication system designed to be embedded directly into your application.
+Seamless Auth is an open source, passwordless authentication system designed to run as part of your application infrastructure.
 
-It provides a small, explicit core and framework-specific integrations that allow you to add modern authentication without redirects, third-party hosted UIs, or opaque identity infrastructure.
+It provides a small, explicit core and framework-specific integrations that allow you to add modern authentication without redirects, hosted identity UIs, or external dependencies.
 
-Seamless Auth can be self-hosted entirely, run locally for development, or deployed as isolated infrastructure per environment.
+Seamless Auth can be run locally, self-hosted, or deployed as isolated infrastructure per environment.
 
 ---
 
 ## The Problem
 
-Authentication is often the most complex and least understood part of an application.
+Authentication is often the most complex and least controlled part of an application.
 
-Traditional systems rely on passwords, redirect-based OAuth flows, and shared multi-tenant identity providers. These approaches introduce several issues:
+Traditional approaches rely on passwords, redirect-based OAuth flows, and shared multi-tenant identity providers. These patterns introduce several issues:
 
-- Passwords are insecure and difficult to protect
+- Passwords are inherently insecure and difficult to manage safely
 - Redirects and callbacks complicate application architecture
-- Tokens are often exposed to the browser or client-side storage
-- Authorization logic becomes tightly coupled to identity providers
-- Local development rarely matches production behavior
+- Tokens are often exposed to the browser or stored client-side
+- Authorization logic becomes tightly coupled to external providers
+- Local development environments rarely reflect production behavior
 
-As a result, developers spend significant time integrating, debugging, and securing authentication instead of building product features.
+The result is a system that is difficult to reason about, difficult to debug, and difficult to trust.
 
 ---
 
 ## The Seamless Auth Approach
 
-Seamless Auth is built around a simple idea:
+Seamless Auth treats authentication as infrastructure.
 
-> Authentication should behave like any other piece of application infrastructure.
+Instead of redirecting users away from your application or relying on hosted identity flows, Seamless Auth runs alongside your services and integrates directly with your frontend and backend.
 
-Instead of redirecting users away from your app or relying on hosted identity flows, Seamless Auth runs as part of your system and integrates directly with your frontend and backend.
+Authentication becomes part of your system, not something that sits outside of it.
 
 Key characteristics:
 
-- **Passwordless by default**
-  Authentication is based on possession and cryptographic verification, not shared secrets.
-- **Embedded authentication**
-  Auth flows live inside your application. There are no redirects, callbacks, or iframes.
-- **Server-side session validation**
-  Sessions are managed using secure, HTTP-only cookies and validated by your API.
-- **Explicit authorization**
-  Roles and access checks are enforced directly in application code.
-- **Local-first development**
-  The same authentication model works in development, staging, and production.
+- **Passwordless by default**  
+  Authentication is based on cryptographic verification, not shared secrets.
+
+- **Embedded authentication**  
+  Auth flows are part of your application. There are no redirects or external UI layers.
+
+- **Server-side session validation**  
+  Sessions are issued and validated using secure, HTTP-only cookies.
+
+- **Explicit authorization**  
+  Roles and access control are defined and enforced in your own code.
+
+- **Consistent environments**  
+  The same model works locally, in staging, and in production.
 
 ---
 
 ## Open Source and Extensible
 
-Seamless Auth is built as an open source system with clear separation between core logic and framework adapters.
+Seamless Auth is built as an open system with clear separation between core logic and integrations.
 
 - A framework-agnostic core handles cryptography, verification, and identity resolution
-- Thin adapters integrate Seamless Auth into popular server frameworks
-- Starter templates demonstrate real-world usage without hiding complexity
+- Thin adapters integrate Seamless Auth into server frameworks
+- Starter templates demonstrate full, working systems without hiding complexity
 
-This design makes it straightforward to add new integrations or adapt Seamless Auth to different runtimes.
+This makes it possible to extend or adapt the system without rewriting core components.
 
 ---
 
 ## Technology Overview
 
-Seamless Auth is powered by modern web standards and explicit infrastructure primitives.
+Seamless Auth is built on modern web standards and explicit infrastructure primitives.
 
 ### WebAuthn and Passkeys
 
-Seamless Auth uses **WebAuthn** and **Passkeys** to provide secure, phishing-resistant authentication without passwords.
+Seamless Auth uses WebAuthn and Passkeys to provide secure, phishing-resistant authentication without passwords.
 
-Credential registration, challenge generation, and verification are handled by the auth server. Your application only consumes verified session state.
+Credential registration, challenge generation, and verification are handled by the auth server. Your application interacts only with verified session state.
 
 ### Secure Cookies and Token Verification
 
-Authenticated sessions are represented using short-lived, HTTP-only cookies.
+Sessions are represented using short-lived, HTTP-only cookies.
 
-Tokens are signed and verifiable using **JSON Web Key Sets (JWKS)**, allowing APIs to validate sessions without contacting an external identity provider.
+Tokens are signed and exposed via JSON Web Key Sets (JWKS), allowing APIs to validate sessions independently without relying on an external identity provider.
 
-### Explicit Infrastructure
+### Infrastructure-Oriented Design
 
 Seamless Auth is designed to run as part of your infrastructure:
 
 - Local development via Node.js or Docker Compose
-- Deployment using container-based platforms
-- Configuration via environment variables and infrastructure-as-code
+- Deployment using containers or infrastructure platforms
+- Configuration through environment variables and code
 
-There are no hidden services or required hosted dependencies.
+There are no required hosted services and no hidden components.
 
 ---
 
 ## What You’ll Learn in These Docs
 
-The documentation walks through:
+The documentation covers:
 
 - How authentication flows through the system
 - How sessions and cookies are issued and validated
@@ -103,7 +107,7 @@ The documentation walks through:
 - How to enforce role-based authorization
 - How to run and test the system locally
 
-Each guide is designed to be runnable and aligned with the starter templates.
+Each guide is aligned with the starter templates and can be run end to end.
 
 ---
 
@@ -112,9 +116,9 @@ Each guide is designed to be runnable and aligned with the starter templates.
 Seamless Auth is a good fit if you:
 
 - Want passwordless authentication without redirects
-- Prefer explicit, code-level control over auth and authorization
-- Need a local development environment that mirrors production
+- Prefer direct control over authentication and authorization
+- Need local development that mirrors production
 - Value open source, inspectable systems
 - Want to avoid vendor lock-in for identity infrastructure
 
-If that sounds like your use case, the next sections will guide you through getting started.
+If that matches your needs, the next sections will guide you through getting started.

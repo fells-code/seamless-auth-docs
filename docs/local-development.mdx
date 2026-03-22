@@ -1,201 +1,212 @@
 export const meta = {
   title: 'Local Development',
   order: 4,
-  tags: ['development', 'docker', 'local'],
+  tags: ['development', 'usage'],
 }
 
 # Local Development
 
-This guide explains how to run Seamless Auth locally and what to expect in a development environment. The goal is to make local development behave as closely as possible to production, while keeping setup fast and predictable.
+At this point you should have a running Seamless Auth stack.
 
-You can run the stack in two ways:
+This section focuses on what was generated and how to work with it during development.
 
-- **Docker Compose** (recommended for first-time setup)
-- **Manual processes** (useful for debugging individual services)
-
-Both approaches use the same configuration and authentication model.
+The goal is to make the system understandable, not just runnable.
 
 ---
 
-## Components and Ports
+## What You Have
 
-A standard local setup includes the following services:
+A typical project created with `create-seamless` looks like this:
 
-```
-| Service     | Description                           | Default Port |
-| ----------- | ------------------------------------- | ------------ |
-| Web UI      | React (Vite) frontend                 | `5001`       |
-| API         | Application backend (Express example) | `3000`       |
-| Auth Server | Seamless Auth server                  | `5312`       |
-| Database    | Postgres                              | `5432`       |
+```text
+/web   → React application
+/api   → Express API
+/auth  → Seamless Auth server
 ```
 
-These ports are configurable via environment variables.
+Each piece has a specific role:
+
+- The web app handles user interaction and authentication UI
+- The API validates sessions and enforces authorization
+- The auth server manages identity, credentials, and session state
+
+You are working with a complete system, not a library.
 
 ---
 
-## Option 1: Docker Compose (Recommended)
+## The Web Application
 
-Docker Compose provides the fastest way to get a complete, working environment.
+The web starter is a React application that already includes Seamless Auth integration.
 
-### Requirements
+### AuthProvider
 
-- Docker
-- Docker Compose
+At the root of the app, the `AuthProvider` is configured:
 
-### Start the stack
-
-From the project root:
-
-```bash
-docker compose up
+```tsx
+<AuthProvider apiHost={import.meta.env.VITE_API_URL}>
+  <App />
+</AuthProvider>
 ```
 
-This command:
-
-- Starts Postgres
-- Starts the Seamless Auth server
-- Starts the API server
-- Starts the web UI
-
-All services run in development mode with hot reload enabled.
-
-### Access the application
-
-Once all services are running, open:
-
-```
-http://localhost:5001
-```
-
-Changes to the source code are picked up automatically without rebuilding containers.
-
-### Stopping the stack
-
-To stop all services:
-
-```bash
-docker compose down
-```
-
-The database volume is preserved between runs unless explicitly removed.
+This connects the frontend to your API and establishes the session context.
 
 ---
 
-## Option 2: Running Services Manually
+### useAuth Hook
 
-You can also run each service directly using Node.js. This is useful when debugging or modifying a single component.
+Authentication state is accessed through the `useAuth` hook:
 
-In separate terminals:
-
-### Auth Server
-
-```bash
-cd auth
-npm install
-npm run dev
+```tsx
+const { user, login, register, logout } = useAuth()
 ```
 
-Runs on:
+This gives you:
 
-```
-http://localhost:5312
-```
+- `user` → current authenticated user
+- `login()` → start authentication
+- `register()` → create a new credential
+- `logout()` → clear session
+
+No tokens are handled directly in the frontend.
 
 ---
 
-### API Server
+### Authenticated UI
 
-```bash
-cd api
-npm install
-npm run dev
-```
+The starter includes basic examples of:
 
-Runs on:
+- registration
+- login
+- conditional rendering based on `user`
 
-```
-http://localhost:3000
-```
+You can build on this pattern to protect routes or show user-specific content.
 
 ---
 
-### Web Application
+## The API Server
 
-```bash
-cd web
-npm install
-npm run dev
+The API starter is where authentication is enforced.
+
+This is where requests are trusted and authorization decisions are made.
+
+---
+
+### createSeamlessServer
+
+The server is initialized using:
+
+```ts
+createSeamlessServer({
+  authServerUrl: process.env.AUTH_SERVER_URL,
+  cookieSecret: process.env.COOKIE_SIGNING_KEY,
+  serviceSecret: process.env.API_SERVICE_TOKEN,
+  issuer: process.env.APP_ORIGIN,
+  audience: process.env.AUTH_SERVER_URL,
+  jwksKid: process.env.JWKS_KID,
+})
 ```
 
-Runs on:
+This connects your API to the auth server and enables session validation.
 
+---
+
+### requireAuth
+
+To protect a route:
+
+```ts
+app.get('/protected', requireAuth, (req, res) => {
+  res.json({ user: req.user })
+})
 ```
-http://localhost:5001
+
+If the request does not have a valid session, it is rejected.
+
+---
+
+### requireRole
+
+For role-based access:
+
+```ts
+app.get('/admin', requireRole('admin'), (req, res) => {
+  res.send('admin only')
+})
 ```
 
----
-
-## Environment Configuration
-
-Each service uses its own `.env` file:
-
-- `auth/.env`
-- `api/.env`
-- `web/.env`
-
-These files are generated automatically by `create-seamless` and contain sensible defaults for local development.
-
-Common variables include:
-
-- Service ports
-- Database connection strings
-- Cookie signing keys
-- Allowed origins
-
-Changes to environment variables require restarting the affected service.
+Authorization is explicit and handled in your code.
 
 ---
 
-## Development-Only Behavior
+### Request Lifecycle
 
-Local development includes a few conveniences that are not intended for production:
+For a protected request:
 
-- One-time passwords (OTPs) may be logged to the console
-- External email and SMS providers are not required
-- Security limits may be relaxed for testing
+1. Browser sends cookies with the request
+2. Middleware validates the session
+3. `req.user` is populated
+4. Your handler runs with a trusted user
 
-The authentication and session model remains the same across environments.
-
----
-
-## Debugging Tips
-
-- If authentication fails, verify that all services are running and ports match your environment configuration
-- Clear cookies if session state becomes inconsistent
-- Check the auth server logs when debugging verification issues
-- Restart services after changing environment variables
+There is no client-side token validation.
 
 ---
 
-## Moving to Production
+## The Auth Server
 
-When deploying to production:
+The auth server is responsible for:
 
-- Replace development secrets with secure values
-- Configure real email and SMS delivery providers
-- Lock down allowed origins and cookie settings
+- registering credentials
+- verifying authentication challenges
+- issuing session cookies
+- signing and exposing JWKS
 
-The same architecture and integration patterns apply.
+You do not interact with it directly from your application code.
+
+Your API communicates with it through defined endpoints and shared configuration.
 
 ---
 
-## What’s Next
+## Working Locally
 
-After running the system locally, continue with:
+When developing:
 
-- **Authentication Flow** – how verification and sessions work
-- **API Integration** – enforcing authentication and roles
-- **Frontend Integration** – using auth state in the UI
+- The web app talks to the API on `localhost`
+- The API validates sessions against the auth server
+- The auth server reads and writes session state to the database
 
-Each guide builds directly on the local setup described here.
+All communication happens over HTTP using cookies.
+
+This mirrors production behavior.
+
+---
+
+## Making Changes
+
+You can modify each layer independently:
+
+- Update UI in `/web`
+- Add routes in `/api`
+- Extend identity logic in `/auth`
+
+Changes are picked up immediately when running in development mode.
+
+---
+
+## Debugging
+
+When something does not work as expected:
+
+- Check API logs for authentication errors
+- Check auth server logs for verification issues
+- Inspect cookies in the browser
+- Confirm environment variables match across services
+
+Most issues come from mismatched configuration between services.
+
+---
+
+## Next Step
+
+Now that you understand how the system is structured in practice, the next section walks through the data model.
+
+This will explain how users, credentials, and sessions are stored and how they relate to each other.

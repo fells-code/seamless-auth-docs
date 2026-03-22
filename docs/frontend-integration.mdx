@@ -6,33 +6,37 @@ export const meta = {
 
 # Frontend Integration
 
-This guide explains how to integrate Seamless Auth into a frontend application using the React SDK.
+This guide shows how to use Seamless Auth in a React application using the official SDK.
 
-The React SDK is intentionally small. It provides:
-
-- A provider to initialize authentication
-- A hook to access authenticated state
-- Optional UI helpers for common flows
-
-All security-sensitive logic lives on the auth server and API. The frontend consumes verified session state.
+The frontend layer is intentionally thin. It does not verify credentials or tokens. It reads session state from cookies and exposes it to your components.
 
 ---
 
-## Installing the React SDK
+## What the SDK Provides
 
-Install the SDK and your routing library:
+The React package exposes a small set of primitives:
+
+- `AuthProvider` to initialize the client
+- `useAuth()` to access session state and actions
+- Optional helpers for common UI flows
+
+All security-sensitive work happens on the auth server and in your API.
+
+---
+
+## Installation
 
 ```bash
 npm install @seamless-auth/react react-router-dom
 ```
 
-TypeScript types are included out of the box.
+TypeScript types are included.
 
 ---
 
-## Initializing Authentication
+## AuthProvider
 
-Authentication is initialized by wrapping your application in `AuthProvider`.
+Wrap your application with `AuthProvider`.
 
 ```tsx
 import { BrowserRouter } from 'react-router-dom'
@@ -42,7 +46,7 @@ import App from './App'
 export default function Root() {
   return (
     <BrowserRouter>
-      <AuthProvider apiHost={import.meta.env.VITE_AUTH_SERVER_URL} mode="server">
+      <AuthProvider apiHost={import.meta.env.VITE_API_URL} mode="server">
         <App />
       </AuthProvider>
     </BrowserRouter>
@@ -50,38 +54,45 @@ export default function Root() {
 }
 ```
 
-The provider:
+Key options:
 
-- Establishes communication with the auth server
-- Synchronizes session state using cookies
-- Makes authentication state available throughout the app
+- `apiHost` points to your API
+- `mode` controls how requests are made (`server` routes through your API)
+
+What the provider does:
+
+- reads and syncs cookies with the backend
+- fetches current session state
+- exposes auth state to the component tree
 
 ---
 
-## Accessing Authentication State
+## useAuth Hook
 
-Authentication state is accessed via the `useAuth()` hook.
+Use `useAuth()` anywhere in your component tree.
 
 ```tsx
 import { useAuth } from '@seamless-auth/react'
 
-const { user, isAuthenticated, logout, hasRole } = useAuth()
+const { user, isAuthenticated, login, register, logout, hasRole } = useAuth()
 ```
 
-Common properties:
+Common fields:
 
-- `user` – the authenticated user object or `null`
-- `isAuthenticated` – whether the user has an active session
-- `logout()` – clears the current session
-- `hasRole(role)` – checks role membership
+- `user` → current user or `null`
+- `isAuthenticated` → boolean
+- `login()` → start verification flow
+- `register()` → create a new credential
+- `logout()` → clear session
+- `hasRole(role)` → check authorization hints in the UI
 
-The `user` object reflects server-verified identity state.
+The `user` object is derived from server-verified state.
 
 ---
 
-## Signing In
+## Starting Authentication
 
-To initiate authentication, call `login()`.
+Call `login()` to begin a sign-in flow.
 
 ```tsx
 const { login } = useAuth()
@@ -91,15 +102,51 @@ const { login } = useAuth()
 </button>
 ```
 
-This triggers a passwordless verification flow handled entirely by the auth server.
+Or call `register()` to create a new credential.
 
-The frontend does not handle credentials, secrets, or token verification.
+```tsx
+const { register } = useAuth()
+
+<button onClick={() => register({ email: 'user@example.com' })}>
+  Register
+</button>
+```
+
+The SDK sends requests to your API. The API forwards them to the auth server. The frontend never handles secrets.
 
 ---
 
-## Signing Out
+## Session State
 
-To end a session:
+After verification succeeds:
+
+- the auth server sets HTTP-only cookies
+- the browser stores them automatically
+- the SDK reads session state via your API
+
+You do not store tokens in localStorage or attach headers manually.
+
+---
+
+## Rendering Based on Auth State
+
+Use `isAuthenticated` or `user` to control UI.
+
+```tsx
+const { isAuthenticated, user } = useAuth()
+
+if (!isAuthenticated) {
+  return <SignIn />
+}
+
+return <Dashboard user={user} />
+```
+
+Keep authorization decisions in your API. The frontend should only reflect state.
+
+---
+
+## Logging Out
 
 ```tsx
 const { logout } = useAuth()
@@ -107,10 +154,61 @@ const { logout } = useAuth()
 <button onClick={logout}>Sign out</button>
 ```
 
-This clears authentication cookies and resets local auth state.
+This clears cookies and resets local state.
 
 ---
 
-## Conditional Rendering
+## Routing Patterns
 
-Seamless Auth does not
+A simple protected route pattern:
+
+```tsx
+import { useAuth } from '@seamless-auth/react'
+import { Navigate } from 'react-router-dom'
+
+function Protected({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated } = useAuth()
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />
+  }
+
+  return <>{children}</>
+}
+```
+
+Use this to guard routes in your router.
+
+---
+
+## How Requests Flow
+
+With `mode="server"`:
+
+1. The browser calls your API
+2. Cookies are included automatically
+3. The API validates the session
+4. The API responds with data
+
+The frontend never talks directly to the auth server in this mode.
+
+---
+
+## Development Notes
+
+- The SDK assumes cookies are available on `localhost`
+- No client-side token storage is required
+- Network requests are simple `fetch` calls to your API
+
+If something fails, check the API and auth server logs rather than the browser first.
+
+---
+
+## What’s Next
+
+Continue with:
+
+- Roles and Authorization
+- Data Model
+
+These sections explain how user data and permissions are represented and enforced.
