@@ -50,20 +50,22 @@ AVAILABLE_ROLES=user,admin,betaUser,team
 
 ---
 
-## Step 1: Enable the Admin Role
+## Step 1: Logout as any user if you are logged in.
 
-Ensure your environment includes the `admin` role:
+Navigate to:
 
-```env
-AVAILABLE_ROLES=user,admin,betaUser,team
+```
+http://localhost:5173
 ```
 
-If you make changes, restart your services:
+Logout if you are logged in.
+You should see the SeamlessAuth starter UI.
 
-```bash
-docker compose down
-docker compose up
-```
+<Image
+  src="/uiStarterTemplate.png"
+  alt="SeamlessAuth Starter UI"
+  caption="SeamlessAuth starter UI"
+/>
 
 ---
 
@@ -77,6 +79,12 @@ npx create-seamless bootstrap-admin admin001@test.com
 
 - The email should match the user you want to promote
 - The CLI will generate a secure invitation link
+- The link is visible in the console in development
+
+<Callout type="warning">
+  This does not create a user, it only provides a usable token that the given email can register
+  with and be automatically promoted to an admin upon successful registration.
+</Callout>
 
 This link:
 
@@ -93,31 +101,12 @@ This link:
 
 ## Step 3: Complete the Invitation Flow
 
-Open the generated link and complete authentication.
+Open the generated link and complete the registration of a user like you did first the first user using the same email provided for the bootstrap command authentication.
 
 After completion:
 
 - The user is granted the `admin` role
 - Future sessions will include admin privileges
-
----
-
-## Alternative: Direct Role Assignment (Not Recommended)
-
-You can manually promote a user:
-
-- Update the database directly
-- Extend your seed logic
-
-Example (conceptual):
-
-```ts
-user.roles = ['admin']
-```
-
-<Callout type="tip">
-  Use the Admin UI or a database viewer for quick role updates during development.
-</Callout>
 
 ---
 
