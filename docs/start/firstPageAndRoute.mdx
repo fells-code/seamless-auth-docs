@@ -1,0 +1,314 @@
+export const meta = {
+  title: 'Start building your own app',
+  order: 6,
+  section: 'start',
+}
+
+## Build a Protected Chat Page
+
+In this guide, you will extend your application by:
+
+- Adding a new **protected frontend page**
+- Restricting access to authenticated users
+- Creating a **protected backend API route**
+- Connecting the frontend to the API
+
+By the end, you will have a simple chat-like interface secured by SeamlessAuth.
+
+---
+
+## What You Will Build
+
+<Card title="End Result">
+  - `/chat` page (protected) - Backend `/chat` route (protected) - Simple request/response chat UI
+</Card>
+
+---
+
+# Step 1: Add the Chat Route to your web directory
+
+Open your `App.tsx` and add a new route (you can replace the whole file with the code below):
+
+```tsx
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+
+import { AuthProvider } from '@seamless-auth/react'
+import Chat from './pages/chat'
+
+import './App.css'
+import BetaAccess from './pages/BetaAccess'
+import Chat from './pages/chat'
+import MainLayout from './layouts/Layout'
+import About from './pages/About'
+import Home from './pages/Home'
+import { API_URL } from './lib/api'
+
+function ApplicationRoutes() {
+  return (
+    <Routes>
+      <Route path="/" element={<MainLayout />}>
+        <Route index element={<Home />} />
+        <Route path="about" element={<About />} />
+        <Route path="beta" element={<BetaAccess />} />
+        <Route path="chat" element={<Chat />} />
+        <Route path="*" element={<Home />} />
+      </Route>
+    </Routes>
+  )
+}
+
+const App = () => {
+  return (
+    <Router>
+      <AuthProvider apiHost={API_URL} mode="server">
+        <ApplicationRoutes />
+      </AuthProvider>
+    </Router>
+  )
+}
+export default App
+```
+
+---
+
+# Step 2: Create the Chat Page
+
+Create a new file:
+
+```txt
+src/pages/chat.tsx
+```
+
+Add the following:
+
+```tsx
+import { useAuth } from '@seamless-auth/react'
+import { useState } from 'react'
+import { apiFetch } from '../lib/api'
+
+export default function Chat() {
+  const { user, isAuthenticated } = useAuth()
+
+  const [input, setInput] = useState('')
+  const [messages, setMessages] = useState<{ role: 'user' | 'bot'; text: string }[]>([])
+  const [loading, setLoading] = useState(false)
+
+  const hasAccess = user?.roles?.includes('team')
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-black px-4">
+        <div className="max-w-lg w-full bg-white dark:bg-gray-900 p-8 rounded-xl border border-gray-200 dark:border-gray-800 text-center">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            Authentication Required
+          </h1>
+          <p className="mt-4 text-gray-700 dark:text-gray-400">
+            You must be signed in to access the chat.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-black px-6 py-16">
+      <div className="max-w-3xl mx-auto space-y-12">
+        <header className="space-y-4">
+          <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white">Protected Chat</h1>
+          <p className="text-gray-700 dark:text-gray-400">
+            This example demonstrates a protected frontend page and a secured API route using
+            SeamlessAuth.
+          </p>
+        </header>
+
+        <section className="space-y-4">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Authentication</h2>
+          <p className="text-gray-700 dark:text-gray-300">
+            You are signed in as <span className="font-medium">{user?.email || user?.phone}</span>.
+          </p>
+        </section>
+
+        <section className="space-y-4">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Authorization</h2>
+
+          {!hasAccess && (
+            <div className="p-6 rounded-xl border border-yellow-300 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/20">
+              <h3 className="font-semibold text-yellow-800 dark:text-yellow-300">
+                Missing Required Role
+              </h3>
+              <p className="mt-2 text-gray-700 dark:text-gray-400">
+                This page requires the{' '}
+                <code className="px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-800">team</code> role.
+              </p>
+            </div>
+          )}
+
+          {hasAccess && (
+            <div className="p-6 rounded-xl border border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20">
+              <h3 className="font-semibold text-green-800 dark:text-green-300">Access Granted</h3>
+              <p className="mt-2 text-gray-700 dark:text-gray-400">
+                You have the required role. You can use the chat below.
+              </p>
+            </div>
+          )}
+        </section>
+
+        {hasAccess && (
+          <section className="space-y-4">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Chat</h2>
+
+            <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 h-80 overflow-y-auto space-y-2">
+              {messages.length === 0 && (
+                <p className="text-gray-500 text-sm">No messages yet. Start the conversation.</p>
+              )}
+
+              {messages.map((m, i) => (
+                <div
+                  key={i}
+                  className={`text-sm ${
+                    m.role === 'user'
+                      ? 'text-right text-blue-500'
+                      : 'text-left text-gray-800 dark:text-gray-300'
+                  }`}
+                >
+                  {m.text}
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-2">
+              <input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                className="flex-1 border border-gray-300 dark:border-gray-700 rounded px-3 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                placeholder="Say something..."
+              />
+
+              <button
+                disabled={loading}
+                onClick={async () => {
+                  if (!input.trim()) return
+
+                  setLoading(true)
+
+                  const data: { reply: string } = await apiFetch('chat', {
+                    method: 'POST',
+                    body: JSON.stringify({ message: input }),
+                  })
+
+                  setMessages((prev) => [
+                    ...prev,
+                    { role: 'user', text: input },
+                    { role: 'bot', text: data.reply },
+                  ])
+
+                  setInput('')
+                  setLoading(false)
+                }}
+                className="bg-black text-white px-4 py-2 rounded disabled:opacity-50"
+              >
+                Send
+              </button>
+            </div>
+          </section>
+        )}
+      </div>
+    </div>
+  )
+}
+```
+
+---
+
+# Step 3: Add Protected API Route
+
+Open your api directory `index.ts` and add this new route below the `beta` route:
+
+```ts
+...
+
+app.post('/chat', requireRole('team'), (req, res) => {
+  const { message } = req.body
+
+  res.json({
+    reply: `Echo: ${message}`,
+  })
+})
+...
+```
+
+---
+
+## Step 4: Test the Flow (It should not work)
+
+1. Log in to your app
+2. Navigate to `/chat`
+3. You should see the unauthenticated page display because this user doesn't have the team role
+
+<Image
+  src="/chatPageRestricted.png"
+  alt="Chat example page with restricted access"
+  caption="You have built chat to only work for team role users"
+/>
+
+---
+
+# Step 5: Use the Admin portal to add the team role to a user
+
+1. Log in as your admin user
+2. Go to the users page, select a user and click Edit
+3. Add the `team` role to that user
+4. Logout and login as the user you just edited
+
+<Image
+  src="/adminEditUser.png"
+  alt="Admin portal user edit modal"
+  caption="You can change a users role in the admin portal"
+/>
+
+---
+
+## Step 4: Test the Flow again
+
+1. Log in to your app
+2. Navigate to `/chat`
+3. You should see the chat UI
+4. Enter in a chat and hit Enter
+5. The page should update with the reply from the API
+
+<Image
+  src="/chatPage.png"
+  alt="Chat page for an allowed user"
+  caption="Team users can now see the chat page"
+/>
+
+<Image
+  src="/chatPageExample.png"
+  alt="Chat page chat example"
+  caption="Basically chatGPT... right?"
+/>
+
+---
+
+## What Just Happened
+
+- The frontend route was protected using `useAuth`
+- The backend route enforced authentication and role checks
+- The session cookie authenticated requests automatically
+- Your app now enforces security across UI and API
+
+<Card title="Key Concept">
+  Frontend protection improves UX, but backend protection enforces security. Always protect both.
+</Card>
+
+---
+
+## Prompt for AI Help
+
+"Help me extend this SeamlessAuth chat example to store messages in a database and support multiple users."
+
+---
+
+## Next Step
+
+→ Explore the Data Models and Sessions deep dive

@@ -1,0 +1,196 @@
+export const meta = {
+  title: 'Troubleshooting & Debugging',
+  order: 1,
+  section: 'troubleshooting',
+}
+
+# Troubleshooting & Debugging
+
+This guide helps you diagnose and resolve common issues when working with SeamlessAuth.
+
+---
+
+## Mental Model
+
+```
+Frontend → API → Auth → Database
+```
+
+When something breaks, trace the flow step-by-step.
+
+---
+
+# Common Issues
+
+## 1. Session Not Persisting
+
+### Symptoms
+
+- User logs in but is immediately logged out
+- `isAuthenticated` is false after login
+
+### Causes
+
+- Cookie not being set
+- Incorrect domain / origin
+- Missing credentials in requests
+
+### Fix
+
+- Ensure API uses credentials:
+
+```ts
+fetch(url, { credentials: 'include' })
+```
+
+- Check `ORIGINS` and `APP_ORIGINS`
+
+---
+
+## 2. Cannot Reach Auth Server
+
+### Symptoms
+
+- API returns 500
+- Auth requests fail
+
+### Causes
+
+- Wrong `AUTH_SERVER_URL`
+- Docker networking issue
+
+### Fix
+
+- Use internal hostname:
+
+```env
+AUTH_SERVER_URL=http://auth:5312
+```
+
+---
+
+## 3. Docker Issues
+
+### Symptoms
+
+- Services not starting
+- Connection refused errors
+
+### Fix
+
+```bash
+docker compose down
+docker compose up --build
+```
+
+Check running containers:
+
+```bash
+docker ps
+```
+
+---
+
+## 4. Admin UI Not Accessible
+
+### Symptoms
+
+- Access denied
+- Blank admin page
+
+### Causes
+
+- User missing `admin` role
+
+### Fix
+
+- Verify roles in DB
+- Re-login after role change
+
+---
+
+## 5. OTP / Magic Link Not Working
+
+### Symptoms
+
+- No OTP received
+- Magic link invalid
+
+### Causes
+
+- Dev mode behavior
+- Expired token
+
+### Fix
+
+- Check console logs
+- Verify token expiration
+
+---
+
+## 6. API Protected Route Failing
+
+### Symptoms
+
+- 401 Unauthorized
+
+### Causes
+
+- Missing auth middleware
+- Cookie not sent
+
+### Fix
+
+- Add `requireAuth`
+- Ensure cookies included
+
+---
+
+## Debugging Tools
+
+### Logs
+
+```bash
+docker compose logs -f
+```
+
+---
+
+### Inspect Database
+
+```bash
+docker exec -it seamless-db psql -U myuser
+```
+
+---
+
+### Check Sessions
+
+```sql
+SELECT * FROM sessions;
+```
+
+---
+
+### Check Users
+
+```sql
+SELECT * FROM users;
+```
+
+---
+
+## Debugging Strategy
+
+1. Check frontend state
+2. Check API response
+3. Check auth server logs
+4. Check database
+
+---
+
+## Prompt for AI Help
+
+Copy this into ChatGPT:
+
+"Help me debug a SeamlessAuth issue where sessions are not persisting."

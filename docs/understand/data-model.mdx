@@ -1,0 +1,200 @@
+export const meta = {
+  title: 'Data Models',
+  order: 1,
+  section: 'understand',
+}
+
+# Data Models
+
+SeamlessAuth is built on a set of structured, relational data models that power authentication, sessions, and security.
+
+This page explains the core tables, how they relate, and how to reason about them.
+
+---
+
+## Mental Model
+
+```
+User → has many → Sessions
+User → has many → Credentials (WebAuthn)
+User → has many → Auth Events
+User → has many → Magic Link Tokens
+
+System → configured by → System Config
+Admin → provisioned via → Bootstrap Invites
+```
+
+---
+
+# Core Models
+
+## Users
+
+Represents an authenticated identity in the system.
+
+| Field          | Type      | Description                       |
+| -------------- | --------- | --------------------------------- |
+| id             | uuid      | Unique user ID                    |
+| email          | string    | Unique email                      |
+| phone          | string    | Unique phone                      |
+| roles          | string[]  | Assigned roles (e.g. user, admin) |
+| verified       | boolean   | Fully verified user               |
+| email_verified | boolean   | Email verified                    |
+| phone_verified | boolean   | Phone verified                    |
+| revoked        | boolean   | Disabled user                     |
+| last_login     | timestamp | Last login time                   |
+
+---
+
+## Sessions
+
+Represents an authenticated session tied to a user.
+
+| Field            | Type      | Description       |
+| ---------------- | --------- | ----------------- |
+| id               | uuid      | Session ID        |
+| userId           | uuid      | Owning user       |
+| refreshTokenHash | string    | Secure token hash |
+| expiresAt        | timestamp | Hard expiration   |
+| idleExpiresAt    | timestamp | Idle expiration   |
+| revokedAt        | timestamp | Revocation time   |
+| userAgent        | string    | Device info       |
+| ipAddress        | string    | Origin IP         |
+
+---
+
+## Credentials (WebAuthn)
+
+Stores passkeys and device credentials.
+
+| Field      | Type      | Description               |
+| ---------- | --------- | ------------------------- |
+| id         | string    | Credential ID             |
+| userId     | uuid      | Owning user               |
+| publicKey  | binary    | WebAuthn public key       |
+| counter    | number    | Replay protection counter |
+| deviceType | string    | Device classification     |
+| lastUsedAt | timestamp | Last usage                |
+
+---
+
+## Magic Link Tokens
+
+Used for passwordless email login.
+
+| Field      | Type      | Description     |
+| ---------- | --------- | --------------- |
+| id         | uuid      | Token ID        |
+| user_id    | uuid      | Associated user |
+| token_hash | string    | Secure token    |
+| expires_at | timestamp | Expiration      |
+| used_at    | timestamp | Usage marker    |
+
+---
+
+## Auth Events
+
+Tracks authentication activity for auditing and analytics.
+
+| Field      | Type   | Description     |
+| ---------- | ------ | --------------- |
+| id         | uuid   | Event ID        |
+| user_id    | uuid   | Associated user |
+| type       | string | Event type      |
+| ip_address | string | Origin IP       |
+| user_agent | string | Device info     |
+| metadata   | jsonb  | Extra data      |
+
+---
+
+## System Config
+
+Stores runtime configuration.
+
+| Key               | Example Value        |
+| ----------------- | -------------------- |
+| default_roles     | ["user", "betaUser"] |
+| available_roles   | ["user", "admin"]    |
+| access_token_ttl  | "30m"                |
+| refresh_token_ttl | "1h"                 |
+
+---
+
+## Bootstrap Invites
+
+Used for securely creating initial admin users.
+
+| Field       | Type      | Description         |
+| ----------- | --------- | ------------------- |
+| email       | string    | Target email        |
+| role        | enum      | Role to assign      |
+| token_hash  | string    | Secure invite token |
+| expires_at  | timestamp | Expiration          |
+| consumed_at | timestamp | Usage marker        |
+
+---
+
+# Relationships
+
+```
+users.id → sessions.userId
+users.id → credentials.userId
+users.id → auth_events.user_id
+users.id → magic_link_tokens.user_id
+```
+
+Foreign key constraints enforce integrity. fileciteturn1file0
+
+---
+
+# Key Concepts
+
+## Sessions Are First-Class
+
+Sessions are not just tokens—they are fully tracked records with:
+
+- expiration
+- device metadata
+- revocation support
+
+---
+
+## Roles Are Embedded
+
+Roles are stored directly on users as an array:
+
+```
+["user", "admin"]
+```
+
+This enables fast authorization checks.
+
+---
+
+## Security is Auditable
+
+Auth events provide a full audit trail of:
+
+- logins
+- verifications
+- registrations
+
+---
+
+## Config is Dynamic
+
+System behavior is driven by database config, not hardcoded values.
+
+---
+
+# Prompt for AI Help
+
+Copy this into ChatGPT:
+
+"Explain the SeamlessAuth data model and how users, sessions, and roles relate."
+
+---
+
+## Next Step
+
+→ Dive deeper into Sessions and Security

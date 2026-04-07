@@ -1,0 +1,151 @@
+export const meta = {
+  title: 'Sessions',
+  order: 2,
+  section: 'understand',
+}
+
+# Sessions Deep Dive
+
+Sessions are the **core of authentication in SeamlessAuth**.
+
+Unlike simple JWT-based systems, sessions are **stateful, trackable, and revocable**.
+
+---
+
+## Mental Model
+
+```
+User → logs in → Session created → Cookie issued → Requests authenticated
+```
+
+---
+
+## What is a Session?
+
+A session represents a **logged-in device or browser instance**.
+
+Each session:
+
+- Belongs to a user
+- Has its own lifecycle
+- Can be revoked independently
+
+---
+
+## Session Fields (Key Highlights)
+
+| Field            | Description            |
+| ---------------- | ---------------------- |
+| id               | Unique session ID      |
+| userId           | Owning user            |
+| refreshTokenHash | Secure token reference |
+| expiresAt        | Absolute expiration    |
+| idleExpiresAt    | Idle timeout           |
+| revokedAt        | Revocation timestamp   |
+| userAgent        | Device/browser info    |
+| ipAddress        | Request origin         |
+
+---
+
+## TTL (Time-To-Live) Behavior
+
+SeamlessAuth uses **two expiration models**:
+
+### 1. Absolute Expiration
+
+```
+expiresAt
+```
+
+- Hard cutoff
+- Session is invalid after this time
+
+---
+
+### 2. Idle Expiration
+
+```
+idleExpiresAt
+```
+
+- Resets on activity
+- Protects against abandoned sessions
+
+---
+
+## Session Lifecycle
+
+```
+Created → Active → Idle → Expired
+                 ↘ Revoked
+```
+
+---
+
+## Session Creation Flow
+
+1. User verifies (OTP / Magic Link / WebAuthn)
+2. Session record is created
+3. Secure cookie is set
+4. Frontend SDK detects session
+
+---
+
+## Revoking Sessions
+
+Sessions can be revoked:
+
+- From Admin UI
+- Via API
+- Automatically (security rules)
+
+Revoked sessions:
+
+- Cannot be used
+- Are marked with `revokedAt`
+
+---
+
+## Multi-Device Support
+
+Each device = separate session
+
+This enables:
+
+- Logging out of one device only
+- Viewing active sessions
+- Device-level security
+
+---
+
+## Security Advantages
+
+- Token hashes stored instead of raw tokens
+- Session revocation
+- Device tracking
+- Idle timeout enforcement
+
+---
+
+## Real Example
+
+A user logs in from:
+
+- Laptop → Session A
+- Phone → Session B
+
+Revoking Session A does not affect Session B.
+
+---
+
+## Prompt for AI Help
+
+Copy this into ChatGPT:
+
+"Explain how SeamlessAuth sessions work, including idle expiration and revocation."
+
+---
+
+## Next Step
+
+→ Learn about Users and Roles

@@ -11,16 +11,16 @@ const router = createBrowserRouter([
     path: '/',
     element: <DocsLayout />,
     children: [
-      { index: true, element: <DocPage slug="introduction" /> },
-      { path: ':slug', element: <DocPage /> },
+      { index: true, element: <DocPage slug="start/overview" /> },
+      { path: '*', element: <DocPage /> },
     ],
   },
   {
     path: '/docs',
     element: <DocsLayout />,
     children: [
-      { index: true, element: <DocPage slug="introduction" /> },
-      { path: ':slug', element: <DocPage /> },
+      { index: true, element: <DocPage slug="start/overview" /> },
+      { path: '*', element: <DocPage /> },
     ],
   },
   { path: '*', element: <NotFound /> },

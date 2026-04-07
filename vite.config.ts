@@ -1,12 +1,14 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import mdx from '@mdx-js/rollup'
+import remarkGfm from 'remark-gfm'
 import rehypeSlug from 'rehype-slug'
 import rehypeAutolinkHeadings from 'rehype-autolink-headings'
 
 export default defineConfig({
   plugins: [
     mdx({
+      remarkPlugins: [remarkGfm],
       rehypePlugins: [
         rehypeSlug,
         [
@@ -20,6 +22,6 @@ export default defineConfig({
     }),
     react(),
   ],
-  server: { port: 5173 },
+  server: { port: 5170 },
   build: { sourcemap: true },
 })

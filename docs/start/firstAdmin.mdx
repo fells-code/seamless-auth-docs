@@ -1,0 +1,174 @@
+export const meta = {
+  title: 'Register Your First Admin',
+  order: 4,
+  section: 'start',
+}
+
+## Register Your First Admin
+
+This guide walks you through creating your first **admin user** in SeamlessAuth.
+
+Admins are used to:
+
+- Access internal dashboards
+- Manage users and roles
+- Inspect sessions and activity
+- Configure system behavior
+
+---
+
+## What You Should Have Ready
+
+Before starting:
+
+- Your app is running locally
+- You have already registered your first user
+- Docker services are running
+
+---
+
+## How Admins Work in SeamlessAuth
+
+SeamlessAuth uses a **role-based access control (RBAC)** model.
+
+Roles are stored on the user and embedded into the session after authentication.
+
+By default, roles are configured via environment variables:
+
+```env
+DEFAULT_ROLES=user,betaUser
+AVAILABLE_ROLES=user,admin,betaUser,team
+```
+
+- `DEFAULT_ROLES` → roles assigned to new users
+- `AVAILABLE_ROLES` → all roles allowed in your system
+
+<Callout type="info">
+  Roles are attached to the user and included in every session, making authorization checks fast and
+  predictable.
+</Callout>
+
+---
+
+## Step 1: Enable the Admin Role
+
+Ensure your environment includes the `admin` role:
+
+```env
+AVAILABLE_ROLES=user,admin,betaUser,team
+```
+
+If you make changes, restart your services:
+
+```bash
+docker compose down
+docker compose up
+```
+
+---
+
+## Step 2: Bootstrap Your First Admin (Recommended)
+
+Use the SeamlessAuth CLI to securely promote your first admin:
+
+```bash
+npx create-seamless bootstrap-admin admin001@test.com
+```
+
+- The email should match the user you want to promote
+- The CLI will generate a secure invitation link
+
+This link:
+
+- Is tied to both the email and a secure token
+- Must be used to complete the promotion flow
+- Can only be used once
+
+<Callout type="warning">
+  Only the first successful bootstrap grants admin privileges. After an admin exists, additional
+  bootstrap attempts will not promote new users.
+</Callout>
+
+---
+
+## Step 3: Complete the Invitation Flow
+
+Open the generated link and complete authentication.
+
+After completion:
+
+- The user is granted the `admin` role
+- Future sessions will include admin privileges
+
+---
+
+## Alternative: Direct Role Assignment (Not Recommended)
+
+You can manually promote a user:
+
+- Update the database directly
+- Extend your seed logic
+
+Example (conceptual):
+
+```ts
+user.roles = ['admin']
+```
+
+<Callout type="tip">
+  Use the Admin UI or a database viewer for quick role updates during development.
+</Callout>
+
+---
+
+## Step 4: Verify Admin Access
+
+Once promoted, the user's session will include:
+
+```json
+{
+  "roles": ["admin"]
+}
+```
+
+<Image
+  src="/adminSession.png"
+  alt="Admin session with role attached"
+  caption="Admin users have the admin role embedded in their session"
+/>
+
+The user will now have access to the Admin UI [http://localhost:5174](http://localhost:5174):
+
+<Image
+  src="/adminPortal.png"
+  alt="Seamless Admin portal UI"
+  caption="Admins can access the Admin Portal and protected admin routes"
+/>
+
+---
+
+## What Just Happened
+
+- You created your first admin user
+- The role was embedded into the session
+- Frontend and backend SDKs exposed role helpers
+- Your application can now enforce admin-only access
+
+<Card title="Key Concept">
+  Authorization is controlled entirely by your application. SeamlessAuth provides identity and role
+  data—you decide how it is enforced.
+</Card>
+
+---
+
+## Prompt for AI Help
+
+Copy this into ChatGPT:
+
+"Help me implement role-based access control using SeamlessAuth. I want admin-only routes and UI."
+
+---
+
+## Next Step
+
+→ Explore the Admin UI

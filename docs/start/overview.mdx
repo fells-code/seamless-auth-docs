@@ -1,0 +1,120 @@
+export const meta = {
+  title: 'What is SeamlessAuth?',
+  order: 1,
+  section: 'start',
+}
+
+## SeamlessAuth
+
+SeamlessAuth is an open-source, passwordless authentication system designed to run as part of your application infrastructure.
+
+It provides a small, explicit core and framework-specific integrations that allow you to implement modern authentication without redirects, hosted identity UIs, or external dependencies.
+
+SeamlessAuth can be run locally, self-hosted, or deployed as isolated infrastructure per environment.
+
+<Callout type="info">
+  SeamlessAuth is designed for developers who want full control over authentication without relying
+  on third-party identity providers.
+</Callout>
+
+---
+
+## Key Characteristics
+
+### Exclusively Passwordless
+
+- Authentication is based on cryptographic verification, not shared secrets.
+- Supports intelligent, user-friendly fallback mechanisms.
+
+---
+
+### Loosely Coupled
+
+- Runs as an isolated API within your stack.
+- Designed to be easy to integrate—and easy to replace.
+- SDKs are thin wrappers over a simple auth server interface.
+- Authentication flows live inside your application (no redirects or external UI layers).
+
+---
+
+### Server-Side Session Validation
+
+- Sessions are issued and validated using secure, HTTP-only cookies.
+- Defense-in-depth approach to authentication.
+- Sessions are tracked per device and per browser.
+
+---
+
+### Explicit Authorization
+
+- Roles and access control are defined and enforced in your own application code.
+- No hidden authorization layers or assumptions.
+
+---
+
+### Consistent Environments
+
+- The same architecture works locally, in staging, and in production.
+- Local development mirrors production behavior closely.
+- Container-first development with optional local source execution.
+
+---
+
+## Open Source and Extensible
+
+SeamlessAuth is designed as an open system with clear separation of concerns.
+
+- A framework-agnostic core handles cryptography, verification, and identity resolution.
+- Thin adapters integrate SeamlessAuth into backend frameworks.
+- Frontend adapters provide seamless integration patterns for UI frameworks.
+- Starter templates demonstrate complete systems without hiding complexity.
+- A shared types package enables deep customization and reuse.
+
+This architecture allows you to extend or adapt the system without rewriting core components.
+
+---
+
+## What You Get
+
+- CLI  
+  https://github.com/fells-code/create-seamless
+
+- Auth Server  
+  https://github.com/fells-code/seamless-auth-api
+
+- Admin Dashboard  
+  https://github.com/fells-code/seamless-auth-admin-dashboard
+
+- Frontend SDKs (e.g. React)  
+  https://github.com/fells-code/seamless-auth-react
+
+- Backend SDKs (e.g. Express)  
+  https://github.com/fells-code/seamless-auth-server/packages/express
+
+- Shared Types  
+  https://github.com/fells-code/seamless-auth-types
+
+---
+
+## Core Idea
+
+SeamlessAuth is authentication as infrastructure.
+CLI → Infrastructure → Auth Server → SDK → Your App
+
+---
+
+## What You Will Build
+
+By the end of this guide, you will have:
+
+- A full-stack application
+- Passwordless authentication
+- Session management with device-level control
+- A local environment that mirrors production
+- A deployable, production-ready architecture
+
+---
+
+## Next Step
+
+→ Continue to Quickstart

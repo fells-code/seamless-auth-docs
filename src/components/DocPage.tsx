@@ -1,17 +1,43 @@
-import { useParams, Navigate, useLocation } from 'react-router-dom'
+import { useParams, Navigate, useLocation, Link } from 'react-router-dom'
 import { ReactNode } from 'react'
-import { MDXProvider } from '@mdx-js/react'
 import { useEffect, useState } from 'react'
 import { DOC_INDEX, DOCS } from '../content'
+import { Callout } from './mdx/Callout'
+import { Card } from './mdx/Card'
+import { CodeBlock } from './mdx/CodeBlock'
+import { Image } from './mdx/Image'
+
+const components = {
+  h2: (props) => {
+    const id = slugify(extractText(props.children))
+    return (
+      <h2 id={id}>
+        <a href={`#${id}`} className="heading-anchor">
+          #
+        </a>
+        {props.children}
+      </h2>
+    )
+  },
+  h3: (props) => {
+    const id = slugify(extractText(props.children))
+    return <h3 id={id} {...props} />
+  },
+  Callout,
+  Card,
+  Image,
+  pre: CodeBlock,
+}
 
 export default function DocPage({ slug: fixedSlug }: { slug?: string }) {
   const params = useParams()
-  const slug = fixedSlug || params.slug
+
+  const slug = fixedSlug || params['*']
   if (!slug) return <Navigate to="/docs" />
 
   const entry = DOC_INDEX[slug]
   if (!entry) return <div>Missing doc: {slug}</div>
-  const { Component } = entry
+  const { Component, title } = entry
 
   const idx = DOCS.findIndex((d) => d.slug === slug)
   const prev = DOCS[idx - 1]
@@ -20,13 +46,24 @@ export default function DocPage({ slug: fixedSlug }: { slug?: string }) {
   return (
     <div className="doc-container">
       <article className="doc">
-        <MDXProvider components={components}>
-          <Component />
-        </MDXProvider>
+        <div className="doc-header">
+          <h1>{title}</h1>
+        </div>
+
+        {/* @ts-expect-error This should be okay */}
+        <Component components={components} />
 
         <div className="pager">
-          {prev && <a href={`/docs/${prev.slug}`}>&larr; {prev.title}</a>}
-          {next && <a href={`/docs/${next.slug}`}>{next.title} &rarr;</a>}
+          {idx > 0 && prev && (
+            <Link className="pager-prev" to={`/docs/${prev.slug}`}>
+              ← {prev.title}
+            </Link>
+          )}
+          {idx < DOCS.length - 1 && next && (
+            <Link className="pager-next" to={`/docs/${next.slug}`}>
+              {next.title} →
+            </Link>
+          )}
         </div>
       </article>
 
@@ -53,17 +90,6 @@ function slugify(text: string) {
     .replace(/(^-|-$)/g, '')
 }
 
-const components = {
-  h2: (props) => {
-    const id = slugify(extractText(props.children))
-    return <h2 id={id} {...props} />
-  },
-  h3: (props) => {
-    const id = slugify(extractText(props.children))
-    return <h3 id={id} {...props} />
-  },
-}
-
 function TableOfContents() {
   const [headings, setHeadings] = useState<{ id: string; text: string; level: number }[]>([])
   const [activeId, setActiveId] = useState<string>('')
@@ -85,14 +111,18 @@ function TableOfContents() {
 
     const observer = new IntersectionObserver(
       (entries) => {
-        entries.forEach((entry) => {
-          const id = (entry.target as HTMLElement).id
-          if (entry.isIntersecting) setActiveId(id)
-        })
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)
+
+        if (visible.length > 0) {
+          const id = (visible[0].target as HTMLElement).id
+          setActiveId(id)
+        }
       },
       {
-        rootMargin: '-10% 0px -15% 0px',
-        threshold: [0, 0.25, 0.5, 1],
+        rootMargin: '-20% 0px -60% 0px',
+        threshold: [0.1, 0.25, 0.5],
       },
     )
     elems.forEach((el) => observer.observe(el))

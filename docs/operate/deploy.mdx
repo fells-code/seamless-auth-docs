@@ -1,0 +1,218 @@
+export const meta = {
+  title: 'Deployment (In Development)',
+  order: 4,
+  section: 'operate',
+}
+
+# Deployment (In Development)
+
+SeamlessAuth will include a fully guided **interactive deployment system** powered by the CLI.
+
+This feature is currently **in development**, but this page outlines the intended experience and architecture.
+
+---
+
+## Vision
+
+The goal of `create-seamless deploy` is to take you from:
+
+```
+Local App → Cloud Infrastructure → Production Deployment
+```
+
+With minimal manual setup.
+
+---
+
+## Mental Model
+
+```
+CLI → Configure → Build → Push → Provision → Deploy → Verify
+```
+
+---
+
+## What the Deploy Command Will Do
+
+Running:
+
+```bash
+npx create-seamless deploy
+```
+
+Will guide you through:
+
+1. Configuration
+2. Infrastructure setup
+3. Application deployment
+
+---
+
+# Step 1: Interactive Configuration
+
+The CLI will prompt for:
+
+- AWS account access
+- Region selection
+- Domain name
+- Deployment tier (dev / prod)
+- Resource sizing
+
+This ensures:
+
+- Safe defaults
+- Explicit user intent
+
+---
+
+# Step 2: Build & Publish Images
+
+The CLI will:
+
+- Build Docker images for:
+  - Web
+  - API
+  - Auth
+  - Admin UI
+
+- Tag and push them to **Amazon ECR**
+
+This creates deployable artifacts for your stack.
+
+---
+
+# Step 3: Secrets & Configuration
+
+The CLI will configure:
+
+- API tokens
+- JWT / JWKS keys
+- Database credentials
+
+Stored securely in:
+
+- **AWS Secrets Manager**
+
+---
+
+# Step 4: Database Provisioning
+
+An **Amazon RDS instance** will be created:
+
+- PostgreSQL
+- Secure networking
+- Backups enabled
+
+---
+
+# Step 5: Networking & Infrastructure
+
+Using Terraform, the CLI will provision:
+
+- VPC
+- Subnets (public / private)
+- Application Load Balancer (ALB)
+- Target Groups (TG)
+- Security Groups
+
+---
+
+# Step 6: Compute Layer
+
+The CLI will deploy:
+
+- ECS Cluster
+- Services for:
+  - API
+  - Auth
+  - Admin UI
+
+Each service will:
+
+- Pull from ECR
+- Use Secrets Manager
+- Scale independently
+
+---
+
+# Step 7: Domain Configuration
+
+If a domain is provided:
+
+- Route53 will be configured
+- ALB will be linked
+- HTTPS will be enabled (via ACM)
+
+---
+
+# Step 8: Deployment Verification
+
+The CLI will:
+
+- Check service health
+- Validate endpoints
+- Output URLs
+
+---
+
+## What This Enables
+
+After deployment, you will have:
+
+- A fully managed auth system
+- Scalable infrastructure
+- Secure secrets handling
+- Publicly accessible application
+
+---
+
+## Design Principles
+
+### Guided
+
+No need to manually configure AWS resources.
+
+---
+
+### Secure by Default
+
+- Secrets in AWS SM
+- Private subnets for services
+- Managed database
+
+---
+
+### Production Ready
+
+- Load balancing
+- Scalable services
+- Infrastructure as code
+
+---
+
+## Future Enhancements
+
+- Multi-region deployments
+- Blue/green deploys
+- CI/CD integration
+- Cost estimation before deploy
+
+---
+
+## Prompt for AI Help
+
+Copy this into ChatGPT:
+
+"Explain how SeamlessAuth deploy will provision AWS infrastructure and deploy services using Terraform and ECS."
+
+---
+
+## Status
+
+🚧 This feature is actively being developed.
+
+---
+
+## Next Step
+
+→ Learn about environment configuration and secrets

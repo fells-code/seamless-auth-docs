@@ -1,0 +1,118 @@
+export const meta = {
+  title: 'Users & Roles',
+  order: 3,
+  section: 'understand',
+}
+
+# Users & Roles
+
+Users represent identities in SeamlessAuth.
+
+They are flexible, extensible, and designed for **role-based access control (RBAC)**.
+
+---
+
+## Mental Model
+
+```
+User → has roles → determines access
+```
+
+---
+
+## User Fields (Key Highlights)
+
+| Field          | Description               |
+| -------------- | ------------------------- |
+| id             | Unique user ID            |
+| email          | Unique email              |
+| phone          | Unique phone              |
+| roles          | Array of roles            |
+| verified       | Fully verified user       |
+| email_verified | Email verification status |
+| phone_verified | Phone verification status |
+| revoked        | Disabled user             |
+| last_login     | Last login timestamp      |
+
+---
+
+## Roles
+
+Roles are stored as an array:
+
+```
+["user", "admin", "betaUser"]
+```
+
+---
+
+## Default Roles
+
+Configured via system config:
+
+- `default_roles`
+- `available_roles`
+
+These control:
+
+- New user permissions
+- Allowed roles in the system
+
+---
+
+## Role-Based Access Control (RBAC)
+
+Roles determine:
+
+- UI access
+- API permissions
+- Admin capabilities
+
+Example:
+
+```tsx
+if (hasRole('admin')) {
+  return <AdminPanel />
+}
+```
+
+---
+
+## Verification Lifecycle
+
+```
+Unverified → Email Verified → Phone Verified → Fully Verified
+```
+
+---
+
+## Revoked Users
+
+If `revoked = true`:
+
+- User cannot authenticate
+- Sessions should be invalidated
+
+---
+
+## Admin Users
+
+Admins are just users with:
+
+```
+"admin" role
+```
+
+---
+
+## Prompt for AI Help
+
+Copy this into ChatGPT:
+
+"Explain how SeamlessAuth handles users and role-based access control."
+
+---
+
+## Next Step
+
+→ Learn about Auth Events and auditing

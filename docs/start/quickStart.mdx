@@ -1,0 +1,205 @@
+export const meta = {
+  title: 'Getting Started',
+  order: 2,
+  section: 'start',
+}
+
+## Getting Started with SeamlessAuth
+
+This guide walks you through setting up a full-stack application using the SeamlessAuth CLI, from initial scaffolding to running a live authentication system locally.
+
+---
+
+## What you will need to complete this walkthrough
+
+- A machine with node > 20.11.x installed
+- A way to run a postgres database locally (we recommend via a container)
+- A terminal like application or interface
+- A web browser
+
+<Callout type="info">
+  We utilize docker and docker compose for the entire demonstration. For best follow along
+  experience we encourage you to do the same.
+</Callout>
+
+---
+
+## What is the CLI?
+
+The SeamlessAuth CLI (`create-seamless`) is the primary entry point for building and running your application.
+
+It is designed to:
+
+- Scaffold full-stack applications
+- Configure authentication automatically
+- Generate environment variables and secrets
+- Provide a consistent, production-aligned setup
+
+It removes the need to manually bootstrap a new application providing:
+
+- Boilerplate application code
+- Auth endpoints
+- Session handling
+- Secure cookies
+- Database connections
+
+<Callout type="info">
+  The CLI is intentionally opinionated. It sets up a complete, working system so you can focus on
+  building features instead of infrastructure.
+</Callout>
+
+---
+
+## Explore the Project
+
+You can explore the core project and releases here:
+
+- GitHub
+  [https://github.com/fells-code/seamless-auth-api](https://github.com/fells-code/seamless-auth-api)
+
+- Releases
+  [https://github.com/fells-code/seamless-auth-api/releases](https://github.com/fells-code/seamless-auth-api/releases)
+
+---
+
+## CLI Help Menu
+
+Before starting, you can inspect available commands:
+
+```bash
+npx create-seamless --help
+```
+
+This will show:
+
+- Available commands (`init`, `deploy`, etc.)
+- Usage patterns
+- Default CLI behavior
+
+<Image
+  src="/cliHelp.png"
+  alt="Seamless CLI Help output"
+  caption="Use create-seamless --help to explore available commands"
+/>
+
+---
+
+## Step 1: Initialize a Project
+
+Run the CLI:
+
+```bash
+npx create-seamless init my-app
+cd my-app
+```
+
+If no command is provided, the CLI defaults to `init`.
+
+---
+
+## Step 2: Interactive Setup
+
+The CLI will guide you through:
+
+- Project configuration
+- Environment setup
+
+<Callout type="tip">
+  Choose Docker mode for the most reliable local environment. It closely mirrors production
+  behavior.
+</Callout>
+
+<Image
+  src="/cliResult.png"
+  alt="Seamless CLI Help output"
+  caption="Use create-seamless init to scaffold an entire infrastrucuture with auth"
+/>
+
+---
+
+## Step 3: Generated Project Structure
+
+After setup, your project will look like:
+
+```txt
+my-app/
+  web/
+  api/
+  docker-compose.yml
+  seamless.config.ts
+```
+
+This includes a fully wired authentication system.
+
+---
+
+## Step 4: Start with Docker (Recommended)
+
+The CLI generates a Docker-based development environment.
+
+Start services:
+
+```bash
+docker compose up
+```
+
+This will:
+
+- Start Postgres
+- Start the SeamlessAuth server
+- Start a template web application
+- Start a template API server
+- Configure your databases with migrations
+- Initialize keys and configuration
+
+---
+
+## Step 5: View the App
+
+Open:
+
+```
+http://localhost:5173
+```
+
+You should see the SeamlessAuth starter UI with:
+
+- Login / signup flow
+- Passwordless authentication
+- Session management
+
+<Image
+  src="/uiStarterTemplate.png"
+  alt="SeamlessAuth Starter UI"
+  caption="SeamlessAuth starter UI"
+/>
+
+---
+
+## What Just Happened
+
+You now have:
+
+- A full-stack application
+- A running auth server
+- Connected frontend and backend services
+- Passwordless authentication enabled
+
+<Card title="What You Just Built">
+  - Auth server (session + identity) - API (protected backend routes) - Frontend (auth-aware UI) -
+  Local infrastructure (Docker-based)
+</Card>
+
+---
+
+## Prompt for AI Help
+
+Copy this into ChatGPT:
+
+"Help me customize a SeamlessAuth project created with create-seamless. I want to add roles and protect routes."
+
+---
+
+## Next Step
+
+→ Continue to registering your first user

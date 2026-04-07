@@ -1,0 +1,298 @@
+export const meta = {
+  title: 'Docker & Local Environment',
+  order: 3,
+  section: 'operate',
+}
+
+# Docker & Local Environment
+
+SeamlessAuth uses Docker to provide a **consistent, production-like local environment**.
+
+This guide explains:
+
+- What services are started
+- How they communicate
+- How to run and debug the stack
+
+---
+
+## Mental Model
+
+```
+Docker Compose → Starts Services → Services Communicate → App Runs
+```
+
+---
+
+## Services Overview
+
+Your generated `docker-compose.yml` defines the following services:
+
+```txt
+services:
+  db
+  auth
+  api
+  web
+  admin (optional)
+```
+
+---
+
+## 1. Database (Postgres)
+
+```yaml
+postgres:16
+```
+
+Responsibilities:
+
+- Stores users
+- Stores sessions
+- Stores auth events
+- Stores system config
+
+Key details:
+
+- Runs on port `5432`
+- Uses a persistent volume (`pgdata`)
+
+---
+
+## 2. Auth Server
+
+Handles all authentication logic.
+
+### Docker Mode
+
+```yaml
+image: ghcr.io/fells-code/seamless-auth-api
+```
+
+### Local Mode
+
+```yaml
+build: ./auth
+```
+
+Responsibilities:
+
+- User authentication
+- Session management
+- OTP / Magic Link / WebAuthn
+- Token issuance
+
+Runs on:
+
+```
+http://localhost:5312
+```
+
+---
+
+## 3. API Service
+
+Your backend application.
+
+```yaml
+build: ./api
+```
+
+Responsibilities:
+
+- Business logic
+- Protected routes
+- Communicates with auth server
+
+Environment highlights:
+
+```env
+AUTH_SERVER_URL=http://auth:5312
+DB_HOST=db
+```
+
+---
+
+## 4. Web (Frontend)
+
+Your frontend application.
+
+```yaml
+build: ./web
+```
+
+Responsibilities:
+
+- UI rendering
+- Authentication flows
+- API communication
+
+Runs on:
+
+```
+http://localhost:5173
+```
+
+---
+
+## 5. Admin UI (Optional)
+
+Only included if selected during CLI setup.
+
+### Image Mode
+
+```yaml
+image: ghcr.io/fells-code/seamless-auth-admin-dashboard
+```
+
+### Source Mode
+
+```yaml
+build: ./admin
+```
+
+Runs on:
+
+```
+http://localhost:5174
+```
+
+---
+
+## How Services Communicate
+
+Inside Docker, services use **container names as hostnames**:
+
+| From | To   | URL                                            |
+| ---- | ---- | ---------------------------------------------- |
+| API  | Auth | [http://auth:5312](http://auth:5312)           |
+| API  | DB   | db                                             |
+| Web  | API  | [http://localhost:3000](http://localhost:3000) |
+
+---
+
+## Starting the Environment
+
+From your project root:
+
+```bash
+docker compose up
+```
+
+This will:
+
+- Build containers (if needed)
+- Start all services
+- Stream logs
+
+---
+
+## Running in Development
+
+Use two terminals:
+
+### Terminal 1
+
+```bash
+docker compose up
+```
+
+### Terminal 2
+
+```bash
+npm install
+npm run dev
+```
+
+---
+
+## Volumes & Live Reloading
+
+Services mount local directories:
+
+```yaml
+./api:/app
+./web:/app
+./auth:/app
+```
+
+This allows:
+
+- Live code editing
+- Instant updates without rebuild
+
+---
+
+## Common Issues
+
+### Port Conflicts
+
+If ports are already in use:
+
+- 5432 (Postgres)
+- 3000 (API)
+- 5173 (Web)
+- 5174 (Admin)
+
+---
+
+### Docker Not Running
+
+Ensure Docker Desktop is running before starting.
+
+---
+
+### Missing Source Directories
+
+If using source mode:
+
+- Ensure `./admin` exists
+- Ensure `./auth` exists (local mode)
+
+---
+
+## Debugging Tips
+
+### View Logs
+
+```bash
+docker compose logs -f
+```
+
+### Restart Services
+
+```bash
+docker compose down
+docker compose up
+```
+
+### Inspect Containers
+
+```bash
+docker ps
+```
+
+---
+
+## What This Gives You
+
+You now have:
+
+- A full local auth system
+- Isolated services
+- Production-like networking
+- Reproducible environment
+
+---
+
+## Prompt for AI Help
+
+Copy this into ChatGPT:
+
+"Explain how Docker services in SeamlessAuth communicate and how to debug issues."
+
+---
+
+## Next Step
+
+→ Learn how deployment works

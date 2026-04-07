@@ -1,0 +1,107 @@
+export const meta = {
+  title: 'Auth Events & Auditing',
+  order: 4,
+  section: 'understand',
+}
+
+# Auth Events & Auditing
+
+SeamlessAuth tracks authentication activity through **auth events**.
+
+These provide visibility into:
+
+- User behavior
+- Security events
+- System activity
+
+---
+
+## Mental Model
+
+```
+User Action → Auth Event Recorded → Stored → Analyzed
+```
+
+---
+
+## What is an Auth Event?
+
+An auth event is a record of something that happened in the auth system.
+
+Examples:
+
+- user_created
+- registration_success
+- verify_otp_success
+- webauthn_registration_success
+
+---
+
+## Event Fields
+
+| Field      | Description        |
+| ---------- | ------------------ |
+| id         | Event ID           |
+| user_id    | Associated user    |
+| type       | Event type         |
+| ip_address | Origin IP          |
+| user_agent | Device info        |
+| metadata   | Additional context |
+
+---
+
+## Why Auth Events Matter
+
+Auth events allow you to:
+
+- Debug authentication issues
+- Monitor system activity
+- Detect suspicious behavior
+- Build analytics dashboards
+
+---
+
+## Real Example
+
+From your system:
+
+- user_created
+- verify_otp_success
+- webauthn_registration_success
+- bootstrap_admin_granted
+
+These events form a timeline of user activity. fileciteturn1file0
+
+---
+
+## Security Use Cases
+
+You can use auth events to:
+
+- Detect repeated login failures
+- Track unusual IP behavior
+- Audit admin actions
+
+---
+
+## Admin UI Integration
+
+The Admin UI surfaces auth events to:
+
+- Inspect user activity
+- Debug authentication flows
+- Review security signals
+
+---
+
+## Prompt for AI Help
+
+Copy this into ChatGPT:
+
+"Explain how to use SeamlessAuth auth events for auditing and security monitoring."
+
+---
+
+## Next Step
+
+→ Explore building with Seamless Auth

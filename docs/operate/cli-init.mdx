@@ -1,0 +1,290 @@
+export const meta = {
+  title: 'CLI Init Deep Dive',
+  order: 2,
+  section: 'operate',
+}
+
+# CLI Init Deep Dive
+
+This guide explains exactly what happens when you run:
+
+```bash
+npx create-seamless my-app
+```
+
+It walks through:
+
+- Every prompt
+- What your choices do
+- What files are generated
+- How your stack is wired together
+
+---
+
+## Mental Model
+
+```
+init → prompts → generators → config → ready-to-run app
+```
+
+---
+
+## Step 0: Directory Setup
+
+If you pass a project name:
+
+```bash
+npx create-seamless my-app
+```
+
+The CLI will:
+
+- Create a new folder
+- Ensure it does not already exist
+- Use it as the project root
+
+If no name is provided, it uses the current directory (must be empty).
+
+---
+
+## Step 1: Interactive Prompts
+
+The CLI asks a series of questions to shape your stack.
+
+### Web Framework
+
+- React (Vite)
+- (Next.js coming soon)
+
+This determines your frontend scaffold.
+
+---
+
+### Backend Framework
+
+- Express
+- (Fastify / others coming soon)
+
+This determines your API server.
+
+---
+
+### Auth Mode
+
+- Docker (recommended)
+- Local dev server (advanced)
+
+**Docker mode**:
+
+- Runs full auth stack in containers
+- Closest to production
+
+**Local mode**:
+
+- Runs auth server locally
+- Still requires Docker for supporting services
+
+---
+
+### Admin Dashboard
+
+You choose whether to include the Admin UI.
+
+If enabled:
+
+#### Admin Source
+
+- Docker image (recommended)
+- Source (for customization)
+
+---
+
+## Step 2: Generators Run
+
+Based on your answers, the CLI executes generators.
+
+### Frontend
+
+```ts
+await generateReactStarter({ root })
+```
+
+Creates:
+
+- React app (Vite)
+- AuthProvider integration
+
+---
+
+### Backend
+
+```ts
+await generateExpressStarter({ root })
+```
+
+Creates:
+
+- Express API
+- Auth-ready endpoints
+
+---
+
+### Auth Server
+
+If using local mode:
+
+```ts
+await generateAuthServer({ root }, 'local')
+```
+
+This generates the SeamlessAuth server locally.
+
+---
+
+### Docker Setup
+
+```ts
+await generateDockerCompose(root, {
+  authMode,
+  adminMode,
+  includeAdmin,
+})
+```
+
+Creates:
+
+- Postgres container
+- Auth server container
+- Admin UI container (optional)
+
+---
+
+## Step 3: Environment Configuration
+
+The CLI wires environment variables automatically.
+
+### API
+
+```ts
+configureApiEnv(root, sharedConfig)
+```
+
+### Web
+
+```ts
+configureWebEnv(root)
+```
+
+### Auth
+
+```ts
+configureAuthLocalEnv(root)
+```
+
+This ensures:
+
+- Services can communicate
+- URLs and ports are aligned
+
+---
+
+## Step 4: Project Config File
+
+```ts
+generateSeamlessConfig(root, { ... })
+```
+
+Creates:
+
+```txt
+seamless.config.ts
+```
+
+This file stores:
+
+- Framework choices
+- Auth mode
+- Admin configuration
+
+---
+
+## Step 5: Final Output
+
+The CLI prints next steps:
+
+- Install dependencies
+- Start Docker
+- Run dev servers
+
+---
+
+## Generated Project Structure
+
+```txt
+my-app/
+  web/
+  api/
+  docker-compose.yml
+  seamless.config.ts
+  .env
+```
+
+---
+
+## What Gets Wired Automatically
+
+- Auth endpoints
+- Session handling
+- Secure cookies
+- Frontend SDK integration
+- Backend auth validation
+
+---
+
+## Key Design Decisions
+
+### Opinionated Defaults
+
+The CLI chooses:
+
+- Secure session handling
+- Passwordless flows
+- Best-practice structure
+
+---
+
+### Full-Stack by Default
+
+You always get:
+
+- Frontend
+- Backend
+- Auth system
+
+---
+
+### Docker-First
+
+Even in local mode, Docker is used to ensure consistency.
+
+---
+
+## Common Pitfalls
+
+- Running in a non-empty directory
+- Skipping Docker setup
+- Misunderstanding auth mode differences
+
+---
+
+## Prompt for AI Help
+
+Copy this into ChatGPT:
+
+"Explain what happens internally when I run create-seamless init and how the project is generated."
+
+---
+
+## Next Step
+
+→ Learn how Docker and local services work together

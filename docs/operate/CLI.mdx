@@ -1,0 +1,140 @@
+export const meta = {
+  title: 'CLI Overview',
+  order: 1,
+  section: 'operate',
+}
+
+# SeamlessAuth CLI
+
+The SeamlessAuth CLI (`create-seamless`) is the **control center** for building, configuring, and deploying your application.
+
+It is designed to:
+
+- Scaffold applications
+- Configure authentication
+- Manage infrastructure
+- Guide developers through setup
+
+---
+
+## Mental Model
+
+```
+CLI → Generates App → Configures Auth → Enables Deployment
+```
+
+---
+
+## Installation
+
+No global install required. Use via npx:
+
+```bash
+npx create-seamless
+```
+
+---
+
+## Core Commands
+
+### init (default)
+
+```bash
+npx create-seamless init my-app
+```
+
+Or simply:
+
+```bash
+npx create-seamless my-app
+```
+
+Creates a new SeamlessAuth project.
+
+---
+
+### deploy
+
+```bash
+npx create-seamless deploy
+```
+
+Guides you through deploying your app.
+
+Includes:
+
+- AWS setup validation
+- Infrastructure provisioning
+- Environment configuration
+
+---
+
+## CLI Behavior
+
+If no command is provided:
+
+- CLI defaults to `init`
+- Uses current directory if empty
+- Prompts for project name otherwise
+
+---
+
+## Help Menu
+
+```bash
+npx create-seamless --help
+```
+
+Displays:
+
+- Available commands
+- Usage patterns
+- Flags and options
+
+---
+
+## What Happens During init
+
+The CLI will:
+
+1. Ask configuration questions
+2. Generate project structure
+3. Create Docker setup
+4. Configure SeamlessAuth
+5. Prepare environment variables
+
+---
+
+## Generated Files
+
+```txt
+web/
+api/
+docker-compose.yml
+seamless.config.ts
+.env
+```
+
+---
+
+## Design Philosophy
+
+The CLI is built to be:
+
+- **Opinionated** → best practices by default
+- **Guided** → interactive prompts
+- **Extensible** → future commands (migrate, inspect)
+
+---
+
+## Prompt for AI Help
+
+Copy this into ChatGPT:
+
+"Explain how to use the SeamlessAuth CLI to scaffold and deploy a full-stack application."
+
+---
+
+## Next Step
+
+→ Learn how deployment works
