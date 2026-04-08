@@ -94,6 +94,14 @@ function TableOfContents() {
   const [headings, setHeadings] = useState<{ id: string; text: string; level: number }[]>([])
   const [activeId, setActiveId] = useState<string>('')
   const location = useLocation()
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
 
   useEffect(() => {
     const activeEl = document.querySelector('.toc-item.active')
@@ -162,6 +170,7 @@ function TableOfContents() {
   }, [])
 
   if (!headings.length) return null
+  if (isMobile) return null
 
   return (
     <nav className="toc">
