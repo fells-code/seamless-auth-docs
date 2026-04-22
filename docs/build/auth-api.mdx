@@ -2,7 +2,16 @@ export const meta = {
   title: 'Auth API Server',
   order: 2,
   section: 'build',
-  tags: ['api', 'auth server', 'auth-server', 'self-hosting', 'jwks', 'webauthn', 'otp', 'magic links'],
+  tags: [
+    'api',
+    'auth server',
+    'auth-server',
+    'self-hosting',
+    'jwks',
+    'webauthn',
+    'otp',
+    'magic links',
+  ],
 }
 
 # Seamless Auth API
@@ -49,19 +58,19 @@ route directly from product code.
 
 ## Key Route Groups
 
-| Route group | Purpose |
-| ----------- | ------- |
-| `/login`, `/logout`, `/refresh` | Session lifecycle and login entry points |
-| `/registration/*` | New user registration |
-| `/otp/*` | Email and phone OTP generation and verification |
-| `/webauthn/*` | Passkey registration and login |
-| `/magic-link/*` | Magic link request, polling, and verification |
-| `/users/*` | Authenticated user profile and credential operations |
-| `/sessions/*` | Session listing and revocation |
-| `/admin/*` | Admin-only user, event, and session operations |
-| `/internal/*` | Dashboard metrics, grouped event summaries, login stats, anomalies |
-| `/system-config/*` | Roles and runtime system configuration |
-| `/.well-known/jwks.json` | Public JWKS endpoint |
+| Route group                     | Purpose                                                            |
+| ------------------------------- | ------------------------------------------------------------------ |
+| `/login`, `/logout`, `/refresh` | Session lifecycle and login entry points                           |
+| `/registration/*`               | New user registration                                              |
+| `/otp/*`                        | Email and phone OTP generation and verification                    |
+| `/webauthn/*`                   | Passkey registration and login                                     |
+| `/magic-link/*`                 | Magic link request, polling, and verification                      |
+| `/users/*`                      | Authenticated user profile and credential operations               |
+| `/sessions/*`                   | Session listing and revocation                                     |
+| `/admin/*`                      | Admin-only user, event, and session operations                     |
+| `/internal/*`                   | Dashboard metrics, grouped event summaries, login stats, anomalies |
+| `/system-config/*`              | Roles and runtime system configuration                             |
+| `/.well-known/jwks.json`        | Public JWKS endpoint                                               |
 
 ---
 

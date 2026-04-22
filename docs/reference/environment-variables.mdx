@@ -2,7 +2,14 @@ export const meta = {
   title: 'Environment Variable Reference',
   order: 3,
   section: 'reference',
-  tags: ['env', 'environment variables', 'configuration', 'self-hosting', 'APP_ORIGIN', 'AUTH_SERVER_URL'],
+  tags: [
+    'env',
+    'environment variables',
+    'configuration',
+    'self-hosting',
+    'APP_ORIGIN',
+    'AUTH_SERVER_URL',
+  ],
 }
 
 # Environment Variables
@@ -19,15 +26,15 @@ own `.env.example` file.
 
 These values appear in the auth API example environment and define the local server runtime.
 
-| Variable | Purpose |
-| -------- | ------- |
-| `NODE_ENV` | Runtime environment |
-| `APP_NAME` | Human-readable application name |
-| `APP_ID` | Application identifier |
-| `APP_ORIGIN` | Primary app/API origin |
-| `ISSUER` | Token/session issuer value |
-| `AUTH_MODE` | Auth mode such as `server` |
-| `DEMO` | Demo/development toggle |
+| Variable     | Purpose                         |
+| ------------ | ------------------------------- |
+| `NODE_ENV`   | Runtime environment             |
+| `APP_NAME`   | Human-readable application name |
+| `APP_ID`     | Application identifier          |
+| `APP_ORIGIN` | Primary app/API origin          |
+| `ISSUER`     | Token/session issuer value      |
+| `AUTH_MODE`  | Auth mode such as `server`      |
+| `DEMO`       | Demo/development toggle         |
 
 ---
 
@@ -35,16 +42,16 @@ These values appear in the auth API example environment and define the local ser
 
 These values feed the system configuration bootstrap.
 
-| Variable | Purpose |
-| -------- | ------- |
-| `DEFAULT_ROLES` | Roles assigned to newly created users |
-| `AVAILABLE_ROLES` | Roles allowed in the system |
-| `ACCESS_TOKEN_TTL` | Access/session TTL configuration |
-| `REFRESH_TOKEN_TTL` | Refresh/session TTL configuration |
-| `RATE_LIMIT` | Base request throttling |
-| `DELAY_AFTER` | Slowdown threshold |
-| `RPID` | WebAuthn relying party ID |
-| `ORIGINS` | Allowed WebAuthn/browser origins |
+| Variable            | Purpose                               |
+| ------------------- | ------------------------------------- |
+| `DEFAULT_ROLES`     | Roles assigned to newly created users |
+| `AVAILABLE_ROLES`   | Roles allowed in the system           |
+| `ACCESS_TOKEN_TTL`  | Access/session TTL configuration      |
+| `REFRESH_TOKEN_TTL` | Refresh/session TTL configuration     |
+| `RATE_LIMIT`        | Base request throttling               |
+| `DELAY_AFTER`       | Slowdown threshold                    |
+| `RPID`              | WebAuthn relying party ID             |
+| `ORIGINS`           | Allowed WebAuthn/browser origins      |
 
 The current required system config keys map directly to these values.
 
@@ -52,24 +59,24 @@ The current required system config keys map directly to these values.
 
 ## Database
 
-| Variable | Purpose |
-| -------- | ------- |
-| `DB_HOST` | Database host |
-| `DB_PORT` | Database port |
-| `DB_NAME` | Database name |
-| `DB_USER` | Database user |
-| `DB_PASSWORD` | Database password |
-| `DB_LOGGING` | Database logging toggle |
+| Variable      | Purpose                 |
+| ------------- | ----------------------- |
+| `DB_HOST`     | Database host           |
+| `DB_PORT`     | Database port           |
+| `DB_NAME`     | Database name           |
+| `DB_USER`     | Database user           |
+| `DB_PASSWORD` | Database password       |
+| `DB_LOGGING`  | Database logging toggle |
 
 ---
 
 ## Service-To-Service And Bootstrap Secrets
 
-| Variable | Purpose |
-| -------- | ------- |
-| `API_SERVICE_TOKEN` | Service token for backend-to-auth communication |
-| `SEAMLESS_BOOTSTRAP_ENABLED` | Enables bootstrap admin flow |
-| `SEAMLESS_BOOTSTRAP_SECRET` | Secret used to authorize bootstrap invite creation |
+| Variable                     | Purpose                                            |
+| ---------------------------- | -------------------------------------------------- |
+| `API_SERVICE_TOKEN`          | Service token for backend-to-auth communication    |
+| `SEAMLESS_BOOTSTRAP_ENABLED` | Enables bootstrap admin flow                       |
+| `SEAMLESS_BOOTSTRAP_SECRET`  | Secret used to authorize bootstrap invite creation |
 
 These values matter when the CLI, backend adapter, and auth server need to trust each other.
 
@@ -77,8 +84,8 @@ These values matter when the CLI, backend adapter, and auth server need to trust
 
 ## JWKS
 
-| Variable | Purpose |
-| -------- | ------- |
+| Variable          | Purpose               |
+| ----------------- | --------------------- |
 | `JWKS_ACTIVE_KID` | Active key identifier |
 
 In Docker-oriented local flows, the CLI may also generate related JWKS material automatically.
@@ -87,9 +94,9 @@ In Docker-oriented local flows, the CLI may also generate related JWKS material 
 
 ## WebAuthn And Browser Origins
 
-| Variable | Purpose |
-| -------- | ------- |
-| `RPID` | Relying party ID used for passkeys |
+| Variable  | Purpose                              |
+| --------- | ------------------------------------ |
+| `RPID`    | Relying party ID used for passkeys   |
 | `ORIGINS` | Allowed browser origins for WebAuthn |
 
 These are especially important for local development because mismatched hostnames and origins can
@@ -101,11 +108,11 @@ break passkey flows even when the rest of the stack looks healthy.
 
 In the current local stack, these values often line up like this:
 
-| Service | Common local URL |
-| ------- | ---------------- |
-| Auth API | `http://localhost:5312` |
-| Backend API | `http://localhost:3000` |
-| Web app | `http://localhost:5173` |
+| Service         | Common local URL        |
+| --------------- | ----------------------- |
+| Auth API        | `http://localhost:5312` |
+| Backend API     | `http://localhost:3000` |
+| Web app         | `http://localhost:5173` |
 | Admin dashboard | `http://localhost:5174` |
 
 ---
@@ -114,12 +121,12 @@ In the current local stack, these values often line up like this:
 
 The Express package documentation currently expects values along these lines:
 
-| Variable | Purpose |
-| -------- | ------- |
-| `AUTH_SERVER_URL` | Base URL for the Seamless Auth API |
-| `COOKIE_SIGNING_KEY` | Secret for signed API session cookies |
-| `API_SERVICE_TOKEN` | Shared service token for API-to-auth communication |
-| `APP_ORIGIN` | Site origin |
+| Variable             | Purpose                                            |
+| -------------------- | -------------------------------------------------- |
+| `AUTH_SERVER_URL`    | Base URL for the Seamless Auth API                 |
+| `COOKIE_SIGNING_KEY` | Secret for signed API session cookies              |
+| `API_SERVICE_TOKEN`  | Shared service token for API-to-auth communication |
+| `APP_ORIGIN`         | Site origin                                        |
 
 Depending on your architecture, your API may also need its own database-related values.
 

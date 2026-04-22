@@ -60,25 +60,27 @@ function compareDocs(a: DocEntry, b: DocEntry) {
   return a.title.localeCompare(b.title)
 }
 
-export const DOCS: DocEntry[] = (docsManifest as DocManifestEntry[]).map((doc) => {
-  const loader = moduleLoaders[`/docs/${doc.slug}.mdx`]
+export const DOCS: DocEntry[] = (docsManifest as DocManifestEntry[])
+  .map((doc) => {
+    const loader = moduleLoaders[`/docs/${doc.slug}.mdx`]
 
-  return {
-    slug: doc.slug,
-    title: doc.title,
-    order: doc.order,
-    tags: doc.tags,
-    section: doc.section,
-    load: async () => {
-      if (!loader) {
-        throw new Error(`Missing doc module for slug "${doc.slug}"`)
-      }
+    return {
+      slug: doc.slug,
+      title: doc.title,
+      order: doc.order,
+      tags: doc.tags,
+      section: doc.section,
+      load: async () => {
+        if (!loader) {
+          throw new Error(`Missing doc module for slug "${doc.slug}"`)
+        }
 
-      const mod = await loader()
-      return mod.default
-    },
-  }
-}).sort(compareDocs)
+        const mod = await loader()
+        return mod.default
+      },
+    }
+  })
+  .sort(compareDocs)
 
 export const DOCS_BY_SECTION: Record<SectionKey, DocEntry[]> = {
   start: [],

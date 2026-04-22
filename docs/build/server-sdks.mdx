@@ -19,10 +19,10 @@ server.
 
 ## Which One Should You Use?
 
-| Package | Use it when | What it gives you |
-| ------- | ----------- | ----------------- |
-| `@seamless-auth/express` | Your backend is Express | Official adapter, mounted auth routes, middleware, role guards |
-| `@seamless-auth/core` | You need a custom adapter or framework integration | Framework-agnostic auth and cookie primitives |
+| Package                  | Use it when                                        | What it gives you                                              |
+| ------------------------ | -------------------------------------------------- | -------------------------------------------------------------- |
+| `@seamless-auth/express` | Your backend is Express                            | Official adapter, mounted auth routes, middleware, role guards |
+| `@seamless-auth/core`    | You need a custom adapter or framework integration | Framework-agnostic auth and cookie primitives                  |
 
 If you already run Express, start with `@seamless-auth/express`.
 
@@ -59,11 +59,7 @@ It provides:
 ```ts
 import express from 'express'
 import cookieParser from 'cookie-parser'
-import {
-  createSeamlessAuthServer,
-  requireAuth,
-  requireRole,
-} from '@seamless-auth/express'
+import { createSeamlessAuthServer, requireAuth, requireRole } from '@seamless-auth/express'
 
 const app = express()
 app.use(express.json())

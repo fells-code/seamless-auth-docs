@@ -18,7 +18,10 @@ function walk(dir) {
     }
 
     const relativePath = path.relative(docsRoot, fullPath)
-    const slug = relativePath.replace(/\.mdx$/, '').split(path.sep).join('/')
+    const slug = relativePath
+      .replace(/\.mdx$/, '')
+      .split(path.sep)
+      .join('/')
 
     return [
       {
@@ -142,17 +145,19 @@ const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.s
   .map((urlPath) => `  <url><loc>${base}${urlPath}</loc></url>`)
   .join('\n')}\n</urlset>\n`
 
-const searchIndex = visibleDocRecords.map(({ slug, title, section, tags, headings, excerpt, urlPath }) => {
-  return {
-    slug,
-    title,
-    section,
-    tags,
-    headings,
-    excerpt,
-    urlPath,
-  }
-})
+const searchIndex = visibleDocRecords.map(
+  ({ slug, title, section, tags, headings, excerpt, urlPath }) => {
+    return {
+      slug,
+      title,
+      section,
+      tags,
+      headings,
+      excerpt,
+      urlPath,
+    }
+  },
+)
 
 const docsManifest = visibleDocRecords.map(({ slug, title, section, order, tags }) => ({
   slug,
@@ -166,8 +171,13 @@ mkdirSync(generatedRoot, { recursive: true })
 
 writeFileSync('public/sitemap.xml', xml)
 writeFileSync('public/search-index.json', JSON.stringify(searchIndex, null, 2) + '\n')
-writeFileSync(path.join(generatedRoot, 'docs-manifest.json'), JSON.stringify(docsManifest, null, 2) + '\n')
+writeFileSync(
+  path.join(generatedRoot, 'docs-manifest.json'),
+  JSON.stringify(docsManifest, null, 2) + '\n',
+)
 
 console.log(`Sitemap written to public/sitemap.xml with ${paths.length} URLs`)
 console.log(`Search index written to public/search-index.json with ${searchIndex.length} entries`)
-console.log(`Docs manifest written to src/generated/docs-manifest.json with ${docsManifest.length} entries`)
+console.log(
+  `Docs manifest written to src/generated/docs-manifest.json with ${docsManifest.length} entries`,
+)

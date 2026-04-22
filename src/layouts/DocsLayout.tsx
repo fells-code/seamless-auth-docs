@@ -21,9 +21,7 @@ export default function DocsLayout() {
         <div className="brand-block">
           <div className="brand-kicker">Documentation</div>
           <div className="brand">Seamless Auth</div>
-          <p className="brand-copy">
-            Docs for the auth API, SDKs, CLI, and admin dashboard.
-          </p>
+          <p className="brand-copy">Docs for the auth API, SDKs, CLI, and admin dashboard.</p>
         </div>
         <Search />
         <Sidebar />

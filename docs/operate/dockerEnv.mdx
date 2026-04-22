@@ -43,13 +43,13 @@ Whether `admin` is present depends on your CLI choices.
 
 ## Service Summary
 
-| Service | Local URL | Purpose |
-| ------- | --------- | ------- |
-| `db` | `localhost:5432` | Postgres persistence |
-| `auth` | `http://localhost:5312` | Auth engine |
-| `api` | `http://localhost:3000` | Application/backend layer |
-| `web` | `http://localhost:5173` | Frontend app |
-| `admin` | `http://localhost:5174` | Admin dashboard |
+| Service | Local URL               | Purpose                   |
+| ------- | ----------------------- | ------------------------- |
+| `db`    | `localhost:5432`        | Postgres persistence      |
+| `auth`  | `http://localhost:5312` | Auth engine               |
+| `api`   | `http://localhost:3000` | Application/backend layer |
+| `web`   | `http://localhost:5173` | Frontend app              |
+| `admin` | `http://localhost:5174` | Admin dashboard           |
 
 ---
 
@@ -99,12 +99,12 @@ Inside Docker, containers talk to each other by service name.
 
 Examples:
 
-| From | To | Internal address |
-| ---- | -- | ---------------- |
-| API | Auth | `http://auth:5312` |
-| API | DB | `db` |
-| Web | API | `http://localhost:3000` |
-| Admin | API | `http://localhost:3000` |
+| From  | To   | Internal address        |
+| ----- | ---- | ----------------------- |
+| API   | Auth | `http://auth:5312`      |
+| API   | DB   | `db`                    |
+| Web   | API  | `http://localhost:3000` |
+| Admin | API  | `http://localhost:3000` |
 
 For the route map and env details behind this, see:
 

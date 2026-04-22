@@ -16,53 +16,53 @@ area as it exists in the codebase today.
 
 ## Route Groups
 
-| Group | Routes | Purpose |
-| ----- | ------ | ------- |
-| Authentication | `/login`, `/logout`, `/refresh` | Login entry, logout, access refresh |
-| Registration | `/registration/register` | New-user registration |
-| OTP | `/otp/*` | Email and phone OTP generation and verification |
-| WebAuthn | `/webauthn/*` | Passkey registration and login |
-| Magic Links | `/magic-link*` | Magic link request, polling, verification |
-| Users | `/users/*` | Authenticated user profile and credential operations |
-| Sessions | `/sessions*` | Session listing and revocation |
-| Admin | `/admin/*` | Admin-only user, event, and session management |
-| Internal | `/internal/*` | Metrics, grouped events, login stats, anomalies |
-| System Config | `/system-config/*` | Available roles and runtime config |
-| Bootstrap | `/internal/bootstrap/admin-invite` | First-admin bootstrap invite creation |
-| JWKS | `/.well-known/jwks.json` | Public JWKS endpoint |
+| Group          | Routes                             | Purpose                                              |
+| -------------- | ---------------------------------- | ---------------------------------------------------- |
+| Authentication | `/login`, `/logout`, `/refresh`    | Login entry, logout, access refresh                  |
+| Registration   | `/registration/register`           | New-user registration                                |
+| OTP            | `/otp/*`                           | Email and phone OTP generation and verification      |
+| WebAuthn       | `/webauthn/*`                      | Passkey registration and login                       |
+| Magic Links    | `/magic-link*`                     | Magic link request, polling, verification            |
+| Users          | `/users/*`                         | Authenticated user profile and credential operations |
+| Sessions       | `/sessions*`                       | Session listing and revocation                       |
+| Admin          | `/admin/*`                         | Admin-only user, event, and session management       |
+| Internal       | `/internal/*`                      | Metrics, grouped events, login stats, anomalies      |
+| System Config  | `/system-config/*`                 | Available roles and runtime config                   |
+| Bootstrap      | `/internal/bootstrap/admin-invite` | First-admin bootstrap invite creation                |
+| JWKS           | `/.well-known/jwks.json`           | Public JWKS endpoint                                 |
 
 ---
 
 ## Authentication
 
-| Method | Path | Purpose |
-| ------ | ---- | ------- |
-| `POST` | `/login` | Start login using email or phone |
-| `GET` | `/logout` | Logout current user |
-| `POST` | `/refresh` | Refresh access state |
+| Method | Path       | Purpose                          |
+| ------ | ---------- | -------------------------------- |
+| `POST` | `/login`   | Start login using email or phone |
+| `GET`  | `/logout`  | Logout current user              |
+| `POST` | `/refresh` | Refresh access state             |
 
 ---
 
 ## Registration
 
-| Method | Path | Purpose |
-| ------ | ---- | ------- |
+| Method | Path                     | Purpose             |
+| ------ | ------------------------ | ------------------- |
 | `POST` | `/registration/register` | Register a new user |
 
 ---
 
 ## OTP
 
-| Method | Path | Purpose |
-| ------ | ---- | ------- |
-| `GET` | `/otp/generate-email-otp` | Generate registration email OTP |
-| `GET` | `/otp/generate-phone-otp` | Generate registration phone OTP |
-| `GET` | `/otp/generate-login-email-otp` | Generate login email OTP |
-| `GET` | `/otp/generate-login-phone-otp` | Generate login phone OTP |
-| `POST` | `/otp/verify-email-otp` | Verify registration email OTP |
-| `POST` | `/otp/verify-phone-otp` | Verify registration phone OTP |
-| `POST` | `/otp/verify-login-email-otp` | Verify login email OTP |
-| `POST` | `/otp/verify-login-phone-otp` | Verify login phone OTP |
+| Method | Path                            | Purpose                         |
+| ------ | ------------------------------- | ------------------------------- |
+| `GET`  | `/otp/generate-email-otp`       | Generate registration email OTP |
+| `GET`  | `/otp/generate-phone-otp`       | Generate registration phone OTP |
+| `GET`  | `/otp/generate-login-email-otp` | Generate login email OTP        |
+| `GET`  | `/otp/generate-login-phone-otp` | Generate login phone OTP        |
+| `POST` | `/otp/verify-email-otp`         | Verify registration email OTP   |
+| `POST` | `/otp/verify-phone-otp`         | Verify registration phone OTP   |
+| `POST` | `/otp/verify-login-email-otp`   | Verify login email OTP          |
+| `POST` | `/otp/verify-login-phone-otp`   | Verify login phone OTP          |
 
 These routes use ephemeral auth state during in-progress auth flows.
 
@@ -70,60 +70,60 @@ These routes use ephemeral auth state during in-progress auth flows.
 
 ## WebAuthn
 
-| Method | Path | Purpose |
-| ------ | ---- | ------- |
-| `GET` | `/webauthn/register/start` | Start passkey registration |
+| Method | Path                        | Purpose                     |
+| ------ | --------------------------- | --------------------------- |
+| `GET`  | `/webauthn/register/start`  | Start passkey registration  |
 | `POST` | `/webauthn/register/finish` | Finish passkey registration |
-| `POST` | `/webauthn/login/start` | Start passkey login |
-| `POST` | `/webauthn/login/finish` | Finish passkey login |
+| `POST` | `/webauthn/login/start`     | Start passkey login         |
+| `POST` | `/webauthn/login/finish`    | Finish passkey login        |
 
 ---
 
 ## Magic Links
 
-| Method | Path | Purpose |
-| ------ | ---- | ------- |
-| `GET` | `/magic-link` | Request a magic login link |
-| `GET` | `/magic-link/check` | Poll for confirmation |
-| `GET` | `/magic-link/verify/:token` | Verify a magic link token |
+| Method | Path                        | Purpose                    |
+| ------ | --------------------------- | -------------------------- |
+| `GET`  | `/magic-link`               | Request a magic login link |
+| `GET`  | `/magic-link/check`         | Poll for confirmation      |
+| `GET`  | `/magic-link/verify/:token` | Verify a magic link token  |
 
 ---
 
 ## Users
 
-| Method | Path | Purpose |
-| ------ | ---- | ------- |
-| `GET` | `/users/me` | Return authenticated user and credentials |
-| `POST` | `/users/credentials` | Update credential metadata |
-| `DELETE` | `/users/credentials` | Delete a credential |
-| `DELETE` | `/users/delete` | Delete the authenticated user |
+| Method   | Path                 | Purpose                                   |
+| -------- | -------------------- | ----------------------------------------- |
+| `GET`    | `/users/me`          | Return authenticated user and credentials |
+| `POST`   | `/users/credentials` | Update credential metadata                |
+| `DELETE` | `/users/credentials` | Delete a credential                       |
+| `DELETE` | `/users/delete`      | Delete the authenticated user             |
 
 ---
 
 ## Sessions
 
-| Method | Path | Purpose |
-| ------ | ---- | ------- |
-| `GET` | `/sessions` | List active sessions for the current user |
-| `DELETE` | `/sessions/:id` | Revoke one session |
-| `DELETE` | `/sessions` | Revoke all sessions for the current user |
+| Method   | Path            | Purpose                                   |
+| -------- | --------------- | ----------------------------------------- |
+| `GET`    | `/sessions`     | List active sessions for the current user |
+| `DELETE` | `/sessions/:id` | Revoke one session                        |
+| `DELETE` | `/sessions`     | Revoke all sessions for the current user  |
 
 ---
 
 ## Admin
 
-| Method | Path | Purpose |
-| ------ | ---- | ------- |
-| `GET` | `/admin/users` | List users |
-| `POST` | `/admin/users` | Create user |
-| `DELETE` | `/admin/users` | Delete user |
-| `GET` | `/admin/users/:userId` | Get user detail |
-| `PATCH` | `/admin/users/:userId` | Update user |
-| `GET` | `/admin/users/:userId/anomalies` | Get anomalies for a user |
-| `GET` | `/admin/auth-events` | Query auth events |
-| `GET` | `/admin/credential-count` | Get credential counts |
-| `GET` | `/admin/sessions` | List all sessions |
-| `GET` | `/admin/sessions/:userId` | List sessions for one user |
+| Method   | Path                                 | Purpose                          |
+| -------- | ------------------------------------ | -------------------------------- |
+| `GET`    | `/admin/users`                       | List users                       |
+| `POST`   | `/admin/users`                       | Create user                      |
+| `DELETE` | `/admin/users`                       | Delete user                      |
+| `GET`    | `/admin/users/:userId`               | Get user detail                  |
+| `PATCH`  | `/admin/users/:userId`               | Update user                      |
+| `GET`    | `/admin/users/:userId/anomalies`     | Get anomalies for a user         |
+| `GET`    | `/admin/auth-events`                 | Query auth events                |
+| `GET`    | `/admin/credential-count`            | Get credential counts            |
+| `GET`    | `/admin/sessions`                    | List all sessions                |
+| `GET`    | `/admin/sessions/:userId`            | List sessions for one user       |
 | `DELETE` | `/admin/sessions/:userId/revoke-all` | Revoke all sessions for one user |
 
 All admin routes require authenticated admin access.
@@ -134,31 +134,31 @@ All admin routes require authenticated admin access.
 
 These endpoints are especially important for the admin dashboard.
 
-| Method | Path | Purpose |
-| ------ | ---- | ------- |
-| `GET` | `/internal/auth-events/summary` | Event summary metrics |
-| `GET` | `/internal/auth-events/timeseries` | Event timeseries metrics |
-| `GET` | `/internal/auth-events/login-stats` | Login success/failure stats |
-| `GET` | `/internal/auth-events/grouped` | Grouped auth event summaries |
-| `GET` | `/internal/security/anomalies` | Suspicious activity feed |
-| `GET` | `/internal/metrics/dashboard` | Dashboard summary metrics |
+| Method | Path                                | Purpose                      |
+| ------ | ----------------------------------- | ---------------------------- |
+| `GET`  | `/internal/auth-events/summary`     | Event summary metrics        |
+| `GET`  | `/internal/auth-events/timeseries`  | Event timeseries metrics     |
+| `GET`  | `/internal/auth-events/login-stats` | Login success/failure stats  |
+| `GET`  | `/internal/auth-events/grouped`     | Grouped auth event summaries |
+| `GET`  | `/internal/security/anomalies`      | Suspicious activity feed     |
+| `GET`  | `/internal/metrics/dashboard`       | Dashboard summary metrics    |
 
 ---
 
 ## System Config
 
-| Method | Path | Purpose |
-| ------ | ---- | ------- |
-| `GET` | `/system-config/roles` | Get available roles |
-| `GET` | `/system-config/admin` | Read current system configuration |
-| `PATCH` | `/system-config/admin` | Update system configuration |
+| Method  | Path                   | Purpose                           |
+| ------- | ---------------------- | --------------------------------- |
+| `GET`   | `/system-config/roles` | Get available roles               |
+| `GET`   | `/system-config/admin` | Read current system configuration |
+| `PATCH` | `/system-config/admin` | Update system configuration       |
 
 ---
 
 ## Bootstrap
 
-| Method | Path | Purpose |
-| ------ | ---- | ------- |
+| Method | Path                               | Purpose                               |
+| ------ | ---------------------------------- | ------------------------------------- |
 | `POST` | `/internal/bootstrap/admin-invite` | Create a first-admin bootstrap invite |
 
 This is an internal bootstrap route used by the CLI and guarded by the bootstrap secret flow.
@@ -167,6 +167,6 @@ This is an internal bootstrap route used by the CLI and guarded by the bootstrap
 
 ## JWKS
 
-| Method | Path | Purpose |
-| ------ | ---- | ------- |
-| `GET` | `/.well-known/jwks.json` | Publish public keys for verification |
+| Method | Path                     | Purpose                              |
+| ------ | ------------------------ | ------------------------------------ |
+| `GET`  | `/.well-known/jwks.json` | Publish public keys for verification |
