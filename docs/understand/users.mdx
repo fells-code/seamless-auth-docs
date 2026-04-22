@@ -2,71 +2,78 @@ export const meta = {
   title: 'Users & Roles',
   order: 3,
   section: 'understand',
+  tags: ['users', 'roles', 'rbac', 'authorization', 'admin role', 'default roles'],
 }
 
 # Users & Roles
 
-Users represent identities in SeamlessAuth.
-
-They are flexible, extensible, and designed for **role-based access control (RBAC)**.
+Users represent identities in SeamlessAuth and carry the role data your application uses for
+authorization.
 
 ---
 
 ## Mental Model
 
-```
-User → has roles → determines access
+```txt
+User -> has roles -> determines access
 ```
 
 ---
 
-## User Fields (Key Highlights)
+## Important User Fields
 
-| Field          | Description               |
-| -------------- | ------------------------- |
-| id             | Unique user ID            |
-| email          | Unique email              |
-| phone          | Unique phone              |
-| roles          | Array of roles            |
-| verified       | Fully verified user       |
-| email_verified | Email verification status |
-| phone_verified | Phone verification status |
-| revoked        | Disabled user             |
-| last_login     | Last login timestamp      |
+| Field | Description |
+| ----- | ----------- |
+| `id` | Unique user ID |
+| `email` | Unique email |
+| `phone` | Unique phone |
+| `roles` | Array of assigned roles |
+| `revoked` | Whether authentication is disabled |
+| `emailVerified` | Email verification status |
+| `phoneVerified` | Phone verification status |
+| `verified` | Fully verified status |
+| `challenge` | In-progress auth challenge |
+| `lastLogin` | Last successful login |
 
 ---
 
 ## Roles
 
-Roles are stored as an array:
+Roles are stored directly on the user record.
 
-```
+Example:
+
+```txt
 ["user", "admin", "betaUser"]
 ```
 
+That makes role checks explicit and easy to reason about in both frontend and backend code.
+
 ---
 
-## Default Roles
+## System Role Configuration
 
-Configured via system config:
+Role behavior is shaped by system configuration values such as:
 
 - `default_roles`
 - `available_roles`
 
-These control:
+Those values control:
 
-- New user permissions
-- Allowed roles in the system
+- which roles new users receive by default
+- which roles are valid in the system
 
 ---
 
-## Role-Based Access Control (RBAC)
+## Authorization Model
 
-Roles determine:
+SeamlessAuth gives you identity and role data. Your application still decides how to enforce access.
 
-- UI access
-- API permissions
-- Admin capabilities
+That can look like:
+
+- UI checks with `hasRole('admin')`
+- backend middleware such as `requireRole('admin')`
+- product-specific role combinations in your own application code
 
 Example:
 
@@ -78,41 +85,44 @@ if (hasRole('admin')) {
 
 ---
 
-## Verification Lifecycle
+## Verification State
 
+Users move through a verification lifecycle:
+
+```txt
+Unverified -> Email verified -> Phone verified -> Fully verified
 ```
-Unverified → Email Verified → Phone Verified → Fully Verified
-```
+
+The exact path depends on the auth flow your app is using.
 
 ---
 
 ## Revoked Users
 
-If `revoked = true`:
+If a user is revoked:
 
-- User cannot authenticate
-- Sessions should be invalidated
+- they should no longer be able to authenticate
+- existing sessions should be treated as invalidated
+
+Revocation is how the system distinguishes a real user record from one that is still allowed to
+participate in auth flows.
 
 ---
 
 ## Admin Users
 
-Admins are just users with:
+Admins are normal users with an `admin` role.
 
-```
-"admin" role
-```
+That simplicity matters because it keeps authorization explicit across:
 
----
-
-## Prompt for AI Help
-
-Copy this into ChatGPT:
-
-"Explain how SeamlessAuth handles users and role-based access control."
+- admin dashboard access
+- backend route protection
+- operator actions
 
 ---
 
-## Next Step
+## Related Docs
 
-→ Learn about Auth Events and auditing
+- [Data Models](/docs/understand/data-model)
+- [Auth Events & Auditing](/docs/understand/authEvents)
+- [Auth API Routes](/docs/reference/auth-api-routes)

@@ -1,10 +1,28 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-<url><loc>https://docs.seamlessauth.com/</loc></url>
-<url><loc>https://docs.seamlessauth.com/docs</loc></url>
-<url><loc>https://docs.seamlessauth.com/docs/introduction</loc></url>
-<url><loc>https://docs.seamlessauth.com/docs/getting-started</loc></url>
-<url><loc>https://docs.seamlessauth.com/docs/react-sdk</loc></url>
-<url><loc>https://docs.seamlessauth.com/docs/nextjs-server</loc></url>
-<url><loc>https://docs.seamlessauth.com/docs/self-hosting</loc></url>
+  <url><loc>https://docs.seamlessauth.com/</loc></url>
+  <url><loc>https://docs.seamlessauth.com/docs</loc></url>
+  <url><loc>https://docs.seamlessauth.com/docs/build/admin-dashboard</loc></url>
+  <url><loc>https://docs.seamlessauth.com/docs/build/auth-api</loc></url>
+  <url><loc>https://docs.seamlessauth.com/docs/build/ecosystem</loc></url>
+  <url><loc>https://docs.seamlessauth.com/docs/build/react-sdk</loc></url>
+  <url><loc>https://docs.seamlessauth.com/docs/build/server-sdks</loc></url>
+  <url><loc>https://docs.seamlessauth.com/docs/operate/CLI</loc></url>
+  <url><loc>https://docs.seamlessauth.com/docs/operate/cli-init</loc></url>
+  <url><loc>https://docs.seamlessauth.com/docs/operate/deploy</loc></url>
+  <url><loc>https://docs.seamlessauth.com/docs/operate/dockerEnv</loc></url>
+  <url><loc>https://docs.seamlessauth.com/docs/reference/auth-api-routes</loc></url>
+  <url><loc>https://docs.seamlessauth.com/docs/reference/cli-commands</loc></url>
+  <url><loc>https://docs.seamlessauth.com/docs/reference/environment-variables</loc></url>
+  <url><loc>https://docs.seamlessauth.com/docs/start/adminUi</loc></url>
+  <url><loc>https://docs.seamlessauth.com/docs/start/firstAdmin</loc></url>
+  <url><loc>https://docs.seamlessauth.com/docs/start/firstPageAndRoute</loc></url>
+  <url><loc>https://docs.seamlessauth.com/docs/start/firstUser</loc></url>
+  <url><loc>https://docs.seamlessauth.com/docs/start/overview</loc></url>
+  <url><loc>https://docs.seamlessauth.com/docs/start/quickStart</loc></url>
+  <url><loc>https://docs.seamlessauth.com/docs/troubleshooting/troubleshooting</loc></url>
+  <url><loc>https://docs.seamlessauth.com/docs/understand/authEvents</loc></url>
+  <url><loc>https://docs.seamlessauth.com/docs/understand/data-model</loc></url>
+  <url><loc>https://docs.seamlessauth.com/docs/understand/sessions</loc></url>
+  <url><loc>https://docs.seamlessauth.com/docs/understand/users</loc></url>
 </urlset>

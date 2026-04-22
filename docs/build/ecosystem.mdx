@@ -1,0 +1,176 @@
+export const meta = {
+  title: 'Ecosystem Overview',
+  order: 1,
+  section: 'build',
+  tags: ['ecosystem', 'packages', 'architecture', 'repos', 'sdk', 'cli', 'auth server'],
+}
+
+# Seamless Auth Ecosystem
+
+Seamless Auth is not a single package. It is a small ecosystem of projects that work together to
+deliver passwordless authentication, self-hosted infrastructure, and operator tooling.
+
+This page is the fastest way to understand what each repository is for and where to start.
+
+---
+
+## Mental Model
+
+```txt
+create-seamless
+  -> scaffolds your app and local stack
+
+seamless-auth-api
+  -> runs the auth engine
+
+@seamless-auth/express or @seamless-auth/core
+  -> connects your backend to the auth engine
+
+@seamless-auth/react
+  -> connects your frontend to the auth flow
+
+seamless-auth-admin-dashboard
+  -> gives operators a UI for users, sessions, events, security, and config
+```
+
+---
+
+## The Main Pieces
+
+| Project | What it is | Use it when |
+| ------- | ---------- | ------------ |
+| `create-seamless` | CLI for scaffolding a full stack around Seamless Auth | You want a working local project quickly |
+| `seamless-auth-api` | Self-hostable auth server | You need the passwordless auth engine itself |
+| `@seamless-auth/core` | Framework-agnostic server auth primitives | You are building your own backend adapter |
+| `@seamless-auth/express` | Official Express adapter | Your backend is Express and you want the supported integration path |
+| `@seamless-auth/react` | React SDK and built-in auth screens | Your frontend is React and you want a ready-to-use auth integration |
+| `seamless-auth-admin-dashboard` | Operator dashboard app | You want a UI for admins and support teams |
+| `@seamless-auth/types` | Shared request/response and domain types | You want consistent types across apps and tooling |
+
+---
+
+## How The Pieces Fit
+
+### 1. The Auth Server Is The Core
+
+`seamless-auth-api` owns the authentication domain:
+
+- registration
+- login
+- OTP flows
+- WebAuthn / passkeys
+- magic links
+- sessions
+- JWKS
+- system configuration
+- admin and internal metrics endpoints
+
+Everything else either talks to it directly or sits on top of it.
+
+---
+
+### 2. Server SDKs Protect Your API
+
+Your application backend normally sits between the browser and the auth server.
+
+That backend layer:
+
+- owns the security boundary for your app
+- validates cookies
+- enforces authorization
+- talks to the auth server using service-to-service credentials
+
+If you use Express, start with `@seamless-auth/express`. If you need a different runtime, start
+with `@seamless-auth/core`.
+
+---
+
+### 3. Frontend SDKs Drive The User Flow
+
+`@seamless-auth/react` wraps your app with auth state and ships built-in auth routes for:
+
+- login
+- passkey login
+- email / phone OTP verification
+- magic link verification
+- passkey registration
+
+The SDK gives you auth state and flow helpers, but your app still owns routing, authorization, and
+product-specific UI decisions.
+
+---
+
+### 4. The Admin Dashboard Is A Separate App
+
+The admin dashboard is not built into the auth server. It is its own frontend application that
+talks to the auth API.
+
+That separation matters because:
+
+- you can deploy the auth server without the dashboard
+- you can customize the dashboard independently
+- operator workflows stay separate from your end-user app
+
+---
+
+### 5. The CLI Connects Everything
+
+`create-seamless` is the fastest way to get a working local stack. It currently scaffolds a React
+frontend, an Express API, the auth server in Docker or local mode, and an optional admin
+dashboard.
+
+It is the easiest starting point if you want to learn the ecosystem through a working project
+rather than by assembling every piece manually.
+
+---
+
+## Choose Your Starting Point
+
+### I want a working stack quickly
+
+Start with [Getting Started](/docs/start/quickStart) and [CLI Overview](/docs/operate/CLI).
+
+---
+
+### I want to self-host the auth engine
+
+Read [Auth API](/docs/build/auth-api).
+
+---
+
+### I need to integrate my backend
+
+Read [Server SDKs](/docs/build/server-sdks).
+
+---
+
+### I need to integrate my React app
+
+Read [React SDK](/docs/build/react-sdk).
+
+---
+
+### I need an operator UI
+
+Read [Admin Dashboard](/docs/build/admin-dashboard).
+
+---
+
+## What This Docs Site Is Becoming
+
+The docs are being reshaped around this ecosystem model:
+
+- `Start` for guided onboarding
+- `Build` for package and integration docs
+- `Understand` for concepts and system behavior
+- `Operate` for CLI and runtime workflows
+- `Reference` for exact routes, env vars, and technical contracts
+
+If a page makes a claim about a package or command, it should line up with the source repository for
+that package or command.
+
+---
+
+## Next Step
+
+→ Continue to [Auth API](/docs/build/auth-api)

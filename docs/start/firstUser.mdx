@@ -1,109 +1,97 @@
 export const meta = {
-  title: 'Register Your First User',
+  title: 'Create Your First User',
   order: 3,
   section: 'start',
+  tags: ['user', 'registration', 'signup', 'passkeys', 'webauthn', 'otp'],
 }
 
-## Register Your First User
+## Create Your First User
 
-This guide walks you through completing your first authentication flow using SeamlessAuth.
+This guide walks through the first successful auth flow in a local Seamless Auth stack.
 
-By the end, you will:
+By the end, you should have:
 
-- Create a user
-- Complete a passwordless login
-- Establish a session
-- See authenticated state in your application
-
----
-
-## What You Should Have Ready
-
-Before starting:
-
-- Your app is running locally
-- Docker services are running
-- You can access [http://localhost:5173](http://localhost:5173)
+- a created user
+- a completed passwordless verification flow
+- an authenticated session
+- a working mental model of what happened in the stack
 
 ---
 
-## Step 1: Open the App
+## Before You Start
+
+Make sure:
+
+- your local stack is running
+- the web app is available at `http://localhost:5173`
+- you are using the generated starter project or an equivalent local setup
+
+---
+
+## Step 1: Open The App
 
 Navigate to:
 
-```
+```txt
 http://localhost:5173
 ```
 
-You should see the SeamlessAuth starter UI.
+You should see the starter UI.
 
 <Image
   src="/uiStarterTemplate.png"
   alt="SeamlessAuth Starter UI"
-  caption="SeamlessAuth starter UI"
+  caption="Starter UI before authentication"
 />
 
 ---
 
-## Step 2: Enter Your Email
+## Step 2: Start Registration
 
-In the registration form:
+In the starter form:
 
-- Enter an email address (eg. test001@test.com)
-- Enter your phone number (eg. +14109850001)
-- Submit the form
+- enter an email address
+- enter a phone number
+- submit the flow
 
-SeamlessAuth will:
-
-- Detect that the user does not exist
-- Automatically begin the registration flow
+In the default local experience, the system detects that the user does not already exist and moves
+into the registration path.
 
 ---
 
-## Step 3: Receive OTPs
+## Step 3: Complete Verification
 
-After providing a test email and phone number you will receive:
+In local development:
 
-- A one-time password (OTP) for phone verification first
+- OTP values may be visible in logs or dev-oriented messaging flows
+- after verification, passkey registration is prompted
 
-In development mode, this will be:
+Once verification succeeds:
 
-- Logged in the console
-
-<Image src="/otp.png" alt="OTP example in terminal" caption="OTPs are logged out in the console" />
-
----
-
-## Step 4: Verify OTPs and create your first Passkey
-
-- Complete the OTP prompts
-
-Once verified:
-
-- A user record is created
-- Passkey registration is prompted
-- A session is issued
+- a user record is created
+- passkey registration completes
+- a session is issued
 
 <Image
   src="/passkeyReg.png"
   alt="Passkey registration screen"
-  caption="SeamlessAuth uses webauthn as it's core for passkeys"
+  caption="Passkey registration in the local starter flow"
 />
 
 ---
 
-## Step 5: Session Established
+## Step 4: Confirm Authenticated State
 
-After verification:
+After the flow completes:
 
-- A secure HTTP-only cookie is set
-- Your frontend SDK detects the session
-- The UI updates to an authenticated state
+- a secure cookie is set
+- the frontend auth layer detects the authenticated state
+- the UI updates to the signed-in view
 
 <Image
   src="/loggedIn.png"
   alt="SeamlessAuth Starter UI - logged in landing page"
-  caption="SeamlessAuth starter UI logged in screen"
+  caption="Starter UI after a successful auth flow"
 />
 
 ---
@@ -112,42 +100,27 @@ After verification:
 
 Behind the scenes:
 
-1. Your frontend called your API server
-2. The API server proxied the request for authentication to the auth server
-3. A verification challenge was issued
-4. You completed verification
-5. A session was created
-6. A secure cookie was set
-7. The SDK updated your application state
-8. All subsquent requests are sent through an auth check endpoint before touching any of your business logic
+1. the frontend initiated the auth flow
+2. the backend/auth integration layer communicated with the auth server
+3. verification completed through passwordless steps
+4. the auth server created the user and session records
+5. a secure cookie established authenticated state for later requests
 
-<Card title="Key Concept">
-  Authentication and registration are passwordless and naturally deconflicting. A user is created
-  automatically during their first successful verification and can normally deconflict any account
-  issues via the registration process.
-</Card>
+If you want the exact route groups involved, see [Auth API Routes](/docs/reference/auth-api-routes).
 
 ---
 
-## Verify via the Admin portal (Optional)
+## Why This Matters
 
-You can confirm your session by reviewing activity in the admin portal, but first we need an admin!
-We will do that next.
+This first run proves the main local stack is wired correctly:
 
-<Callout type="tip">
-  Use the Admin UI to inspect users and sessions visually without querying the database.
-</Callout>
-
----
-
-## Prompt for AI Help
-
-Copy this into ChatGPT:
-
-"I just registered a user in SeamlessAuth. Help me protect routes so only authenticated users can access certain pages."
+- frontend to API
+- API to auth server
+- auth server to database
+- session cookie back to the application
 
 ---
 
 ## Next Step
 
-→ Register your first admin user
+→ Continue to [Register Your First Admin](/docs/start/firstAdmin)

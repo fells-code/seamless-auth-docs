@@ -1,3 +1,14 @@
+import type { ComponentType } from 'react'
+import docsManifest from './generated/docs-manifest.json'
+
+export type DocManifestEntry = {
+  slug: string
+  title: string
+  order: number
+  tags: string[]
+  section: SectionKey
+}
+
 export type SectionKey =
   | 'start'
   | 'build'
@@ -7,14 +18,7 @@ export type SectionKey =
   | 'reference'
 
 export type DocModule = {
-  default: React.ComponentType
-  meta?: {
-    title?: string
-    order?: number
-    tags?: string[]
-    hidden?: boolean
-    section?: SectionKey
-  }
+  default: ComponentType
 }
 
 export type DocEntry = {
@@ -22,19 +26,11 @@ export type DocEntry = {
   title: string
   order: number
   tags: string[]
-  hidden: boolean
   section: SectionKey
-  Component: React.ComponentType
+  load: () => Promise<ComponentType>
 }
 
-const modules = import.meta.glob<DocModule>('/docs/**/*.mdx', { eager: true })
-
-function getPathParts(path: string) {
-  return path
-    .replace(/^\/docs\//, '')
-    .replace(/\.mdx$/, '')
-    .split('/')
-}
+const moduleLoaders = import.meta.glob<DocModule>('/docs/**/*.mdx')
 
 export const DOC_SECTIONS: Record<SectionKey, string> = {
   start: 'Start',
@@ -64,23 +60,25 @@ function compareDocs(a: DocEntry, b: DocEntry) {
   return a.title.localeCompare(b.title)
 }
 
-export const DOCS: DocEntry[] = Object.entries(modules)
-  .map(([path, mod]) => {
-    const parts = getPathParts(path)
-    const inferredSection = parts[0] as SectionKey
+export const DOCS: DocEntry[] = (docsManifest as DocManifestEntry[]).map((doc) => {
+  const loader = moduleLoaders[`/docs/${doc.slug}.mdx`]
 
-    return {
-      slug: parts.join('/'),
-      title: mod.meta?.title || parts[parts.length - 1],
-      order: mod.meta?.order ?? 999,
-      tags: mod.meta?.tags ?? [],
-      hidden: !!mod.meta?.hidden,
-      section: mod.meta?.section ?? inferredSection ?? 'reference',
-      Component: mod.default,
-    }
-  })
-  .filter((d) => !d.hidden)
-  .sort(compareDocs)
+  return {
+    slug: doc.slug,
+    title: doc.title,
+    order: doc.order,
+    tags: doc.tags,
+    section: doc.section,
+    load: async () => {
+      if (!loader) {
+        throw new Error(`Missing doc module for slug "${doc.slug}"`)
+      }
+
+      const mod = await loader()
+      return mod.default
+    },
+  }
+}).sort(compareDocs)
 
 export const DOCS_BY_SECTION: Record<SectionKey, DocEntry[]> = {
   start: [],

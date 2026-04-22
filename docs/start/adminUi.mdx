@@ -1,228 +1,149 @@
 export const meta = {
-  title: 'Admin UI',
+  title: 'Explore the Admin Dashboard',
   order: 5,
   section: 'start',
+  tags: ['admin', 'dashboard', 'operator ui', 'operations', 'security', 'sessions', 'events'],
 }
 
-## Admin UI
+## Explore the Admin Dashboard
 
-The SeamlessAuth Admin UI provides a centralized interface for managing your authentication system.
+The Seamless Auth Admin UI is the operator-facing application for managing and investigating a
+Seamless Auth deployment.
 
-It is designed for **operational visibility and control**, allowing you to inspect users, sessions, and security events in real time.
+It runs as a separate app and uses the same auth system as the rest of your stack.
 
 ---
 
 ## Access Requirements
 
-Only users with the `admin` role can access the Admin UI.
+Only users with the `admin` role should be able to access the dashboard.
 
-If a non-admin attempts access:
+In the current dashboard app:
 
-- They will be denied access
-- Or redirected depending on your configuration
+- unauthenticated users are redirected to `/unauthenticated`
+- authenticated non-admin users should not reach the main operator routes
+- admin access depends on the `admin` role being present in the authenticated session
 
 <Callout type="info">
-  The Admin UI is backed entirely by the same API you control. There is no hidden logic—everything
-  maps directly to your system.
+  The dashboard is an operational tool, not a hidden control plane. It works through explicit API
+  routes and the same role data your application can inspect.
 </Callout>
 
 ---
 
-## Overview of Interfaces
+## Main Areas
 
-The Admin UI consists of six primary sections:
+The current dashboard app includes:
 
-<Card title="Admin UI Sections">
-  - Dashboard (Metrics & Overview) - Users - Sessions - Events (Audit Logs) - Security - System
-  Configuration
-</Card>
+- Overview
+- Users
+- Sessions
+- Events
+- Security
+- System configuration
+- Profile
 
----
-
-## Dashboard
-
-The dashboard provides a high-level view of your system.
-
-It includes:
-
-- User counts
-- Session activity
-- Authentication trends
-- System health indicators
-
-This page helps you quickly answer:
-
-- Is my system active?
-- Are users logging in successfully?
-- Is anything unusual happening?
-
-<Image src="/adminPortal.png" alt="Seamless Admin portal" caption="Admin portal dashboard" />
+The most important starter-path sections are the first six.
 
 ---
 
-## Users
+## What You Can Do There
 
-The Users page is the primary interface for managing identities.
+### Overview
 
-You can:
+Use the overview screen to quickly answer:
 
-- View all users
-- Edit user details
-- Assign or remove roles
-- Revoke sessions
-- Disable (revoke) users entirely
+- is the system active?
+- are logins succeeding?
+- are there suspicious signals worth investigating?
 
-<Callout type="tip">
-  Revoking a user will prevent future authentication and should be used for compromised or invalid
-  accounts.
-</Callout>
-
-<Image src="/adminUsers.png" alt="Seamless Admin users view" caption="Admin portal users" />
+<Image src="/adminPortal.png" alt="Seamless Admin portal" caption="Admin dashboard overview" />
 
 ---
 
-## Sessions
+### Users
 
-The Sessions page shows all active sessions across users.
+Use the users screen to:
 
-Each session represents a device or browser instance.
+- browse identities
+- edit user details
+- update roles
+- revoke access-related state
 
-You can:
-
-- View active sessions
-- Inspect device and IP information
-- Revoke individual sessions
-
-This enables:
-
-- Device-level security
-- Debugging login issues
-- Supporting users across devices
-
-<Image
-  src="/adminSessions.png"
-  alt="Seamless Admin sessions view"
-  caption="Admin portal sessions"
-/>
+<Image src="/adminUsers.png" alt="Seamless Admin users view" caption="Users view" />
 
 ---
 
-## Events (Audit Logs)
+### Sessions
 
-The Events page provides a detailed audit trail of authentication activity.
+Use the sessions screen to:
 
-Examples include:
+- inspect active sessions
+- review device/browser context
+- revoke sessions
 
-- user_created
-- registration_success
-- verify_otp_success
-- webauthn_registration_success
-
-You can use this to:
-
-- Debug authentication flows
-- Track user behavior
-- Audit system activity
-
-<Image
-  src="/adminEvents.png"
-  alt="Seamless Admin auth events view"
-  caption="Admin portal auth events"
-/>
+<Image src="/adminSessions.png" alt="Seamless Admin sessions view" caption="Sessions view" />
 
 ---
 
-## Security
+### Events
 
-The Security section highlights suspicious or noteworthy activity.
+Use the events screen to:
 
-This may include:
+- inspect auth flow history
+- filter event types
+- debug failed or unusual behavior
 
-- Repeated failed logins
-- Unusual IP behavior
-- Rapid session creation
-
-This helps you:
-
-- Detect potential abuse
-- Investigate anomalies
-- Improve system safety
-
-<Image
-  src="/adminSecurity.png"
-  alt="Seamless Admin security view"
-  caption="Admin portal security"
-/>
+<Image src="/adminEvents.png" alt="Seamless Admin auth events view" caption="Events view" />
 
 ---
 
-## System Configuration
+### Security
 
-The System page allows you to manage runtime configuration.
+Use the security screen to:
 
-You can update:
+- review anomaly signals
+- inspect failed login pressure
+- pivot into suspicious events
 
-- Token TTLs (access / refresh)
-- Available roles
-- Default roles
-- Application metadata
+<Image src="/adminSecurity.png" alt="Seamless Admin security view" caption="Security view" />
 
-These settings are stored in your system config and applied dynamically.
+---
 
-<Callout type="warning">
-  Changes to system configuration can impact authentication behavior. Apply updates carefully and
-  validate in development first.
-</Callout>
+### System Configuration
+
+Use the system screen to:
+
+- review runtime auth configuration
+- update available and default roles
+- adjust auth-related settings exposed by the system config APIs
 
 <Image
   src="/adminSystem.png"
   alt="Seamless Admin system config view"
-  caption="Admin portal system config"
+  caption="System configuration view"
 />
 
 ---
 
-## How It All Connects
+## How It Connects To The Stack
 
-Each section of the Admin UI maps directly to core data models:
+The dashboard sits on top of:
 
-- Users → `users`
-- Sessions → `sessions`
-- Events → `auth_events`
-- System → `system_config`
+- admin routes such as `/admin/*`
+- internal metrics routes such as `/internal/*`
+- system config routes such as `/system-config/*`
 
-This ensures:
-
-- Full transparency
-- Predictable behavior
-- No hidden state
+If you want the technical route map, see [Auth API Routes](/docs/reference/auth-api-routes).
 
 ---
 
-## What This Enables
+## When To Use This Page
 
-With the Admin UI, you can:
+Use this page as a quick orientation guide during your first local run.
 
-- Operate your auth system without direct database access
-- Debug issues quickly
-- Manage users and sessions safely
-- Monitor security and activity
+For deeper product docs, continue to:
 
-<Card title="Key Concept">
-  The Admin UI is an operational layer, not a control layer. It surfaces your system—it does not
-  replace your application logic.
-</Card>
-
----
-
-## Prompt for AI Help
-
-Copy this into ChatGPT:
-
-"Explain how to use the SeamlessAuth Admin UI to manage users, sessions, and security events."
-
----
-
-## Next Step
-
-→ Add a new protected page and API route
+- [Admin Dashboard](/docs/build/admin-dashboard)
+- [Auth Events & Auditing](/docs/understand/authEvents)
+- [Sessions](/docs/understand/sessions)

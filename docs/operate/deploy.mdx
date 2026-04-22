@@ -1,215 +1,63 @@
 export const meta = {
-  title: 'Deployment (In Development)',
+  title: 'Deployment Status',
   order: 4,
   section: 'operate',
+  tags: ['deploy', 'status', 'roadmap', 'production', 'not yet shipped'],
 }
 
-# Deployment (In Development)
+# Deployment Status
 
-SeamlessAuth will include a fully guided **interactive deployment system** powered by the CLI.
-
-This feature is currently **in development**, but this page outlines the intended experience and architecture.
-
----
-
-## Vision
-
-The goal of `create-seamless deploy` is to take you from:
-
-```
-Local App → Cloud Infrastructure → Production Deployment
-```
-
-With minimal manual setup.
+Deployment support is an area of active development, but it is important to separate the current
+state from the intended future workflow.
 
 ---
 
-## Mental Model
+## Current State
 
-```
-CLI → Configure → Build → Push → Provision → Deploy → Verify
-```
+The current public `create-seamless` CLI focuses on:
 
----
+- `init`
+- `check`
+- `bootstrap-admin`
 
-## What the Deploy Command Will Do
-
-Running:
-
-```bash
-npx create-seamless deploy
-```
-
-Will guide you through:
-
-1. Configuration
-2. Infrastructure setup
-3. Application deployment
+There is **not** currently a public `deploy` command in the CLI.
 
 ---
 
-# Step 1: Interactive Configuration
+## What Exists Today
 
-The CLI will prompt for:
+Today, Seamless Auth supports:
 
-- AWS account access
-- Region selection
-- Domain name
-- Deployment tier (dev / prod)
-- Resource sizing
+- Local scaffolding
+- Self-hosting the auth API
+- Running the admin dashboard separately
+- Building applications on top of the server and frontend SDKs
 
-This ensures:
-
-- Safe defaults
-- Explicit user intent
+Production deployment is still something you should plan explicitly in your own infrastructure
+workflow.
 
 ---
 
-# Step 2: Build & Publish Images
+## Intended Direction
 
-The CLI will:
+The long-term direction is a guided deployment story that can take a locally working stack toward a
+repeatable production environment.
 
-- Build Docker images for:
-  - Web
-  - API
-  - Auth
-  - Admin UI
-
-- Tag and push them to **Amazon ECR**
-
-This creates deployable artifacts for your stack.
+That is also the point where this docs area should expand again in a major way, alongside better
+guides for integrating Seamless Auth into an existing application instead of only a newly scaffolded
+one.
 
 ---
 
-# Step 3: Secrets & Configuration
+## Documentation Rule
 
-The CLI will configure:
+If you are documenting deployment work:
 
-- API tokens
-- JWT / JWKS keys
-- Database credentials
+- label planned behavior clearly
+- do not present a future CLI command as already shipped
+- tie infrastructure claims to a source repo or implementation artifact
 
-Stored securely in:
-
-- **AWS Secrets Manager**
-
----
-
-# Step 4: Database Provisioning
-
-An **Amazon RDS instance** will be created:
-
-- PostgreSQL
-- Secure networking
-- Backups enabled
-
----
-
-# Step 5: Networking & Infrastructure
-
-Using Terraform, the CLI will provision:
-
-- VPC
-- Subnets (public / private)
-- Application Load Balancer (ALB)
-- Target Groups (TG)
-- Security Groups
-
----
-
-# Step 6: Compute Layer
-
-The CLI will deploy:
-
-- ECS Cluster
-- Services for:
-  - API
-  - Auth
-  - Admin UI
-
-Each service will:
-
-- Pull from ECR
-- Use Secrets Manager
-- Scale independently
-
----
-
-# Step 7: Domain Configuration
-
-If a domain is provided:
-
-- Route53 will be configured
-- ALB will be linked
-- HTTPS will be enabled (via ACM)
-
----
-
-# Step 8: Deployment Verification
-
-The CLI will:
-
-- Check service health
-- Validate endpoints
-- Output URLs
-
----
-
-## What This Enables
-
-After deployment, you will have:
-
-- A fully managed auth system
-- Scalable infrastructure
-- Secure secrets handling
-- Publicly accessible application
-
----
-
-## Design Principles
-
-### Guided
-
-No need to manually configure AWS resources.
-
----
-
-### Secure by Default
-
-- Secrets in AWS SM
-- Private subnets for services
-- Managed database
-
----
-
-### Production Ready
-
-- Load balancing
-- Scalable services
-- Infrastructure as code
-
----
-
-## Future Enhancements
-
-- Multi-region deployments
-- Blue/green deploys
-- CI/CD integration
-- Cost estimation before deploy
-
----
-
-## Prompt for AI Help
-
-Copy this into ChatGPT:
-
-"Explain how SeamlessAuth deploy will provision AWS infrastructure and deploy services using Terraform and ECS."
-
----
-
-## Status
-
-🚧 This feature is actively being developed.
+This is especially important for agents and operators who may treat docs as source of truth.
 
 ---
 

@@ -1,7 +1,8 @@
 export const meta = {
-  title: 'CLI Init Deep Dive',
+  title: 'CLI Init Flow',
   order: 2,
   section: 'operate',
+  tags: ['cli', 'init', 'scaffolding', 'docker compose', 'seamless.config.json'],
 }
 
 # CLI Init Deep Dive
@@ -12,12 +13,8 @@ This guide explains exactly what happens when you run:
 npx create-seamless my-app
 ```
 
-It walks through:
-
-- Every prompt
-- What your choices do
-- What files are generated
-- How your stack is wired together
+It focuses on the current CLI behavior: local project generation, auth wiring, Docker setup, and
+admin dashboard inclusion.
 
 ---
 
@@ -54,7 +51,7 @@ The CLI asks a series of questions to shape your stack.
 ### Web Framework
 
 - React (Vite)
-- (Next.js coming soon)
+- Next.js is listed as coming soon, not currently generated
 
 This determines your frontend scaffold.
 
@@ -63,7 +60,7 @@ This determines your frontend scaffold.
 ### Backend Framework
 
 - Express
-- (Fastify / others coming soon)
+- Fastify, FastAPI, and Axum are listed as coming soon, not currently generated
 
 This determines your API server.
 
@@ -81,8 +78,8 @@ This determines your API server.
 
 **Local mode**:
 
-- Runs auth server locally
-- Still requires Docker for supporting services
+- Generates the auth server source into `./auth`
+- Still relies on Docker for the full local stack
 
 ---
 
@@ -112,7 +109,7 @@ await generateReactStarter({ root })
 Creates:
 
 - React app (Vite)
-- AuthProvider integration
+- Auth-aware starter frontend
 
 ---
 
@@ -197,7 +194,7 @@ generateSeamlessConfig(root, { ... })
 Creates:
 
 ```txt
-seamless.config.ts
+seamless.config.json
 ```
 
 This file stores:
@@ -224,9 +221,11 @@ The CLI prints next steps:
 my-app/
   web/
   api/
+  auth/                  # local auth mode only
+  admin/                 # admin source mode only
   docker-compose.yml
-  seamless.config.ts
-  .env
+  seamless.config.json
+  README.md
 ```
 
 ---
@@ -258,6 +257,12 @@ The CLI chooses:
 You always get:
 
 - Frontend
+- API
+
+You may also get:
+
+- `auth/` source when local auth mode is selected
+- `admin/` source when admin source mode is selected
 - Backend
 - Auth system
 

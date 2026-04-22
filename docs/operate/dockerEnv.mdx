@@ -1,32 +1,32 @@
 export const meta = {
-  title: 'Docker & Local Environment',
+  title: 'Docker Local Stack',
   order: 3,
   section: 'operate',
+  tags: ['docker', 'local', 'environment', 'docker compose', 'services', 'ports'],
 }
 
 # Docker & Local Environment
 
-SeamlessAuth uses Docker to provide a **consistent, production-like local environment**.
+Seamless Auth uses Docker to make the local stack predictable and close to deployment reality.
 
-This guide explains:
-
-- What services are started
-- How they communicate
-- How to run and debug the stack
+This page explains the generated local environment and how the services talk to each other.
 
 ---
 
 ## Mental Model
 
-```
-Docker Compose → Starts Services → Services Communicate → App Runs
+```txt
+docker compose up
+  -> starts the stack
+  -> wires service-to-service hostnames
+  -> exposes the local URLs you interact with
 ```
 
 ---
 
-## Services Overview
+## Typical Local Services
 
-Your generated `docker-compose.yml` defines the following services:
+The generated `docker-compose.yml` usually includes:
 
 ```txt
 services:
@@ -34,239 +34,119 @@ services:
   auth
   api
   web
-  admin (optional)
+  admin   # optional
 ```
+
+Whether `admin` is present depends on your CLI choices.
 
 ---
 
-## 1. Database (Postgres)
+## Service Summary
 
-```yaml
-postgres:16
-```
-
-Responsibilities:
-
-- Stores users
-- Stores sessions
-- Stores auth events
-- Stores system config
-
-Key details:
-
-- Runs on port `5432`
-- Uses a persistent volume (`pgdata`)
+| Service | Local URL | Purpose |
+| ------- | --------- | ------- |
+| `db` | `localhost:5432` | Postgres persistence |
+| `auth` | `http://localhost:5312` | Auth engine |
+| `api` | `http://localhost:3000` | Application/backend layer |
+| `web` | `http://localhost:5173` | Frontend app |
+| `admin` | `http://localhost:5174` | Admin dashboard |
 
 ---
 
-## 2. Auth Server
+## Auth Service Modes
 
-Handles all authentication logic.
+The generated stack supports two main auth shapes.
 
-### Docker Mode
+### Docker image mode
 
-```yaml
-image: ghcr.io/fells-code/seamless-auth-api
-```
-
-### Local Mode
+The auth service runs from:
 
 ```yaml
-build: ./auth
+image: ghcr.io/fells-code/seamless-auth-api:latest
 ```
 
-Responsibilities:
+### Local source mode
 
-- User authentication
-- Session management
-- OTP / Magic Link / WebAuthn
-- Token issuance
+The auth service is generated into `./auth` and the compose file builds it with `Dockerfile.dev`.
 
-Runs on:
-
-```
-http://localhost:5312
-```
+That mode is useful when you want to inspect or modify the auth server locally.
 
 ---
 
-## 3. API Service
+## Admin Dashboard Modes
 
-Your backend application.
+If the dashboard is included, it can be wired in two ways.
 
-```yaml
-build: ./api
-```
-
-Responsibilities:
-
-- Business logic
-- Protected routes
-- Communicates with auth server
-
-Environment highlights:
-
-```env
-AUTH_SERVER_URL=http://auth:5312
-DB_HOST=db
-```
-
----
-
-## 4. Web (Frontend)
-
-Your frontend application.
+### Image mode
 
 ```yaml
-build: ./web
+image: ghcr.io/fells-code/seamless-auth-admin-dashboard:latest
 ```
 
-Responsibilities:
-
-- UI rendering
-- Authentication flows
-- API communication
-
-Runs on:
-
-```
-http://localhost:5173
-```
-
----
-
-## 5. Admin UI (Optional)
-
-Only included if selected during CLI setup.
-
-### Image Mode
-
-```yaml
-image: ghcr.io/fells-code/seamless-auth-admin-dashboard
-```
-
-### Source Mode
+### Source mode
 
 ```yaml
 build: ./admin
 ```
 
-Runs on:
-
-```
-http://localhost:5174
-```
+Source mode is the path to choose if you want to customize the dashboard app itself.
 
 ---
 
 ## How Services Communicate
 
-Inside Docker, services use **container names as hostnames**:
+Inside Docker, containers talk to each other by service name.
 
-| From | To   | URL                                            |
-| ---- | ---- | ---------------------------------------------- |
-| API  | Auth | [http://auth:5312](http://auth:5312)           |
-| API  | DB   | db                                             |
-| Web  | API  | [http://localhost:3000](http://localhost:3000) |
+Examples:
+
+| From | To | Internal address |
+| ---- | -- | ---------------- |
+| API | Auth | `http://auth:5312` |
+| API | DB | `db` |
+| Web | API | `http://localhost:3000` |
+| Admin | API | `http://localhost:3000` |
+
+For the route map and env details behind this, see:
+
+- [Auth API Routes](/docs/reference/auth-api-routes)
+- [Environment Variables](/docs/reference/environment-variables)
 
 ---
 
-## Starting the Environment
+## Starting The Stack
 
-From your project root:
+From the project root:
 
 ```bash
 docker compose up
 ```
 
-This will:
+That will:
 
-- Build containers (if needed)
-- Start all services
-- Stream logs
-
----
-
-## Running in Development
-
-Use two terminals:
-
-### Terminal 1
-
-```bash
-docker compose up
-```
-
-### Terminal 2
-
-```bash
-npm install
-npm run dev
-```
+- start Postgres
+- start the auth server
+- start the backend API
+- start the web app
+- start the admin dashboard when included
 
 ---
 
-## Volumes & Live Reloading
+## Useful Commands
 
-Services mount local directories:
-
-```yaml
-./api:/app
-./web:/app
-./auth:/app
-```
-
-This allows:
-
-- Live code editing
-- Instant updates without rebuild
-
----
-
-## Common Issues
-
-### Port Conflicts
-
-If ports are already in use:
-
-- 5432 (Postgres)
-- 3000 (API)
-- 5173 (Web)
-- 5174 (Admin)
-
----
-
-### Docker Not Running
-
-Ensure Docker Desktop is running before starting.
-
----
-
-### Missing Source Directories
-
-If using source mode:
-
-- Ensure `./admin` exists
-- Ensure `./auth` exists (local mode)
-
----
-
-## Debugging Tips
-
-### View Logs
+View logs:
 
 ```bash
 docker compose logs -f
 ```
 
-### Restart Services
+Rebuild and restart:
 
 ```bash
 docker compose down
-docker compose up
+docker compose up --build
 ```
 
-### Inspect Containers
+Inspect running containers:
 
 ```bash
 docker ps
@@ -274,25 +154,43 @@ docker ps
 
 ---
 
-## What This Gives You
+## Common Issues
 
-You now have:
+### Port conflicts
 
-- A full local auth system
-- Isolated services
-- Production-like networking
-- Reproducible environment
+Watch for conflicts on:
+
+- `5432`
+- `3000`
+- `5173`
+- `5174`
+- `5312`
+
+### Missing source directories
+
+If you chose source-based modes, confirm that:
+
+- `./auth` exists for local auth mode
+- `./admin` exists for admin source mode
+
+### Wrong internal URL
+
+Inside the container network, the API should talk to the auth service as:
+
+```txt
+http://auth:5312
+```
+
+Not `http://localhost:5312`.
 
 ---
 
-## Prompt for AI Help
+## What This Page Is For
 
-Copy this into ChatGPT:
+Use this page when the local stack itself is the problem.
 
-"Explain how Docker services in SeamlessAuth communicate and how to debug issues."
+Use these related docs when you need more specific detail:
 
----
-
-## Next Step
-
-→ Learn how deployment works
+- [CLI Commands](/docs/reference/cli-commands)
+- [Environment Variables](/docs/reference/environment-variables)
+- [Troubleshooting & Debugging](/docs/troubleshooting/troubleshooting)

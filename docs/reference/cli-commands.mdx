@@ -1,0 +1,130 @@
+export const meta = {
+  title: 'CLI Command Reference',
+  order: 1,
+  section: 'reference',
+  tags: ['cli', 'commands', 'create-seamless', 'reference', 'init', 'check', 'bootstrap-admin'],
+}
+
+# CLI Commands
+
+This page summarizes the current public command surface of `create-seamless`.
+
+The CLI is also exposed under the `seamless` binary name.
+
+---
+
+## Command Summary
+
+| Command | Purpose |
+| ------- | ------- |
+| `seamless init [project-name]` | Scaffold a new local Seamless Auth project |
+| `seamless check` | Validate local project setup and running services |
+| `seamless bootstrap-admin [email]` | Create the first admin bootstrap invite |
+| `seamless --help` | Print usage |
+| `seamless --version` | Print the installed CLI version |
+
+---
+
+## `init`
+
+```bash
+seamless init my-app
+```
+
+If you omit the project name:
+
+```bash
+seamless init
+```
+
+The CLI will try to scaffold into the current directory.
+
+### What it does
+
+- prompts for frontend and backend choices
+- prompts for auth mode
+- optionally includes the admin dashboard
+- generates a working local stack
+- writes `seamless.config.json`
+- creates `docker-compose.yml`
+
+### Current generated stack
+
+Today the supported generated path is centered on:
+
+- React for the frontend
+- Express for the backend
+- Seamless Auth API in Docker or local source mode
+- optional admin dashboard
+
+---
+
+## `check`
+
+```bash
+seamless check
+```
+
+Use this when you want to validate a generated local project.
+
+It is intended to help answer questions like:
+
+- is Docker installed?
+- is the project initialized?
+- is `docker-compose.yml` present?
+- are the expected services running?
+
+---
+
+## `bootstrap-admin`
+
+```bash
+seamless bootstrap-admin admin@example.com
+```
+
+This creates the first admin bootstrap invite.
+
+### How it resolves the secret
+
+The CLI attempts to resolve the bootstrap secret automatically from:
+
+- `.env`
+- `auth/.env`
+- `docker-compose.yml`
+
+If it cannot find the secret automatically, it prompts you for it.
+
+### What happens next
+
+After the invite is created:
+
+- a registration URL may be printed
+- the invited user completes registration with the invited email
+- the resulting account receives admin access
+
+This is for the initial admin bootstrap flow, not general role management.
+
+---
+
+## Shortcut Behavior
+
+This is valid:
+
+```bash
+seamless my-app
+```
+
+It is treated as a shortcut for:
+
+```bash
+seamless init my-app
+```
+
+---
+
+## Important Current-State Note
+
+The current public CLI does **not** expose a `deploy` command.
+
+If you encounter older docs or notes that mention `seamless deploy`, treat that as planned work,
+not part of the current shipped command surface.

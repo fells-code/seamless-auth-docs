@@ -5,6 +5,7 @@ import { useState } from 'react'
 export default function Sidebar() {
   const [open, setOpen] = useState<Record<string, boolean>>({
     start: true,
+    build: true,
     understand: true,
     operate: true,
     troubleshooting: true,
@@ -13,6 +14,15 @@ export default function Sidebar() {
 
   return (
     <div className="sidebar">
+      <div className="sidebar-intro">
+        <div className="sidebar-intro-title">Find your path</div>
+        <div className="sidebar-intro-links">
+          <NavLink to="/docs/start/overview">Overview</NavLink>
+          <NavLink to="/docs/build/ecosystem">Packages</NavLink>
+          <NavLink to="/docs/reference/auth-api-routes">Reference</NavLink>
+        </div>
+      </div>
+
       {Object.entries(DOCS_BY_SECTION).map(([key, docs]) => {
         if (!docs.length) return null
 

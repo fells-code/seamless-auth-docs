@@ -1,26 +1,27 @@
 export const meta = {
-  title: 'CLI Overview',
+  title: 'CLI',
   order: 1,
   section: 'operate',
+  tags: ['cli', 'create-seamless', 'scaffolding', 'commands', 'init', 'check', 'bootstrap-admin'],
 }
 
 # SeamlessAuth CLI
 
-The SeamlessAuth CLI (`create-seamless`) is the **control center** for building, configuring, and deploying your application.
+The SeamlessAuth CLI (`create-seamless`, also available as `seamless`) is the entry point for
+scaffolding and checking a local Seamless Auth project.
 
-It is designed to:
+Current public commands focus on:
 
 - Scaffold applications
-- Configure authentication
-- Manage infrastructure
-- Guide developers through setup
+- Validate the generated project
+- Bootstrap the first admin user
 
 ---
 
 ## Mental Model
 
 ```
-CLI → Generates App → Configures Auth → Enables Deployment
+CLI -> Generates App -> Wires Local Stack -> Helps You Operate It
 ```
 
 ---
@@ -53,19 +54,26 @@ Creates a new SeamlessAuth project.
 
 ---
 
-### deploy
+### check
 
 ```bash
-npx create-seamless deploy
+npx create-seamless check
 ```
 
-Guides you through deploying your app.
+Validates local project setup, Docker availability, and running services.
 
-Includes:
+---
 
-- AWS setup validation
-- Infrastructure provisioning
-- Environment configuration
+### bootstrap-admin
+
+```bash
+npx create-seamless bootstrap-admin admin@example.com
+```
+
+Creates a bootstrap admin invite for the first admin user.
+
+The CLI will try to resolve the bootstrap secret from local project files before prompting you for
+it manually.
 
 ---
 
@@ -98,10 +106,10 @@ Displays:
 The CLI will:
 
 1. Ask configuration questions
-2. Generate project structure
-3. Create Docker setup
-4. Configure SeamlessAuth
-5. Prepare environment variables
+2. Generate the web and API starters
+3. Configure the auth server in Docker or local mode
+4. Optionally include the admin dashboard
+5. Generate Docker Compose and local config
 
 ---
 
@@ -110,9 +118,11 @@ The CLI will:
 ```txt
 web/
 api/
+auth/                  # only in local auth mode
+admin/                 # only in admin source mode
 docker-compose.yml
-seamless.config.ts
-.env
+seamless.config.json
+README.md
 ```
 
 ---
@@ -123,18 +133,21 @@ The CLI is built to be:
 
 - **Opinionated** → best practices by default
 - **Guided** → interactive prompts
-- **Extensible** → future commands (migrate, inspect)
+- **Focused** → local scaffolding and setup checks today
 
 ---
 
-## Prompt for AI Help
+## What It Does Not Do Yet
 
-Copy this into ChatGPT:
+The current public CLI does **not** expose a production deployment command.
 
-"Explain how to use the SeamlessAuth CLI to scaffold and deploy a full-stack application."
+It also does not yet provide a polished “attach Seamless Auth to an existing application” workflow.
+
+If you see older docs or notes mentioning `deploy`, treat that as planned or in-progress work, not
+as part of the current public command set.
 
 ---
 
 ## Next Step
 
-→ Learn how deployment works
+→ Continue to [CLI Init Deep Dive](/docs/operate/cli-init)

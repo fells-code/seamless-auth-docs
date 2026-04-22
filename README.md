@@ -1,73 +1,90 @@
-# React + TypeScript + Vite
+# Seamless Auth Docs
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This repository contains the docs site for the Seamless Auth ecosystem.
 
-Currently, two official plugins are available:
+It is a React + Vite + MDX application that publishes product documentation for:
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- `create-seamless`
+- `seamless-auth-api`
+- `@seamless-auth/core`
+- `@seamless-auth/express`
+- `@seamless-auth/react`
+- `seamless-auth-admin-dashboard`
 
-## React Compiler
+## Goals
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+The docs should work well for both humans and agents.
 
-## Expanding the ESLint configuration
+That means they should:
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- explain package boundaries clearly
+- reflect the current behavior of sibling repos
+- separate shipped functionality from planned functionality
+- provide both walkthroughs and technical reference material
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## Current Scope
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+The docs are in a strong place for:
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+- ecosystem/package discovery
+- local scaffolding and operator setup
+- auth API, server SDK, React SDK, and admin dashboard reference
+- route, env var, and CLI lookup
+
+The next major docs expansion should happen when the Seamless CLI can:
+
+- provision deployment infrastructure directly
+- guide Seamless Auth integration into an existing project
+
+Until then, keep deployment and existing-project integration language clearly labeled as in progress
+or planned.
+
+## Local Development
+
+Install dependencies:
+
+```bash
+npm install
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Start the docs site:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run dev
 ```
+
+The local site runs on [http://localhost:5170](http://localhost:5170).
+
+## Scripts
+
+```bash
+npm run dev
+npm run lint
+npm run typecheck
+npm run build
+```
+
+`npm run build` also regenerates `public/sitemap.xml`.
+
+Both `npm run dev` and `npm run build` also regenerate:
+
+- `public/search-index.json`
+- `src/generated/docs-manifest.json`
+
+## Content Structure
+
+```txt
+docs/
+  start/
+  build/
+  understand/
+  operate/
+  troubleshooting/
+  reference/
+```
+
+Page metadata and section ordering are managed in `src/content.ts`.
+
+## Agent Guidance
+
+If you are making docs changes, read [AGENTS.md](./AGENTS.md) first.

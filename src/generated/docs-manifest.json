@@ -1,0 +1,336 @@
+[
+  {
+    "slug": "build/admin-dashboard",
+    "title": "Admin Dashboard App",
+    "section": "build",
+    "order": 5,
+    "tags": [
+      "admin",
+      "dashboard",
+      "operations",
+      "operator ui",
+      "runtime config",
+      "metrics"
+    ]
+  },
+  {
+    "slug": "build/auth-api",
+    "title": "Auth API Server",
+    "section": "build",
+    "order": 2,
+    "tags": [
+      "api",
+      "auth server",
+      "auth-server",
+      "self-hosting",
+      "jwks",
+      "webauthn",
+      "otp",
+      "magic links"
+    ]
+  },
+  {
+    "slug": "build/ecosystem",
+    "title": "Ecosystem Overview",
+    "section": "build",
+    "order": 1,
+    "tags": [
+      "ecosystem",
+      "packages",
+      "architecture",
+      "repos",
+      "sdk",
+      "cli",
+      "auth server"
+    ]
+  },
+  {
+    "slug": "build/react-sdk",
+    "title": "React SDK",
+    "section": "build",
+    "order": 4,
+    "tags": [
+      "react",
+      "frontend",
+      "sdk",
+      "auth",
+      "AuthProvider",
+      "useAuth",
+      "AuthRoutes",
+      "passkeys"
+    ]
+  },
+  {
+    "slug": "build/server-sdks",
+    "title": "Server SDKs and Adapters",
+    "section": "build",
+    "order": 3,
+    "tags": [
+      "server",
+      "express",
+      "core",
+      "sdk",
+      "adapter",
+      "middleware",
+      "requireAuth",
+      "requireRole"
+    ]
+  },
+  {
+    "slug": "operate/CLI",
+    "title": "CLI",
+    "section": "operate",
+    "order": 1,
+    "tags": [
+      "cli",
+      "create-seamless",
+      "scaffolding",
+      "commands",
+      "init",
+      "check",
+      "bootstrap-admin"
+    ]
+  },
+  {
+    "slug": "operate/cli-init",
+    "title": "CLI Init Flow",
+    "section": "operate",
+    "order": 2,
+    "tags": [
+      "cli",
+      "init",
+      "scaffolding",
+      "docker compose",
+      "seamless.config.json"
+    ]
+  },
+  {
+    "slug": "operate/deploy",
+    "title": "Deployment Status",
+    "section": "operate",
+    "order": 4,
+    "tags": [
+      "deploy",
+      "status",
+      "roadmap",
+      "production",
+      "not yet shipped"
+    ]
+  },
+  {
+    "slug": "operate/dockerEnv",
+    "title": "Docker Local Stack",
+    "section": "operate",
+    "order": 3,
+    "tags": [
+      "docker",
+      "local",
+      "environment",
+      "docker compose",
+      "services",
+      "ports"
+    ]
+  },
+  {
+    "slug": "reference/auth-api-routes",
+    "title": "Auth API Route Reference",
+    "section": "reference",
+    "order": 2,
+    "tags": [
+      "api",
+      "routes",
+      "auth server",
+      "reference",
+      "otp",
+      "webauthn",
+      "magic links",
+      "sessions"
+    ]
+  },
+  {
+    "slug": "reference/cli-commands",
+    "title": "CLI Command Reference",
+    "section": "reference",
+    "order": 1,
+    "tags": [
+      "cli",
+      "commands",
+      "create-seamless",
+      "reference",
+      "init",
+      "check",
+      "bootstrap-admin"
+    ]
+  },
+  {
+    "slug": "reference/environment-variables",
+    "title": "Environment Variable Reference",
+    "section": "reference",
+    "order": 3,
+    "tags": [
+      "env",
+      "environment variables",
+      "configuration",
+      "self-hosting",
+      "APP_ORIGIN",
+      "AUTH_SERVER_URL"
+    ]
+  },
+  {
+    "slug": "start/adminUi",
+    "title": "Explore the Admin Dashboard",
+    "section": "start",
+    "order": 5,
+    "tags": [
+      "admin",
+      "dashboard",
+      "operator ui",
+      "operations",
+      "security",
+      "sessions",
+      "events"
+    ]
+  },
+  {
+    "slug": "start/firstAdmin",
+    "title": "Create Your First Admin",
+    "section": "start",
+    "order": 4,
+    "tags": [
+      "admin",
+      "bootstrap",
+      "roles",
+      "dashboard",
+      "rbac"
+    ]
+  },
+  {
+    "slug": "start/firstPageAndRoute",
+    "title": "Protect a Page and Route",
+    "section": "start",
+    "order": 6,
+    "tags": [
+      "app",
+      "routes",
+      "authorization",
+      "express",
+      "react",
+      "requireRole",
+      "protected routes"
+    ]
+  },
+  {
+    "slug": "start/firstUser",
+    "title": "Create Your First User",
+    "section": "start",
+    "order": 3,
+    "tags": [
+      "user",
+      "registration",
+      "signup",
+      "passkeys",
+      "webauthn",
+      "otp"
+    ]
+  },
+  {
+    "slug": "start/overview",
+    "title": "What Is Seamless Auth?",
+    "section": "start",
+    "order": 1,
+    "tags": [
+      "overview",
+      "seamless auth",
+      "ecosystem",
+      "architecture",
+      "passwordless",
+      "passkeys"
+    ]
+  },
+  {
+    "slug": "start/quickStart",
+    "title": "Quickstart",
+    "section": "start",
+    "order": 2,
+    "tags": [
+      "quickstart",
+      "getting started",
+      "cli",
+      "create-seamless",
+      "docker",
+      "local stack"
+    ]
+  },
+  {
+    "slug": "troubleshooting/troubleshooting",
+    "title": "Troubleshooting the Local Stack",
+    "section": "troubleshooting",
+    "order": 1,
+    "tags": [
+      "troubleshooting",
+      "debugging",
+      "local",
+      "cookies",
+      "docker",
+      "auth server",
+      "sessions"
+    ]
+  },
+  {
+    "slug": "understand/authEvents",
+    "title": "Auth Events and Auditing",
+    "section": "understand",
+    "order": 4,
+    "tags": [
+      "events",
+      "audit",
+      "security",
+      "anomalies",
+      "metrics",
+      "login failed"
+    ]
+  },
+  {
+    "slug": "understand/data-model",
+    "title": "Auth Data Model",
+    "section": "understand",
+    "order": 1,
+    "tags": [
+      "data model",
+      "database",
+      "architecture",
+      "users",
+      "sessions",
+      "credentials",
+      "events"
+    ]
+  },
+  {
+    "slug": "understand/sessions",
+    "title": "Session Model",
+    "section": "understand",
+    "order": 2,
+    "tags": [
+      "sessions",
+      "cookies",
+      "security",
+      "revocation",
+      "idle timeout",
+      "refresh token"
+    ]
+  },
+  {
+    "slug": "understand/users",
+    "title": "Users & Roles",
+    "section": "understand",
+    "order": 3,
+    "tags": [
+      "users",
+      "roles",
+      "rbac",
+      "authorization",
+      "admin role",
+      "default roles"
+    ]
+  }
+]

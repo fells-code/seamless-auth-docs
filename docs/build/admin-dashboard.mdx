@@ -1,0 +1,116 @@
+export const meta = {
+  title: 'Admin Dashboard App',
+  order: 5,
+  section: 'build',
+  tags: ['admin', 'dashboard', 'operations', 'operator ui', 'runtime config', 'metrics'],
+}
+
+# Admin Dashboard
+
+`seamless-auth-admin-dashboard` is the operator-facing application for managing and observing a
+Seamless Auth deployment.
+
+It is a separate frontend app that runs alongside the auth stack, not a hidden screen inside the
+auth server.
+
+---
+
+## What It Is For
+
+Use the dashboard when you need a UI for:
+
+- browsing and managing users
+- inspecting sessions
+- reviewing auth events
+- investigating suspicious activity
+- checking dashboard metrics
+- editing system configuration
+
+It is the operational layer for your auth system.
+
+---
+
+## Main Areas
+
+The current dashboard app includes routes for:
+
+- overview
+- users
+- user detail
+- sessions
+- events
+- security
+- system configuration
+- profile
+
+That maps closely to the admin and internal route groups exposed by the auth API.
+
+---
+
+## How It Authenticates
+
+The dashboard uses `@seamless-auth/react` and expects to talk to a backend/API layer that owns auth
+cookies.
+
+Current app shape:
+
+```txt
+Admin Dashboard
+  -> API URL from runtime config or Vite env
+  -> @seamless-auth/react provider
+  -> admin-protected routes
+```
+
+Only authenticated users with the `admin` role should be able to access the main operator screens.
+
+---
+
+## Runtime Configuration Model
+
+The dashboard is built as static assets and is designed for runtime config injection.
+
+That matters because the same built image can be pointed at different environments without a rebuild.
+
+Current runtime model:
+
+- `index.html` loads `/config.js`
+- container startup writes `window.__SEAMLESS_CONFIG__`
+- the app reads runtime config first, then falls back to `import.meta.env`
+
+For local development, `VITE_API_URL` is the main value to care about.
+
+---
+
+## Deployment Shape
+
+You can use the dashboard in a few ways:
+
+- run the official image
+- clone the source and customize it
+- include it from `create-seamless` during project setup
+
+The CLI already supports including the admin dashboard and lets you choose image mode or source
+mode.
+
+---
+
+## Relationship To The Rest Of The Ecosystem
+
+The dashboard sits on top of the same auth system the rest of the ecosystem uses.
+
+It depends on:
+
+- auth sessions being issued correctly
+- admin-only API access
+- internal metrics and anomaly endpoints
+- system configuration endpoints
+
+It does not replace the auth server. It visualizes and operates it.
+
+---
+
+## Good Next Reads
+
+- [Admin UI](/docs/start/adminUi)
+- [Auth Events & Auditing](/docs/understand/authEvents)
+- [Sessions](/docs/understand/sessions)

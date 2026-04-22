@@ -1,7 +1,7 @@
 import { useParams, Navigate, useLocation, Link } from 'react-router-dom'
-import { ReactNode } from 'react'
-import { useEffect, useState } from 'react'
-import { DOC_INDEX, DOCS } from '../content'
+import { ReactNode, useEffect, useState } from 'react'
+import type { ComponentType } from 'react'
+import { DOC_INDEX, DOCS, DOC_SECTIONS } from '../content'
 import { Callout } from './mdx/Callout'
 import { Card } from './mdx/Card'
 import { CodeBlock } from './mdx/CodeBlock'
@@ -32,12 +32,56 @@ const components = {
 export default function DocPage({ slug: fixedSlug }: { slug?: string }) {
   const params = useParams()
 
-  const slug = fixedSlug || params['*']
-  if (!slug) return <Navigate to="/docs" />
-
+  const slug = fixedSlug || params['*'] || ''
   const entry = DOC_INDEX[slug]
-  if (!entry) return <div>Missing doc: {slug}</div>
-  const { Component, title } = entry
+  const [LoadedComponent, setLoadedComponent] = useState<ComponentType | null>(null)
+
+  useEffect(() => {
+    if (!entry) {
+      setLoadedComponent(null)
+      return
+    }
+
+    let cancelled = false
+
+    setLoadedComponent(null)
+
+    entry
+      .load()
+      .then((Component) => {
+        if (!cancelled) {
+          setLoadedComponent(() => Component)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLoadedComponent(() => null)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [entry])
+
+  if (!slug) return <Navigate to="/docs" />
+  if (!entry) {
+    return (
+      <div className="missing-doc">
+        <div className="eyebrow">Missing Page</div>
+        <h1>We couldn&apos;t find that document.</h1>
+        <p>
+          The page <code>{slug}</code> does not exist in the current docs set.
+        </p>
+        <div className="missing-doc-links">
+          <Link to="/docs/start/overview">Go to overview</Link>
+          <Link to="/docs/build/ecosystem">Open ecosystem guide</Link>
+          <Link to="/docs/reference/auth-api-routes">Open reference docs</Link>
+        </div>
+      </div>
+    )
+  }
+  const { title, section, tags } = entry
 
   const idx = DOCS.findIndex((d) => d.slug === slug)
   const prev = DOCS[idx - 1]
@@ -47,11 +91,29 @@ export default function DocPage({ slug: fixedSlug }: { slug?: string }) {
     <div className="doc-container">
       <article className="doc">
         <div className="doc-header">
+          <div className="eyebrow">{DOC_SECTIONS[section]}</div>
           <h1>{title}</h1>
+          {!!tags.length && (
+            <div className="doc-tags">
+              {tags.map((tag) => (
+                <span key={tag} className="doc-tag">
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* @ts-expect-error This should be okay */}
-        <Component components={components} />
+        {LoadedComponent ? (
+          // @ts-expect-error This should be okay
+          <LoadedComponent components={components} />
+        ) : (
+          <div className="doc-loading">
+            <div className="doc-loading-bar doc-loading-bar-lg" />
+            <div className="doc-loading-bar" />
+            <div className="doc-loading-bar doc-loading-bar-sm" />
+          </div>
+        )}
 
         <div className="pager">
           {idx > 0 && prev && (
@@ -69,6 +131,12 @@ export default function DocPage({ slug: fixedSlug }: { slug?: string }) {
 
       <aside className="doc-toc">
         <TableOfContents />
+        <div className="toc-card">
+          <div className="toc-card-title">Need exact details?</div>
+          <Link to="/docs/reference/auth-api-routes">Auth API Routes</Link>
+          <Link to="/docs/reference/environment-variables">Environment Variables</Link>
+          <Link to="/docs/reference/cli-commands">CLI Commands</Link>
+        </div>
       </aside>
     </div>
   )

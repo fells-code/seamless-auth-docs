@@ -1,178 +1,186 @@
 export const meta = {
-  title: 'Troubleshooting & Debugging',
+  title: 'Troubleshooting the Local Stack',
   order: 1,
   section: 'troubleshooting',
+  tags: ['troubleshooting', 'debugging', 'local', 'cookies', 'docker', 'auth server', 'sessions'],
 }
 
 # Troubleshooting & Debugging
 
-This guide helps you diagnose and resolve common issues when working with SeamlessAuth.
+This page is a practical debugging guide for the local Seamless Auth stack.
+
+When something breaks, trace the request path one layer at a time.
 
 ---
 
 ## Mental Model
 
-```
-Frontend → API → Auth → Database
+```txt
+Frontend -> API -> Auth -> Database
 ```
 
-When something breaks, trace the flow step-by-step.
+If you skip layers while debugging, it is easy to misdiagnose the problem.
 
 ---
 
-# Common Issues
-
-## 1. Session Not Persisting
+## 1. Session Does Not Persist
 
 ### Symptoms
 
-- User logs in but is immediately logged out
-- `isAuthenticated` is false after login
+- the user appears to log in and then becomes unauthenticated immediately
+- `isAuthenticated` stays false after the flow
 
-### Causes
+### Check
 
-- Cookie not being set
-- Incorrect domain / origin
-- Missing credentials in requests
+- is the cookie being set?
+- is the request using credentials?
+- are your browser origins and cookie assumptions correct?
 
-### Fix
+### Good places to inspect
 
-- Ensure API uses credentials:
+- frontend network requests
+- backend auth integration layer
+- browser cookie storage
+- origin-related environment configuration
 
-```ts
-fetch(url, { credentials: 'include' })
-```
-
-- Check `ORIGINS` and `APP_ORIGINS`
+For env details, see [Environment Variables](/docs/reference/environment-variables).
 
 ---
 
-## 2. Cannot Reach Auth Server
+## 2. API Cannot Reach The Auth Server
 
 ### Symptoms
 
-- API returns 500
-- Auth requests fail
+- API returns 500s during auth-related flows
+- login or `/users/me` calls fail unexpectedly
 
-### Causes
+### Common cause
 
-- Wrong `AUTH_SERVER_URL`
-- Docker networking issue
+The API is using the wrong auth server URL.
 
-### Fix
+### In Docker
 
-- Use internal hostname:
+Use:
 
-```env
-AUTH_SERVER_URL=http://auth:5312
+```txt
+http://auth:5312
 ```
+
+Not `http://localhost:5312`.
+
+For route context, see [Auth API Routes](/docs/reference/auth-api-routes).
 
 ---
 
-## 3. Docker Issues
+## 3. Docker Stack Is Not Healthy
 
 ### Symptoms
 
-- Services not starting
-- Connection refused errors
+- one or more services never become reachable
+- `docker compose up` exits early or loops
+- local ports are in use
 
-### Fix
+### Useful commands
 
 ```bash
+docker compose logs -f
 docker compose down
 docker compose up --build
-```
-
-Check running containers:
-
-```bash
 docker ps
 ```
 
+If the local stack itself is the issue, also review [Docker & Local Environment](/docs/operate/dockerEnv).
+
 ---
 
-## 4. Admin UI Not Accessible
+## 4. Admin UI Is Not Accessible
 
 ### Symptoms
 
-- Access denied
-- Blank admin page
+- dashboard redirects away
+- user can sign in but cannot access admin screens
 
-### Causes
+### Common causes
 
-- User missing `admin` role
+- the user does not actually have the `admin` role
+- the session was created before the role change
+- you are signed in as the wrong user
 
-### Fix
+### What to do
 
-- Verify roles in DB
-- Re-login after role change
+- verify the role on the user
+- sign out and sign back in after the change
+- confirm you are opening the dashboard on `http://localhost:5174`
 
 ---
 
-## 5. OTP / Magic Link Not Working
+## 5. OTP Or Magic Link Flow Fails
 
 ### Symptoms
 
-- No OTP received
-- Magic link invalid
+- OTP is never accepted
+- magic link never completes
+- login flow stalls mid-way
 
-### Causes
+### Good checks
 
-- Dev mode behavior
-- Expired token
+- confirm the auth server is healthy
+- confirm the current flow is using the correct route group
+- check local logs for dev-mode OTP or link handling
+- verify the token or code is not expired
 
-### Fix
+Relevant route groups:
 
-- Check console logs
-- Verify token expiration
+- `/otp/*`
+- `/magic-link*`
+- `/webauthn/*`
+
+See [Auth API Routes](/docs/reference/auth-api-routes).
 
 ---
 
-## 6. API Protected Route Failing
+## 6. Protected Backend Route Returns 401 Or 403
 
 ### Symptoms
 
-- 401 Unauthorized
+- authenticated user still cannot reach an app route
+- backend says unauthorized or forbidden
 
-### Causes
+### Distinguish the failure
 
-- Missing auth middleware
-- Cookie not sent
+- `401` usually means the request is not authenticated correctly
+- `403` usually means the user is authenticated but missing the required role or permission
 
-### Fix
+### Check
 
-- Add `requireAuth`
-- Ensure cookies included
+- is auth middleware installed?
+- is the cookie present?
+- does the user have the required role?
+- did the user sign in again after the role was changed?
 
 ---
 
-## Debugging Tools
+## Useful Local Inspection Commands
 
-### Logs
+View logs:
 
 ```bash
 docker compose logs -f
 ```
 
----
-
-### Inspect Database
+Open a Postgres shell:
 
 ```bash
 docker exec -it seamless-db psql -U myuser
 ```
 
----
-
-### Check Sessions
+Inspect sessions:
 
 ```sql
 SELECT * FROM sessions;
 ```
 
----
-
-### Check Users
+Inspect users:
 
 ```sql
 SELECT * FROM users;
@@ -180,17 +188,18 @@ SELECT * FROM users;
 
 ---
 
-## Debugging Strategy
+## Practical Debugging Order
 
-1. Check frontend state
-2. Check API response
-3. Check auth server logs
-4. Check database
+1. confirm which browser request is failing
+2. confirm the API request target and response
+3. confirm the auth service is reachable
+4. confirm the database state if needed
+5. confirm role/session state after any admin change
 
 ---
 
-## Prompt for AI Help
+## Related Docs
 
-Copy this into ChatGPT:
-
-"Help me debug a SeamlessAuth issue where sessions are not persisting."
+- [Docker & Local Environment](/docs/operate/dockerEnv)
+- [Environment Variables](/docs/reference/environment-variables)
+- [Auth API Routes](/docs/reference/auth-api-routes)

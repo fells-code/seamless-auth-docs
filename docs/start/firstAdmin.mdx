@@ -1,118 +1,83 @@
 export const meta = {
-  title: 'Register Your First Admin',
+  title: 'Create Your First Admin',
   order: 4,
   section: 'start',
+  tags: ['admin', 'bootstrap', 'roles', 'dashboard', 'rbac'],
 }
 
-## Register Your First Admin
+## Create Your First Admin
 
-This guide walks you through creating your first **admin user** in SeamlessAuth.
+This guide walks through the first-admin bootstrap flow in a local Seamless Auth stack.
 
-Admins are used to:
-
-- Access internal dashboards
-- Manage users and roles
-- Inspect sessions and activity
-- Configure system behavior
+The goal is simple: create an initial admin invite, complete the registration flow with that email,
+and verify access to the admin dashboard.
 
 ---
 
-## What You Should Have Ready
+## Before You Start
 
-Before starting:
+Make sure:
 
-- Your app is running locally
-- You have already registered your first user
-- Docker services are running
+- your local stack is running
+- you have already gone through the first-user flow once
+- you can access the web app at `http://localhost:5173`
 
 ---
 
-## How Admins Work in SeamlessAuth
+## Why Bootstrap Exists
 
-SeamlessAuth uses a **role-based access control (RBAC)** model.
+The first admin flow is intentionally separate from normal role management.
 
-Roles are stored on the user and embedded into the session after authentication.
-
-By default, roles are configured via environment variables:
-
-```env
-DEFAULT_ROLES=user,betaUser
-AVAILABLE_ROLES=user,admin,betaUser,team
-```
-
-- `DEFAULT_ROLES` → roles assigned to new users
-- `AVAILABLE_ROLES` → all roles allowed in your system
+That bootstrap path exists so you can create the initial operator account without manually editing
+the database.
 
 <Callout type="info">
-  Roles are attached to the user and included in every session, making authorization checks fast and
-  predictable.
+  After the first admin exists, normal administration should happen through your application and
+  admin tooling, not by repeatedly relying on bootstrap.
 </Callout>
 
 ---
 
-## Step 1: Logout as any user if you are logged in.
+## Step 1: Create The Invite
 
-Navigate to:
-
-```
-http://localhost:5173
-```
-
-Logout if you are logged in.
-You should see the SeamlessAuth starter UI.
-
-<Image
-  src="/uiStarterTemplate.png"
-  alt="SeamlessAuth Starter UI"
-  caption="SeamlessAuth starter UI"
-/>
-
----
-
-## Step 2: Bootstrap Your First Admin (Recommended)
-
-Use the SeamlessAuth CLI to securely promote your first admin:
+Run:
 
 ```bash
 npx create-seamless bootstrap-admin admin001@test.com
 ```
 
-- The email should match the user you want to promote
-- The CLI will generate a secure invitation link
-- The link is visible in the console in development
+The CLI will:
+
+- resolve the bootstrap secret from local project files when possible
+- call the auth API bootstrap route
+- print a registration URL when available
+
+The invited email should match the account you want to become the first admin.
+
+---
+
+## Step 2: Complete Registration
+
+Open the generated registration URL and finish the same kind of registration flow you used for your
+first user.
+
+Use the same email address you passed to `bootstrap-admin`.
+
+Once registration completes:
+
+- the user is granted the `admin` role
+- future sessions for that user include admin access
 
 <Callout type="warning">
-  This does not create a user, it only provides a usable token that the given email can register
-  with and be automatically promoted to an admin upon successful registration.
-</Callout>
-
-This link:
-
-- Is tied to both the email and a secure token
-- Must be used to complete the promotion flow
-- Can only be used once
-
-<Callout type="warning">
-  Only the first successful bootstrap grants admin privileges. After an admin exists, additional
-  bootstrap attempts will not promote new users.
+  The bootstrap invite is not the user account. It is a one-time authorization path that lets that
+  email become the initial admin during registration.
 </Callout>
 
 ---
 
-## Step 3: Complete the Invitation Flow
+## Step 3: Verify The Role
 
-Open the generated link and complete the registration of a user like you did first the first user using the same email provided for the bootstrap command authentication.
-
-After completion:
-
-- The user is granted the `admin` role
-- Future sessions will include admin privileges
-
----
-
-## Step 4: Verify Admin Access
-
-Once promoted, the user's session will include:
+After successful registration, the session should include the `admin` role.
 
 ```json
 {
@@ -123,41 +88,40 @@ Once promoted, the user's session will include:
 <Image
   src="/adminSession.png"
   alt="Admin session with role attached"
-  caption="Admin users have the admin role embedded in their session"
+  caption="Admin users have the admin role attached to their session"
 />
 
-The user will now have access to the Admin UI [http://localhost:5174](http://localhost:5174):
+---
+
+## Step 4: Open The Dashboard
+
+Navigate to:
+
+```txt
+http://localhost:5174
+```
+
+You should be able to reach the admin dashboard.
 
 <Image
   src="/adminPortal.png"
   alt="Seamless Admin portal UI"
-  caption="Admins can access the Admin Portal and protected admin routes"
+  caption="Admins can access the dashboard and operator routes"
 />
 
 ---
 
 ## What Just Happened
 
-- You created your first admin user
-- The role was embedded into the session
-- Frontend and backend SDKs exposed role helpers
-- Your application can now enforce admin-only access
-
-<Card title="Key Concept">
-  Authorization is controlled entirely by your application. SeamlessAuth provides identity and role
-  data—you decide how it is enforced.
-</Card>
+- you created the first admin bootstrap invite
+- registration completed with the invited email
+- the resulting user received the `admin` role
+- the dashboard became accessible through normal auth state
 
 ---
 
-## Prompt for AI Help
+## Related Docs
 
-Copy this into ChatGPT:
-
-"Help me implement role-based access control using SeamlessAuth. I want admin-only routes and UI."
-
----
-
-## Next Step
-
-→ Explore the Admin UI
+- [CLI Commands](/docs/reference/cli-commands)
+- [Users & Roles](/docs/understand/users)
+- [Admin UI](/docs/start/adminUi)

@@ -1,0 +1,139 @@
+export const meta = {
+  title: 'Server SDKs and Adapters',
+  order: 3,
+  section: 'build',
+  tags: ['server', 'express', 'core', 'sdk', 'adapter', 'middleware', 'requireAuth', 'requireRole'],
+}
+
+# Server SDKs
+
+Seamless Auth currently ships two official server-side packages:
+
+- `@seamless-auth/core`
+- `@seamless-auth/express`
+
+These packages help your backend become the security boundary between the browser and the auth
+server.
+
+---
+
+## Which One Should You Use?
+
+| Package | Use it when | What it gives you |
+| ------- | ----------- | ----------------- |
+| `@seamless-auth/express` | Your backend is Express | Official adapter, mounted auth routes, middleware, role guards |
+| `@seamless-auth/core` | You need a custom adapter or framework integration | Framework-agnostic auth and cookie primitives |
+
+If you already run Express, start with `@seamless-auth/express`.
+
+---
+
+## What The Backend Layer Does
+
+Your backend integration layer is responsible for:
+
+- receiving browser requests
+- owning auth cookies
+- validating authenticated state
+- enforcing authorization
+- talking to the auth server with service credentials
+
+That architecture is intentional. Browser cookies should not be forwarded directly to the auth
+server as if it were your public application API.
+
+---
+
+## `@seamless-auth/express`
+
+The Express package is the supported “batteries included” server integration.
+
+It provides:
+
+- `createSeamlessAuthServer(...)`
+- `requireAuth()`
+- `requireRole(role)`
+- `getSeamlessUser(...)`
+
+### Typical shape
+
+```ts
+import express from 'express'
+import cookieParser from 'cookie-parser'
+import {
+  createSeamlessAuthServer,
+  requireAuth,
+  requireRole,
+} from '@seamless-auth/express'
+
+const app = express()
+app.use(express.json())
+app.use(cookieParser())
+
+app.use(
+  '/auth',
+  createSeamlessAuthServer({
+    authServerUrl: process.env.AUTH_SERVER_URL!,
+  }),
+)
+
+app.get('/api/me', requireAuth(), (req, res) => {
+  res.json({ user: req.user })
+})
+
+app.get('/admin', requireAuth(), requireRole('admin'), (_req, res) => {
+  res.json({ ok: true })
+})
+```
+
+### Use it when
+
+- you want the official backend path today
+- your application server is Express
+- you want auth middleware and mounted auth routes quickly
+
+---
+
+## `@seamless-auth/core`
+
+The core package is lower level and framework-agnostic.
+
+It is designed for:
+
+- custom adapters
+- future framework integrations
+- runtimes where you want full control over request and response handling
+
+The core package does not own Express-specific behavior. Instead, it gives you the underlying auth
+and cookie primitives the adapters build on top of.
+
+Use it when:
+
+- Express is not your runtime
+- you are building an adapter for another framework
+- you want to reason about the auth mechanics directly
+
+---
+
+## Current Official Coverage
+
+Today, the strongest documented server-side path is Express.
+
+The repo structure clearly leaves room for more adapters later, but the best-supported current
+combination is:
+
+```txt
+@seamless-auth/react
+  -> your frontend
+
+@seamless-auth/express
+  -> your backend integration layer
+
+seamless-auth-api
+  -> your auth engine
+```
+
+---
+
+## Next Step
+
+If your frontend is React, continue to [React SDK](/docs/build/react-sdk).

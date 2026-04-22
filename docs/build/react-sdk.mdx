@@ -1,0 +1,142 @@
+export const meta = {
+  title: 'React SDK',
+  order: 4,
+  section: 'build',
+  tags: ['react', 'frontend', 'sdk', 'auth', 'AuthProvider', 'useAuth', 'AuthRoutes', 'passkeys'],
+}
+
+# React SDK
+
+`@seamless-auth/react` is the official React integration for Seamless Auth.
+
+It gives your app auth state, built-in auth flows, and passkey-aware helpers without forcing you
+into a hosted identity UI.
+
+---
+
+## What It Exports
+
+The package centers on three main exports:
+
+- `AuthProvider`
+- `useAuth()`
+- `AuthRoutes`
+
+Those cover provider setup, auth state access, and built-in auth route screens.
+
+---
+
+## What The SDK Handles
+
+The React SDK helps with:
+
+- auth state and current user access
+- session validation on load
+- login initiation
+- passkey login
+- built-in auth route screens
+- credential update and deletion helpers
+- logout and user deletion helpers
+
+Your app still owns:
+
+- your routing tree
+- route protection strategy
+- product-specific authorization
+- application UI outside the built-in auth screens
+
+---
+
+## Basic Setup
+
+```tsx
+import { BrowserRouter } from 'react-router-dom'
+import { AuthProvider } from '@seamless-auth/react'
+
+<BrowserRouter>
+  <AuthProvider apiHost="http://localhost:3000" mode="server">
+    <App />
+  </AuthProvider>
+</BrowserRouter>
+```
+
+The provider needs your API host and supports an auth mode. In the wider ecosystem, `mode="server"`
+is commonly used when your app talks to a backend integration layer that owns the cookie boundary.
+
+---
+
+## Reading Auth State
+
+```tsx
+import { useAuth } from '@seamless-auth/react'
+
+function Dashboard() {
+  const { user, isAuthenticated, hasRole, logout } = useAuth()
+
+  if (!isAuthenticated) return <div>Not signed in</div>
+
+  return (
+    <div>
+      <p>{user?.email}</p>
+      {hasRole('admin') && <a href="/admin">Admin</a>}
+      <button onClick={logout}>Log out</button>
+    </div>
+  )
+}
+```
+
+The context includes more than just `user` and `isAuthenticated`. It also includes credential
+management helpers and passkey login helpers.
+
+---
+
+## Built-In Auth Routes
+
+`AuthRoutes` currently provides screens for:
+
+- `/login`
+- `/passKeyLogin`
+- `/verifyPhoneOTP`
+- `/verifyEmailOTP`
+- `/verify-magiclink`
+- `/registerPasskey`
+- `/magiclinks-sent`
+
+That makes it easy to get a working auth flow running fast while still keeping routing inside your
+own app.
+
+---
+
+## Important Boundary
+
+The React SDK is not a full application framework and it does not replace your backend.
+
+The intended shape is:
+
+```txt
+React app
+  -> your backend API or mounted auth layer
+  -> Seamless Auth API
+```
+
+That backend layer is where cookie validation, role enforcement, and service-to-service auth should
+live.
+
+---
+
+## When To Reach For It
+
+Use `@seamless-auth/react` when:
+
+- your frontend is React
+- you want a supported path for passkey and passwordless flows
+- you want ready-made auth routes but still control your app routing
+- you want auth state and helpers without outsourcing identity UX to a third party
+
+---
+
+## Related Docs
+
+- [Server SDKs](/docs/build/server-sdks)
+- [Sessions](/docs/understand/sessions)
+- [Users & Roles](/docs/understand/users)

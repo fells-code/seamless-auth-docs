@@ -1,151 +1,134 @@
 export const meta = {
-  title: 'Sessions',
+  title: 'Session Model',
   order: 2,
   section: 'understand',
+  tags: ['sessions', 'cookies', 'security', 'revocation', 'idle timeout', 'refresh token'],
 }
 
-# Sessions Deep Dive
+# Sessions
 
-Sessions are the **core of authentication in SeamlessAuth**.
+Sessions are one of the core security primitives in SeamlessAuth.
 
-Unlike simple JWT-based systems, sessions are **stateful, trackable, and revocable**.
+Unlike purely stateless browser tokens, SeamlessAuth sessions are explicit records with lifecycle,
+device context, and revocation state.
 
 ---
 
 ## Mental Model
 
-```
-User → logs in → Session created → Cookie issued → Requests authenticated
+```txt
+User -> verifies -> Session created -> Cookie issued -> Requests authenticated
 ```
 
 ---
 
-## What is a Session?
+## What A Session Represents
 
-A session represents a **logged-in device or browser instance**.
+A session represents a logged-in browser, device, or server-side auth context.
 
 Each session:
 
-- Belongs to a user
-- Has its own lifecycle
-- Can be revoked independently
+- belongs to one user
+- has its own expiration lifecycle
+- carries request/device context
+- can be revoked independently
 
 ---
 
-## Session Fields (Key Highlights)
+## Important Session Fields
 
-| Field            | Description            |
-| ---------------- | ---------------------- |
-| id               | Unique session ID      |
-| userId           | Owning user            |
-| refreshTokenHash | Secure token reference |
-| expiresAt        | Absolute expiration    |
-| idleExpiresAt    | Idle timeout           |
-| revokedAt        | Revocation timestamp   |
-| userAgent        | Device/browser info    |
-| ipAddress        | Request origin         |
-
----
-
-## TTL (Time-To-Live) Behavior
-
-SeamlessAuth uses **two expiration models**:
-
-### 1. Absolute Expiration
-
-```
-expiresAt
-```
-
-- Hard cutoff
-- Session is invalid after this time
+| Field | Description |
+| ----- | ----------- |
+| `id` | Unique session ID |
+| `userId` | Owning user |
+| `mode` | `web` or `server` |
+| `refreshTokenHash` | Stored refresh token reference |
+| `lastUsedAt` | Most recent activity |
+| `expiresAt` | Absolute expiration |
+| `idleExpiresAt` | Idle timeout cutoff |
+| `deviceName` | Friendly device label |
+| `userAgent` | Device/browser info |
+| `ipAddress` | Request origin |
+| `revokedAt` | Revocation timestamp |
+| `revokedReason` | Revocation reason |
 
 ---
 
-### 2. Idle Expiration
+## Expiration Model
 
-```
-idleExpiresAt
-```
+SeamlessAuth uses two main expiration concepts.
 
-- Resets on activity
-- Protects against abandoned sessions
+### Absolute expiration
+
+`expiresAt` is the hard stop for the session.
+
+### Idle expiration
+
+`idleExpiresAt` limits abandoned sessions and is based on activity.
 
 ---
 
-## Session Lifecycle
+## Lifecycle
 
-```
-Created → Active → Idle → Expired
-                 ↘ Revoked
+```txt
+Created -> Active -> Idle -> Expired
+                 \
+                  -> Revoked
 ```
 
 ---
 
-## Session Creation Flow
+## How Sessions Are Created
 
-1. User verifies (OTP / Magic Link / WebAuthn)
-2. Session record is created
-3. Secure cookie is set
-4. Frontend SDK detects session
+1. the user completes a passwordless verification flow
+2. the auth server creates a session record
+3. a secure cookie is issued
+4. backend and frontend integrations recognize the authenticated state
 
 ---
 
-## Revoking Sessions
+## Why Sessions Are First-Class
+
+This design enables:
+
+- device-level visibility
+- per-session revocation
+- multi-device support
+- explicit server-side lifecycle tracking
+- better operator workflows in the admin dashboard
+
+---
+
+## Revocation
 
 Sessions can be revoked:
 
-- From Admin UI
-- Via API
-- Automatically (security rules)
+- from the current-user session APIs
+- from admin routes
+- during lifecycle or security handling
 
-Revoked sessions:
+When revoked:
 
-- Cannot be used
-- Are marked with `revokedAt`
-
----
-
-## Multi-Device Support
-
-Each device = separate session
-
-This enables:
-
-- Logging out of one device only
-- Viewing active sessions
-- Device-level security
+- the session can no longer be used
+- `revokedAt` is set
+- a `revokedReason` may also be recorded
 
 ---
 
-## Security Advantages
+## Multi-Device Example
 
-- Token hashes stored instead of raw tokens
-- Session revocation
-- Device tracking
-- Idle timeout enforcement
+A user signs in from:
 
----
+- a laptop
+- a phone
+- a work browser
 
-## Real Example
-
-A user logs in from:
-
-- Laptop → Session A
-- Phone → Session B
-
-Revoking Session A does not affect Session B.
+That results in separate sessions. Revoking one does not require revoking the others.
 
 ---
 
-## Prompt for AI Help
+## Related Docs
 
-Copy this into ChatGPT:
-
-"Explain how SeamlessAuth sessions work, including idle expiration and revocation."
-
----
-
-## Next Step
-
-→ Learn about Users and Roles
+- [Users & Roles](/docs/understand/users)
+- [Auth API Routes](/docs/reference/auth-api-routes)
+- [Environment Variables](/docs/reference/environment-variables)
