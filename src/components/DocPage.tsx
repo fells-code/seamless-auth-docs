@@ -31,38 +31,49 @@ const components = {
 
 export default function DocPage({ slug: fixedSlug }: { slug?: string }) {
   const params = useParams()
+  const location = useLocation()
 
-  const slug = fixedSlug || params['*'] || ''
+  const rawSlug = fixedSlug || params['*'] || ''
+  const slug = normalizeDocSlug(rawSlug)
   const entry = DOC_INDEX[slug]
-  const [LoadedComponent, setLoadedComponent] = useState<ComponentType | null>(null)
+  const [loadedDoc, setLoadedDoc] = useState<{ slug: string; Component: ComponentType } | null>(
+    null,
+  )
 
   useEffect(() => {
     if (!entry) {
-      setLoadedComponent(null)
+      setLoadedDoc(null)
       return
     }
 
     let cancelled = false
 
-    setLoadedComponent(null)
+    setLoadedDoc(null)
 
     entry
       .load()
       .then((Component) => {
         if (!cancelled) {
-          setLoadedComponent(() => Component)
+          setLoadedDoc({ slug, Component })
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setLoadedComponent(() => null)
+          setLoadedDoc(null)
         }
       })
 
     return () => {
       cancelled = true
     }
-  }, [entry])
+  }, [entry, slug])
+
+  const LoadedComponent = loadedDoc?.slug === slug ? loadedDoc.Component : null
+
+  if (!fixedSlug && rawSlug && rawSlug !== slug) {
+    const normalizedPathname = location.pathname.replace(/\/+$/, '') || '/'
+    return <Navigate replace to={`${normalizedPathname}${location.search}${location.hash}`} />
+  }
 
   if (!slug) return <Navigate to="/docs" />
   if (!entry) {
@@ -130,7 +141,7 @@ export default function DocPage({ slug: fixedSlug }: { slug?: string }) {
       </article>
 
       <aside className="doc-toc">
-        <TableOfContents />
+        <TableOfContents docSlug={slug} contentReady={Boolean(LoadedComponent)} />
         <div className="toc-card">
           <div className="toc-card-title">Need exact details?</div>
           <Link to="/docs/reference/auth-api-routes">Auth API Routes</Link>
@@ -158,10 +169,19 @@ function slugify(text: string) {
     .replace(/(^-|-$)/g, '')
 }
 
-function TableOfContents() {
+function normalizeDocSlug(slug: string) {
+  return slug.replace(/^\/+|\/+$/g, '').replace(/\/+/g, '/')
+}
+
+function TableOfContents({
+  docSlug,
+  contentReady,
+}: {
+  docSlug: string
+  contentReady: boolean
+}) {
   const [headings, setHeadings] = useState<{ id: string; text: string; level: number }[]>([])
   const [activeId, setActiveId] = useState<string>('')
-  const location = useLocation()
   const [isMobile, setIsMobile] = useState(false)
 
   useEffect(() => {
@@ -172,11 +192,20 @@ function TableOfContents() {
   }, [])
 
   useEffect(() => {
+    setHeadings([])
+    setActiveId('')
+  }, [docSlug])
+
+  useEffect(() => {
     const activeEl = document.querySelector('.toc-item.active')
     activeEl?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   }, [activeId])
 
   useEffect(() => {
+    if (!contentReady) {
+      return
+    }
+
     const elems = Array.from(document.querySelectorAll('.doc h2, .doc h3')) as HTMLHeadingElement[]
     const data = elems.map((el) => ({
       id: el.id,
@@ -203,7 +232,7 @@ function TableOfContents() {
     )
     elems.forEach((el) => observer.observe(el))
     return () => observer.disconnect()
-  }, [location.pathname])
+  }, [contentReady, docSlug])
 
   useEffect(() => {
     const onScroll = () => {
@@ -217,6 +246,10 @@ function TableOfContents() {
   }, [headings])
 
   useEffect(() => {
+    if (!contentReady) {
+      return
+    }
+
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((e) => {
@@ -228,7 +261,7 @@ function TableOfContents() {
     const sections = document.querySelectorAll('.doc section')
     sections.forEach((s) => observer.observe(s))
     return () => observer.disconnect()
-  }, [])
+  }, [contentReady, docSlug])
 
   useEffect(() => {
     document.documentElement.style.scrollBehavior = 'smooth'
