@@ -165,7 +165,7 @@
       "What It Does Not Do Yet",
       "Next Step"
     ],
-    "excerpt": "The SeamlessAuth CLI (create-seamless, also available as seamless) is the entry point for scaffolding and checking a local Seamless Auth project.",
+    "excerpt": "The Seamless Auth CLI (create-seamless, also available as seamless) is the entry point for scaffolding and checking a local Seamless Auth project.",
     "urlPath": "/docs/operate/CLI"
   },
   {
@@ -487,7 +487,7 @@
       "What You Will Build",
       "Next Step"
     ],
-    "excerpt": "SeamlessAuth is a passwordless authentication ecosystem designed to run as part of your own application infrastructure.",
+    "excerpt": "Seamless Auth is a passwordless authentication ecosystem designed to run as part of your own application infrastructure.",
     "urlPath": "/docs/start/overview"
   },
   {
@@ -586,7 +586,7 @@
       "How The Dashboard Uses Them",
       "Related Docs"
     ],
-    "excerpt": "SeamlessAuth tracks authentication activity through explicit auth event records.",
+    "excerpt": "Seamless Auth tracks authentication activity through explicit auth event records.",
     "urlPath": "/docs/understand/authEvents"
   },
   {
@@ -615,7 +615,7 @@
       "Why This Model Matters",
       "Next Step"
     ],
-    "excerpt": "SeamlessAuth is built on a relational model that keeps users, sessions, passkeys, events, and configuration explicit and inspectable.",
+    "excerpt": "Seamless Auth is built on a relational model that keeps users, sessions, passkeys, events, and configuration explicit and inspectable.",
     "urlPath": "/docs/understand/data-model"
   },
   {
@@ -644,7 +644,7 @@
       "Multi-Device Example",
       "Related Docs"
     ],
-    "excerpt": "Sessions are one of the core security primitives in SeamlessAuth.",
+    "excerpt": "Sessions are one of the core security primitives in Seamless Auth.",
     "urlPath": "/docs/understand/sessions"
   },
   {
@@ -670,7 +670,7 @@
       "Admin Users",
       "Related Docs"
     ],
-    "excerpt": "Users represent identities in SeamlessAuth and carry the role data your application uses for authorization.",
+    "excerpt": "Users represent identities in Seamless Auth and carry the role data your application uses for authorization.",
     "urlPath": "/docs/understand/users"
   }
 ]
