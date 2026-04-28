@@ -173,13 +173,7 @@ function normalizeDocSlug(slug: string) {
   return slug.replace(/^\/+|\/+$/g, '').replace(/\/+/g, '/')
 }
 
-function TableOfContents({
-  docSlug,
-  contentReady,
-}: {
-  docSlug: string
-  contentReady: boolean
-}) {
+function TableOfContents({ docSlug, contentReady }: { docSlug: string; contentReady: boolean }) {
   const [headings, setHeadings] = useState<{ id: string; text: string; level: number }[]>([])
   const [activeId, setActiveId] = useState<string>('')
   const [isMobile, setIsMobile] = useState(false)
