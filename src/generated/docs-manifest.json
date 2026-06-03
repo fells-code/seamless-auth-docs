@@ -10,7 +10,9 @@
       "operations",
       "operator ui",
       "runtime config",
-      "metrics"
+      "metrics",
+      "organizations",
+      "step-up"
     ]
   },
   {
@@ -26,7 +28,26 @@
       "jwks",
       "webauthn",
       "otp",
-      "magic links"
+      "magic links",
+      "oauth",
+      "totp",
+      "organizations"
+    ]
+  },
+  {
+    "slug": "build/custom-auth-ui",
+    "title": "How To Build Your Own Auth UI",
+    "section": "build",
+    "order": 6,
+    "tags": [
+      "react",
+      "custom ui",
+      "auth ui",
+      "passkeys",
+      "magic links",
+      "otp",
+      "oauth",
+      "organizations"
     ]
   },
   {
@@ -45,6 +66,36 @@
     ]
   },
   {
+    "slug": "build/oauth-login",
+    "title": "How To Add OAuth Login",
+    "section": "build",
+    "order": 8,
+    "tags": [
+      "oauth",
+      "login",
+      "react",
+      "providers",
+      "callback",
+      "google",
+      "account linking"
+    ]
+  },
+  {
+    "slug": "build/organizations-memberships",
+    "title": "How To Use Organizations And Memberships",
+    "section": "build",
+    "order": 9,
+    "tags": [
+      "organizations",
+      "memberships",
+      "tenant",
+      "teams",
+      "roles",
+      "scopes",
+      "react"
+    ]
+  },
+  {
     "slug": "build/react-sdk",
     "title": "React SDK",
     "section": "build",
@@ -57,7 +108,28 @@
       "AuthProvider",
       "useAuth",
       "AuthRoutes",
-      "passkeys"
+      "passkeys",
+      "oauth",
+      "organizations",
+      "step-up",
+      "prf"
+    ]
+  },
+  {
+    "slug": "build/secure-routes",
+    "title": "How To Secure Routes",
+    "section": "build",
+    "order": 7,
+    "tags": [
+      "routes",
+      "protected routes",
+      "authorization",
+      "express",
+      "react",
+      "requireAuth",
+      "requireRole",
+      "scoped roles",
+      "step-up"
     ]
   },
   {
@@ -73,7 +145,24 @@
       "adapter",
       "middleware",
       "requireAuth",
-      "requireRole"
+      "requireRole",
+      "oauth",
+      "organizations"
+    ]
+  },
+  {
+    "slug": "build/totp-step-up",
+    "title": "How To Use TOTP And Step-Up",
+    "section": "build",
+    "order": 10,
+    "tags": [
+      "totp",
+      "mfa",
+      "step-up",
+      "webauthn",
+      "passkeys",
+      "admin",
+      "device recovery"
     ]
   },
   {
@@ -83,7 +172,8 @@
     "order": 1,
     "tags": [
       "cli",
-      "create-seamless",
+      "seamless-cli",
+      "seamless",
       "scaffolding",
       "commands",
       "init",
@@ -111,10 +201,11 @@
     "order": 4,
     "tags": [
       "deploy",
+      "deployment",
       "status",
-      "roadmap",
-      "production",
-      "not yet shipped"
+      "cli",
+      "seamless-cli",
+      "planned"
     ]
   },
   {
@@ -144,7 +235,11 @@
       "otp",
       "webauthn",
       "magic links",
-      "sessions"
+      "oauth",
+      "totp",
+      "organizations",
+      "sessions",
+      "step-up"
     ]
   },
   {
@@ -155,11 +250,28 @@
     "tags": [
       "cli",
       "commands",
-      "create-seamless",
+      "seamless-cli",
+      "seamless",
       "reference",
       "init",
       "check",
       "bootstrap-admin"
+    ]
+  },
+  {
+    "slug": "reference/cookies-sessions-tokens",
+    "title": "Cookie, Session, And Token Reference",
+    "section": "reference",
+    "order": 4,
+    "tags": [
+      "cookies",
+      "sessions",
+      "tokens",
+      "jwt",
+      "jwks",
+      "refresh tokens",
+      "express",
+      "requireAuth"
     ]
   },
   {
@@ -172,8 +284,26 @@
       "environment variables",
       "configuration",
       "self-hosting",
-      "APP_ORIGIN",
+      "oauth",
+      "totp",
+      "jwks",
       "AUTH_SERVER_URL"
+    ]
+  },
+  {
+    "slug": "reference/system-config",
+    "title": "System Config Reference",
+    "section": "reference",
+    "order": 5,
+    "tags": [
+      "system config",
+      "configuration",
+      "login methods",
+      "roles",
+      "oauth",
+      "lockout",
+      "webauthn",
+      "admin"
     ]
   },
   {
@@ -188,7 +318,8 @@
       "operations",
       "security",
       "sessions",
-      "events"
+      "events",
+      "organizations"
     ]
   },
   {
@@ -256,7 +387,7 @@
       "quickstart",
       "getting started",
       "cli",
-      "create-seamless",
+      "seamless-cli",
       "docker",
       "local stack"
     ]
@@ -287,7 +418,10 @@
       "security",
       "anomalies",
       "metrics",
-      "login failed"
+      "login failed",
+      "oauth",
+      "totp",
+      "redaction"
     ]
   },
   {
@@ -302,7 +436,10 @@
       "users",
       "sessions",
       "credentials",
-      "events"
+      "events",
+      "organizations",
+      "oauth",
+      "totp"
     ]
   },
   {
@@ -316,7 +453,9 @@
       "security",
       "revocation",
       "idle timeout",
-      "refresh token"
+      "refresh token",
+      "step-up",
+      "organizations"
     ]
   },
   {
@@ -330,6 +469,8 @@
       "rbac",
       "authorization",
       "admin role",
+      "scoped roles",
+      "organizations",
       "default roles"
     ]
   }

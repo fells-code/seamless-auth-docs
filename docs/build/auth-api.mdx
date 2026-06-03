@@ -11,6 +11,9 @@ export const meta = {
     'webauthn',
     'otp',
     'magic links',
+    'oauth',
+    'totp',
+    'organizations',
   ],
 }
 
@@ -18,7 +21,7 @@ export const meta = {
 
 `seamless-auth-api` is the self-hostable authentication engine in the Seamless Auth ecosystem.
 
-If you are asking “what actually runs the passwordless auth system?”, this is the answer.
+If you are asking "what actually runs the passwordless auth system?", this is the answer.
 
 ---
 
@@ -29,14 +32,17 @@ The auth API is responsible for the authentication domain itself:
 - user registration
 - login initiation
 - OTP generation and verification
-- WebAuthn / passkey registration and login
-- magic link requests and verification
-- session issuance and revocation
+- WebAuthn/passkey registration and login
+- magic link requests, polling, and verification
+- OAuth provider discovery, authorization start, callback validation, and account linking
+- TOTP enrollment, login MFA, and step-up verification
+- session issuance, refresh, organization context, and revocation
 - user and credential management
-- admin data access
+- organization and membership records
+- admin data access and device replacement recovery
 - internal metrics and anomaly feeds
 - public JWKS publication
-- system configuration
+- runtime system configuration
 
 It is the core service other Seamless Auth packages integrate with.
 
@@ -51,8 +57,8 @@ Use the auth API directly when:
 - you are building your own adapter instead of using the official SDKs
 - you want to understand the route groups and data model underneath the higher-level packages
 
-Most application teams should still pair it with server and frontend SDKs instead of calling every
-route directly from product code.
+Most application teams should pair it with server and frontend SDKs instead of calling every route
+directly from browser product code.
 
 ---
 
@@ -65,12 +71,17 @@ route directly from product code.
 | `/otp/*`                        | Email and phone OTP generation and verification                    |
 | `/webauthn/*`                   | Passkey registration and login                                     |
 | `/magic-link/*`                 | Magic link request, polling, and verification                      |
+| `/oauth/*`                      | External provider login and callback handling                      |
+| `/totp/*`                       | TOTP enrollment, login MFA, and TOTP step-up                       |
+| `/step-up/*`                    | Fresh passkey verification for sensitive actions                   |
 | `/users/*`                      | Authenticated user profile and credential operations               |
+| `/organizations/*`              | Organization and membership operations for authenticated users     |
 | `/sessions/*`                   | Session listing and revocation                                     |
-| `/admin/*`                      | Admin-only user, event, and session operations                     |
+| `/admin/*`                      | Admin-only user, org, event, session, and recovery operations      |
 | `/internal/*`                   | Dashboard metrics, grouped event summaries, login stats, anomalies |
-| `/system-config/*`              | Roles and runtime system configuration                             |
+| `/system-config/*`              | Roles, login methods, OAuth, lockout, TTLs, and runtime config     |
 | `/.well-known/jwks.json`        | Public JWKS endpoint                                               |
+| `/health/*`                     | Health and version probes                                          |
 
 ---
 
@@ -83,18 +94,52 @@ It does not replace:
 - your frontend application
 - your backend business API
 - your operator dashboard
+- your infrastructure secret manager
 
 Typical deployment shape:
 
 ```txt
 Browser
   -> Your frontend
-  -> Your backend API
+  -> Your backend API with /auth adapter routes
   -> Seamless Auth API
   -> Postgres
 ```
 
-That separation keeps auth focused and auditable.
+The raw auth API uses JSON and bearer-style auth contracts. Browser-facing cookies should be owned
+by a trusted backend adapter such as `@seamless-auth/express`.
+
+---
+
+## Runtime Components
+
+The source repo is organized around:
+
+- Express app setup, CORS, rate limits, slowdown, route logging, and OpenAPI in development
+- route modules with request and response schemas
+- controllers for request handling and response shaping
+- services for sessions, messaging, OAuth, organizations, TOTP, lockout, step-up, and redaction
+- Sequelize models for users, credentials, sessions, auth events, system config, organizations,
+  memberships, TOTP credentials, OAuth identities, and bootstrap invites
+- Postgres as the source of truth for auth state
+
+Route modules declare schemas that feed request validation, response validation, and generated
+OpenAPI metadata.
+
+---
+
+## Authentication Methods
+
+Available login methods are controlled by system config:
+
+- `passkey`
+- `magic_link`
+- `email_otp`
+- `phone_otp`
+- `oauth`
+
+Passkey-capable sessions can be restricted to passkey-only continuation by disabling
+`passkey_login_fallback_enabled`.
 
 ---
 
@@ -108,9 +153,27 @@ Common local path:
 2. run `seamless-auth-api`
 3. connect your backend adapter
 4. connect your frontend SDK
+5. optionally run the admin dashboard
 
 The repo also publishes a Docker image, which is the simplest way to run it locally if you do not
 want to build from source first.
+
+---
+
+## Production Notes
+
+Production deployments should provide stable secrets and signing material:
+
+- `API_SERVICE_TOKEN`
+- `REFRESH_TOKEN_LOOKUP_SECRET`
+- `TOTP_SECRET_ENCRYPTION_KEY`
+- `OAUTH_STATE_SECRET`
+- `SEAMLESS_JWKS_ACTIVE_KID`
+- `SEAMLESS_JWKS_KEY_<kid>_PRIVATE`
+- `JWKS_PUBLIC_KEYS`
+
+Raw provider secrets and signing keys belong in environment variables or a secret manager, not in
+`system_config`.
 
 ---
 
@@ -121,7 +184,7 @@ These projects typically sit above the auth API:
 - `@seamless-auth/express` for backend integration
 - `@seamless-auth/react` for frontend auth UX and state
 - `seamless-auth-admin-dashboard` for operator workflows
-- `create-seamless` for scaffolding a complete local stack
+- `seamless-cli` for scaffolding, local stack checks, and first-admin bootstrap
 
 If you are using Seamless Auth through a starter or SDK, you are still relying on this service.
 
@@ -129,7 +192,13 @@ If you are using Seamless Auth through a starter or SDK, you are still relying o
 
 ## Good Next Reads
 
+- [How To Add OAuth Login](/docs/build/oauth-login)
+- [How To Use Organizations And Memberships](/docs/build/organizations-memberships)
+- [How To Use TOTP And Step-Up](/docs/build/totp-step-up)
 - [Server SDKs](/docs/build/server-sdks)
 - [React SDK](/docs/build/react-sdk)
 - [Admin Dashboard](/docs/build/admin-dashboard)
 - [Data Models](/docs/understand/data-model)
+- [Auth API Routes](/docs/reference/auth-api-routes)
+- [Cookie, Session, And Token Reference](/docs/reference/cookies-sessions-tokens)
+- [System Config Reference](/docs/reference/system-config)

@@ -1,0 +1,341 @@
+export const meta = {
+  title: 'System Config Reference',
+  order: 5,
+  section: 'reference',
+  tags: [
+    'system config',
+    'configuration',
+    'login methods',
+    'roles',
+    'oauth',
+    'lockout',
+    'webauthn',
+    'admin',
+  ],
+}
+
+# System Config Reference
+
+System config is the runtime configuration stored by `seamless-auth-api` in the `system_config`
+table.
+
+Use it for auth behavior that operators may need to inspect or change, such as login methods,
+roles, token TTLs, WebAuthn relying-party settings, OAuth provider metadata, and lockout policy.
+
+Do not store raw secrets in system config. Secrets belong in environment variables or a secret
+manager.
+
+---
+
+## How System Config Is Loaded
+
+At startup, `seamless-auth-api` bootstraps each known config key.
+
+For each key:
+
+1. if a `system_config` row already exists, the API uses that row
+2. if no row exists and a mapped env var exists, the API parses the env var and creates the row
+3. if no row exists and the key has a built-in default, the API creates the row with that default
+4. if no row exists, no env var exists, and no default exists, startup fails
+
+That means env vars seed missing config rows. They do not overwrite rows that already exist.
+
+---
+
+## Routes
+
+Raw auth API routes:
+
+| Method  | Route                  | Required access |
+| ------- | ---------------------- | --------------- |
+| `GET`   | `/system-config/roles` | `admin:read`    |
+| `GET`   | `/system-config/admin` | `admin:read`    |
+| `PATCH` | `/system-config/admin` | `admin:write`   |
+
+Through the Express adapter, use:
+
+```txt
+/auth/system-config/roles
+/auth/system-config/admin
+```
+
+Successful updates return:
+
+```json
+{
+  "success": true,
+  "updatedKeys": ["login_methods"]
+}
+```
+
+The auth API logs system config reads, updates, and validation errors as auth events.
+
+---
+
+## Config Keys
+
+| Key                              | Env seed                         | Type               | Purpose                                                |
+| -------------------------------- | -------------------------------- | ------------------ | ------------------------------------------------------ |
+| `app_name`                       | `APP_NAME`                       | string             | Display name used in auth flows and TOTP issuer        |
+| `default_roles`                  | `DEFAULT_ROLES`                  | string array       | Roles assigned to new users                            |
+| `available_roles`                | `AVAILABLE_ROLES`                | string array       | Roles allowed in the system                            |
+| `login_methods`                  | `LOGIN_METHODS`                  | login method array | Methods offered after login starts                     |
+| `passkey_login_fallback_enabled` | `PASSKEY_LOGIN_FALLBACK_ENABLED` | boolean            | Whether fallback methods can appear with passkey login |
+| `oauth_providers`                | `OAUTH_PROVIDERS`                | JSON array         | OAuth provider metadata                                |
+| `lockout_policy`                 | `LOCKOUT_POLICY`                 | JSON object        | Failed-login lockout policy                            |
+| `access_token_ttl`               | `ACCESS_TOKEN_TTL`               | duration           | Access token and access cookie TTL                     |
+| `refresh_token_ttl`              | `REFRESH_TOKEN_TTL`              | duration           | Refresh cookie TTL                                     |
+| `rate_limit`                     | `RATE_LIMIT`                     | number             | Request rate limit value                               |
+| `delay_after`                    | `DELAY_AFTER`                    | number             | Slowdown threshold                                     |
+| `rpid`                           | `RPID`                           | string             | WebAuthn relying party ID                              |
+| `origins`                        | `ORIGINS`                        | URL array          | WebAuthn allowed browser origins                       |
+
+Built-in defaults exist for:
+
+| Key                              | Default                                                   |
+| -------------------------------- | --------------------------------------------------------- |
+| `login_methods`                  | `["passkey", "magic_link"]`                               |
+| `oauth_providers`                | `[]`                                                      |
+| `passkey_login_fallback_enabled` | `true`                                                    |
+| `lockout_policy`                 | enabled, 10 failures, 15-minute window, 15-minute lockout |
+
+Other keys must come from env or an existing database row.
+
+---
+
+## Env Parsing Rules
+
+| Env value                        | Parsing rule                              |
+| -------------------------------- | ----------------------------------------- |
+| `DEFAULT_ROLES`                  | Comma-separated list                      |
+| `AVAILABLE_ROLES`                | Comma-separated list                      |
+| `LOGIN_METHODS`                  | Comma-separated list                      |
+| `ORIGINS`                        | Comma-separated URL list                  |
+| `OAUTH_PROVIDERS`                | JSON array                                |
+| `LOCKOUT_POLICY`                 | JSON object                               |
+| `RATE_LIMIT`                     | Number                                    |
+| `DELAY_AFTER`                    | Number                                    |
+| `PASSKEY_LOGIN_FALLBACK_ENABLED` | `true` means true; anything else is false |
+| `ACCESS_TOKEN_TTL`               | Duration string                           |
+| `REFRESH_TOKEN_TTL`              | Duration string                           |
+| `RPID`                           | String                                    |
+| `APP_NAME`                       | String                                    |
+
+Duration strings in system config use:
+
+```txt
+30s
+15m
+1h
+7d
+```
+
+The current schema accepts `s`, `m`, `h`, and `d` for system config TTLs.
+
+---
+
+## Login Methods
+
+Allowed values:
+
+| Method       | Meaning                       |
+| ------------ | ----------------------------- |
+| `passkey`    | WebAuthn/passkey login        |
+| `magic_link` | Email magic-link login        |
+| `email_otp`  | Email one-time code           |
+| `phone_otp`  | Phone/SMS one-time code       |
+| `oauth`      | External OAuth provider login |
+
+Example:
+
+```json
+{
+  "login_methods": ["passkey", "magic_link", "email_otp", "phone_otp", "oauth"],
+  "passkey_login_fallback_enabled": true
+}
+```
+
+When passkey login is usable and `passkey_login_fallback_enabled` is false, the auth API returns
+only `passkey` as the continuation method.
+
+OAuth is configured as a login method, but it does not appear as a fallback from identifier-based
+`/login`. Use `/oauth/providers` or `listOAuthProviders()` to render OAuth buttons.
+
+---
+
+## Roles
+
+`default_roles` are assigned to new users.
+
+`available_roles` is the list operators can assign through admin flows.
+
+Rules enforced on update:
+
+- every `default_roles` value must exist in `available_roles`
+- roles currently assigned to users cannot be removed from `available_roles`
+- `available_roles` cannot remove a role that is still part of the existing default roles
+
+Scoped admin roles are supported by auth route guards:
+
+| Role          | Grants                       |
+| ------------- | ---------------------------- |
+| `admin`       | broad admin access           |
+| `admin:read`  | read access                  |
+| `admin:write` | write access and read access |
+
+Use the narrowest role that matches the route you are protecting.
+
+---
+
+## OAuth Providers
+
+`oauth_providers` is an array of provider configs.
+
+```json
+{
+  "oauth_providers": [
+    {
+      "id": "google",
+      "name": "Google",
+      "enabled": true,
+      "clientId": "google-client-id.apps.googleusercontent.com",
+      "clientSecretEnv": "GOOGLE_CLIENT_SECRET",
+      "authorizationUrl": "https://accounts.google.com/o/oauth2/v2/auth",
+      "tokenUrl": "https://oauth2.googleapis.com/token",
+      "userInfoUrl": "https://openidconnect.googleapis.com/v1/userinfo",
+      "scopes": ["openid", "email", "profile"],
+      "redirectUris": ["https://app.example.com/auth/oauth/callback/google"],
+      "subjectJsonPath": "sub",
+      "emailJsonPath": "email",
+      "emailVerifiedJsonPath": "email_verified",
+      "nameJsonPath": "name",
+      "allowSignup": true,
+      "accountLinking": "email",
+      "requireEmailVerified": true
+    }
+  ]
+}
+```
+
+`clientSecretEnv` is an env var name. The actual provider secret must live in that env var, not in
+system config.
+
+`redirectUri` and `redirectUris` are allowlists. If present, requested OAuth callback URLs must
+match exactly.
+
+---
+
+## Lockout Policy
+
+Default policy:
+
+```json
+{
+  "enabled": true,
+  "maxFailures": 10,
+  "windowSeconds": 900,
+  "lockoutSeconds": 900
+}
+```
+
+The current lockout policy counts recent failures for:
+
+- `login_failed`
+- `webauthn_login_failed`
+- `verify_otp_failed`
+- `totp_failed`
+- `magic_link_failed`
+
+When a user is locked, the auth API returns `423` with `error: "account_locked"` and
+`retryAfterSeconds`.
+
+---
+
+## WebAuthn Config
+
+| Key        | Use                                                |
+| ---------- | -------------------------------------------------- |
+| `rpid`     | Expected WebAuthn relying party ID                 |
+| `origins`  | Browser origins accepted for WebAuthn verification |
+| `app_name` | Relying party display name during registration     |
+
+Local example:
+
+```json
+{
+  "rpid": "localhost",
+  "origins": ["http://localhost:5173", "http://localhost:5174"],
+  "app_name": "Seamless Auth Example"
+}
+```
+
+Production example:
+
+```json
+{
+  "rpid": "example.com",
+  "origins": ["https://app.example.com", "https://admin.example.com"],
+  "app_name": "Example"
+}
+```
+
+`APP_ORIGINS` is separate. It controls CORS for who may call the auth API. `origins` controls
+WebAuthn verification.
+
+---
+
+## Runtime Cache
+
+`seamless-auth-api` caches system config in process and invalidates the cache after a successful
+`PATCH /system-config/admin`.
+
+If you edit the `system_config` table outside the API, expect existing processes to keep cached
+values until they reload or the cache expires.
+
+---
+
+## What Does Not Belong In System Config
+
+Keep these in env vars or a secret manager:
+
+- `API_SERVICE_TOKEN`
+- `COOKIE_SIGNING_KEY`
+- `REFRESH_TOKEN_LOOKUP_SECRET`
+- `TOTP_SECRET_ENCRYPTION_KEY`
+- `OAUTH_STATE_SECRET`
+- OAuth provider client secrets such as `GOOGLE_CLIENT_SECRET`
+- `SEAMLESS_JWKS_ACTIVE_KID`
+- `SEAMLESS_JWKS_KEY_<kid>_PRIVATE`
+- `JWKS_PUBLIC_KEYS`
+
+System config may reference secret env var names, such as `clientSecretEnv`, but should not contain
+raw secret values.
+
+---
+
+## Safe Update Pattern
+
+1. Read current config from `/auth/system-config/admin`.
+2. Patch only the keys you intend to change.
+3. Confirm the response includes the expected `updatedKeys`.
+4. Test login, WebAuthn, OAuth, and admin flows affected by the change.
+5. Keep env vars aligned for any secrets referenced by system config.
+
+Example patch:
+
+```json
+{
+  "login_methods": ["passkey", "magic_link", "email_otp"],
+  "passkey_login_fallback_enabled": true
+}
+```
+
+---
+
+## Related Docs
+
+- [Cookie, Session, And Token Reference](/docs/reference/cookies-sessions-tokens)
+- [Environment Variables](/docs/reference/environment-variables)
+- [Auth API Routes](/docs/reference/auth-api-routes)
+- [How To Add OAuth Login](/docs/build/oauth-login)
+- [How To Use TOTP And Step-Up](/docs/build/totp-step-up)

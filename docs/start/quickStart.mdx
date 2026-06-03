@@ -2,7 +2,7 @@ export const meta = {
   title: 'Quickstart',
   order: 2,
   section: 'start',
-  tags: ['quickstart', 'getting started', 'cli', 'create-seamless', 'docker', 'local stack'],
+  tags: ['quickstart', 'getting started', 'cli', 'seamless-cli', 'docker', 'local stack'],
 }
 
 ## Quickstart
@@ -28,8 +28,8 @@ project with the CLI, start the stack, and complete the first admin bootstrap fl
 
 ## What is the CLI?
 
-The Seamless Auth CLI (`create-seamless`, also available as `seamless`) scaffolds a working local
-project around the auth ecosystem.
+The Seamless Auth CLI is published as `seamless-cli` and exposes the `seamless` binary. It
+scaffolds a working local project around the auth ecosystem.
 
 Today it is primarily used to:
 
@@ -37,6 +37,8 @@ Today it is primarily used to:
 - Configure the auth server in Docker or local mode
 - Optionally include the admin dashboard
 - Generate local secrets and service-to-service wiring
+- Validate the generated local stack
+- Bootstrap the first admin user
 
 <Callout type="info">
   The current CLI is opinionated on purpose. It prefers giving you a working local stack over
@@ -50,7 +52,7 @@ Today it is primarily used to:
 You can inspect the CLI here:
 
 - GitHub
-  [https://github.com/fells-code/create-seamless](https://github.com/fells-code/create-seamless)
+  [https://github.com/fells-code/seamless-cli](https://github.com/fells-code/seamless-cli)
 
 ---
 
@@ -59,7 +61,7 @@ You can inspect the CLI here:
 Before starting, you can inspect available commands:
 
 ```bash
-npx create-seamless --help
+npx seamless-cli --help
 ```
 
 This will show:
@@ -68,12 +70,6 @@ This will show:
 - Usage patterns
 - Default CLI behavior
 
-<Image
-  src="/cliHelp.png"
-  alt="Seamless CLI Help output"
-  caption="Use create-seamless --help to explore available commands"
-/>
-
 ---
 
 ## Step 1: Initialize a Project
@@ -81,11 +77,17 @@ This will show:
 Run the CLI:
 
 ```bash
-npx create-seamless init my-app
+npx seamless-cli init my-app
 cd my-app
 ```
 
-If no command is provided, the CLI defaults to `init`.
+You can also use the project-name shorthand:
+
+```bash
+npx seamless-cli my-app
+```
+
+Running the CLI with no command prints help.
 
 ---
 
@@ -106,8 +108,8 @@ The CLI will guide you through:
 
 <Image
   src="/cliResult.png"
-  alt="Seamless CLI Help output"
-  caption="Use create-seamless init to scaffold an entire infrastrucuture with auth"
+  alt="Seamless CLI init output"
+  caption="Use seamless-cli init to scaffold a full-stack local auth project"
 />
 
 ---
@@ -180,7 +182,7 @@ You should see the starter UI with:
 Once the stack is running, create your first admin invite:
 
 ```bash
-npx create-seamless bootstrap-admin admin@example.com
+npx seamless-cli bootstrap-admin admin@example.com
 ```
 
 If the CLI can resolve the bootstrap secret locally, it will use it automatically. Otherwise it
@@ -203,6 +205,7 @@ You now have a local stack with:
 - Connected frontend and backend services
 - Passwordless authentication enabled
 - A bootstrap path for your first admin user
+- A CLI that can also check the generated stack
 
 <Card title="What You Just Built">
   - Web app - API - Auth server - Optional admin dashboard - Local Docker-based infrastructure
@@ -214,10 +217,10 @@ You now have a local stack with:
 
 Copy this into ChatGPT:
 
-"Help me customize a Seamless Auth project created with create-seamless. I want to add roles, protect routes, and understand which package does what."
+"Help me customize a Seamless Auth project created with seamless-cli. I want to add roles, protect routes, and understand which package does what."
 
 ---
 
 ## Next Step
 
-→ Continue to registering your first user
+Continue to [Create Your First User](/docs/start/firstUser).

@@ -2,7 +2,16 @@ export const meta = {
   title: 'Explore the Admin Dashboard',
   order: 5,
   section: 'start',
-  tags: ['admin', 'dashboard', 'operator ui', 'operations', 'security', 'sessions', 'events'],
+  tags: [
+    'admin',
+    'dashboard',
+    'operator ui',
+    'operations',
+    'security',
+    'sessions',
+    'events',
+    'organizations',
+  ],
 }
 
 ## Explore the Admin Dashboard
@@ -16,13 +25,15 @@ It runs as a separate app and uses the same auth system as the rest of your stac
 
 ## Access Requirements
 
-Only users with the `admin` role should be able to access the dashboard.
+Dashboard access is controlled by scoped admin roles.
 
 In the current dashboard app:
 
 - unauthenticated users are redirected to `/unauthenticated`
-- authenticated non-admin users should not reach the main operator routes
-- admin access depends on the `admin` role being present in the authenticated session
+- authenticated users without admin read access should not reach the main operator routes
+- `admin`, `admin:read`, and `admin:write` can read dashboard data
+- `admin` and `admin:write` can perform write actions
+- sensitive write actions can require fresh step-up verification
 
 <Callout type="info">
   The dashboard is an operational tool, not a hidden control plane. It works through explicit API
@@ -37,13 +48,14 @@ The current dashboard app includes:
 
 - Overview
 - Users
+- Organizations
 - Sessions
 - Events
 - Security
 - System configuration
 - Profile
 
-The most important starter-path sections are the first six.
+The most important starter-path sections are the first seven.
 
 ---
 
@@ -56,6 +68,7 @@ Use the overview screen to quickly answer:
 - is the system active?
 - are logins succeeding?
 - are there suspicious signals worth investigating?
+- how much passkey and session activity is happening?
 
 <Image src="/adminOverview.png" alt="Seamless Admin portal" caption="Admin dashboard overview" />
 <Image
@@ -68,16 +81,37 @@ Use the overview screen to quickly answer:
 
 ### Users
 
-Use the users screen to:
+Use the users screen and user detail view to:
 
 - browse identities
 - edit user details
-- update roles
-- revoke access-related state
+- update global roles
+- inspect credentials
+- review user sessions and anomalies
+- revoke one or all user sessions
+- start device replacement recovery
+
+Device replacement recovery revokes sessions, removes passkeys, disables TOTP credentials, and
+returns counts only. It requires fresh step-up authentication.
 
 <Image src="/adminUsers2.png" alt="Seamless Admin users view" caption="Users view" />
 <Image src="/adminUsersTable.png" alt="Seamless Admin users view" caption="Users view" />
-<Image src="/adminUserDetail.png" alt="Seamless Admin users view" caption="Users details" />
+<Image src="/adminUserDetail.png" alt="Seamless Admin users view" caption="User details" />
+
+---
+
+### Organizations
+
+Use the organizations screen to:
+
+- create organization records
+- edit organization name and slug
+- review membership counts
+- add and remove members
+- update organization membership roles and scopes
+
+Organization routes are separate from global user roles. Use them when access depends on tenant or
+workspace context.
 
 ---
 
@@ -87,7 +121,9 @@ Use the sessions screen to:
 
 - inspect active sessions
 - review device/browser context
-- revoke sessions
+- identify stale or risky access
+- revoke individual sessions
+- revoke selected sessions in bulk
 
 <Image src="/adminSessions2.png" alt="Seamless Admin sessions view" caption="Sessions view" />
 
@@ -100,6 +136,7 @@ Use the events screen to:
 - inspect auth flow history
 - filter event types
 - debug failed or unusual behavior
+- review OAuth, TOTP, session, and admin-sensitive events
 
 <Image src="/adminEvents2.png" alt="Seamless Admin auth events view" caption="Events view" />
 <Image src="/adminEventsTable.png" alt="Seamless Admin auth events view" caption="Events view" />
@@ -113,6 +150,7 @@ Use the security screen to:
 - review anomaly signals
 - inspect failed login pressure
 - pivot into suspicious events
+- support lockout-policy investigations
 
 <Image src="/adminSecurity2.png" alt="Seamless Admin security view" caption="Security view" />
 <Image src="/adminSecurityTable.png" alt="Seamless Admin security view" caption="Security view" />
@@ -121,11 +159,19 @@ Use the security screen to:
 
 ### System Configuration
 
-Use the system screen to:
+Use the system screen to review and update runtime auth configuration:
 
-- review runtime auth configuration
-- update available and default roles
-- adjust auth-related settings exposed by the system config APIs
+- default and available roles
+- login methods
+- passkey fallback policy
+- OAuth provider configuration
+- token TTLs
+- rate limit and slowdown values
+- account lockout policy
+- WebAuthn relying party and browser origins
+
+OAuth provider client secrets stay in environment variables referenced by provider config. Do not
+paste raw provider secrets into the dashboard.
 
 <Image
   src="/adminSystemConfig.png"
@@ -138,6 +184,7 @@ Use the system screen to:
   alt="Seamless Admin system config view"
   caption="System configuration view"
 />
+
 ---
 
 ## How It Connects To The Stack
@@ -146,7 +193,9 @@ The dashboard sits on top of:
 
 - admin routes such as `/admin/*`
 - internal metrics routes such as `/internal/*`
+- session routes such as `/sessions/*`
 - system config routes such as `/system-config/*`
+- step-up routes such as `/step-up/*`
 
 If you want the technical route map, see [Auth API Routes](/docs/reference/auth-api-routes).
 

@@ -10,11 +10,14 @@ export const meta = {
 This guide explains exactly what happens when you run:
 
 ```bash
-npx create-seamless my-app
+npx seamless-cli my-app
 ```
 
-It focuses on the current CLI behavior: local project generation, auth wiring, Docker setup, and
-admin dashboard inclusion.
+That project-name shorthand runs the same init path as `npx seamless-cli init my-app`. Running the
+CLI with no command prints help.
+
+This guide focuses on local project generation, auth wiring, Docker setup, and admin dashboard
+inclusion.
 
 ---
 
@@ -31,7 +34,7 @@ init → prompts → generators → config → ready-to-run app
 If you pass a project name:
 
 ```bash
-npx create-seamless my-app
+npx seamless-cli my-app
 ```
 
 The CLI will:
@@ -40,7 +43,9 @@ The CLI will:
 - Ensure it does not already exist
 - Use it as the project root
 
-If no name is provided, it uses the current directory (must be empty).
+If you run `npx seamless-cli init` with no project name, it uses the current directory. If that
+directory is not empty, the current CLI prints that an existing project was detected and exits; the
+existing-project integration flow is still future work.
 
 ---
 
@@ -80,6 +85,8 @@ This determines your API server.
 
 - Generates the auth server source into `./auth`
 - Still relies on Docker for the full local stack
+- Prompts about Docker, but the current source enables Docker either way because it is required for
+  the full generated stack
 
 ---
 
@@ -207,11 +214,13 @@ This file stores:
 
 ## Step 5: Final Output
 
-The CLI prints next steps:
+The CLI prints next steps. In the Docker-backed path, those are:
 
-- Install dependencies
-- Start Docker
-- Run dev servers
+- `docker compose up`
+- `seamless bootstrap-admin`
+- complete registration in the browser
+
+It also prints the expected local service URLs for auth, API, web, and admin.
 
 ---
 
@@ -256,15 +265,16 @@ The CLI chooses:
 
 You always get:
 
-- Frontend
-- API
+- `web/` frontend starter
+- `api/` backend starter
+- local Docker Compose wiring
+- `seamless.config.json`
+- auth server runtime wiring
 
 You may also get:
 
 - `auth/` source when local auth mode is selected
 - `admin/` source when admin source mode is selected
-- Backend
-- Auth system
 
 ---
 
@@ -286,7 +296,7 @@ Even in local mode, Docker is used to ensure consistency.
 
 Copy this into ChatGPT:
 
-"Explain what happens internally when I run create-seamless init and how the project is generated."
+"Explain what happens internally when I run seamless-cli init and how the project is generated."
 
 ---
 

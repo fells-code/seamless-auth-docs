@@ -2,65 +2,81 @@ export const meta = {
   title: 'Deployment Status',
   order: 4,
   section: 'operate',
-  tags: ['deploy', 'status', 'roadmap', 'production', 'not yet shipped'],
+  tags: ['deploy', 'deployment', 'status', 'cli', 'seamless-cli', 'planned'],
 }
 
 # Deployment Status
 
-Deployment support is an area of active development, but it is important to separate the current
-state from the intended future workflow.
+The current `seamless-cli` package does not ship a deployment command.
+
+This page intentionally preserves the existing `/docs/operate/deploy` route, but the old AWS
+dev-tier `deploy` and `destroy` command docs no longer describe the renamed CLI source in
+`../seamless-cli`.
 
 ---
 
 ## Current State
 
-The current public `create-seamless` CLI focuses on:
+The current public CLI command surface is:
 
-- `init`
-- `check`
-- `bootstrap-admin`
+```bash
+seamless init [project-name]
+seamless check
+seamless bootstrap-admin [email]
+seamless --help
+seamless --version
+```
 
-There is **not** currently a public `deploy` command in the CLI.
-
----
-
-## What Exists Today
-
-Today, Seamless Auth supports:
-
-- Local scaffolding
-- Self-hosting the auth API
-- Running the admin dashboard separately
-- Building applications on top of the server and frontend SDKs
-
-Production deployment is still something you should plan explicitly in your own infrastructure
-workflow.
+There is no current `seamless deploy` or `seamless destroy` implementation in `../seamless-cli`.
 
 ---
 
-## Intended Direction
+## What The CLI Can Prepare Today
 
-The long-term direction is a guided deployment story that can take a locally working stack toward a
-repeatable production environment.
+`seamless-cli` can generate a local project with:
 
-That is also the point where this docs area should expand again in a major way, alongside better
-guides for integrating Seamless Auth into an existing application instead of only a newly scaffolded
-one.
+- React web starter
+- Express API starter
+- Seamless Auth API in Docker or local-source mode
+- optional admin dashboard in Docker image or source mode
+- Docker Compose wiring
+- local secrets and service URLs
+- `seamless.config.json`
+
+That gives you a production-shaped local stack, but it is not a hosted deployment workflow.
+
+---
+
+## What Operators Still Own
+
+Until deployment automation ships again, operators own:
+
+- hosting the auth API, application API, web app, and optional admin dashboard
+- provisioning Postgres
+- setting stable production secrets
+- configuring JWKS signing keys
+- configuring HTTPS, CORS, origins, cookie domain, and proxy headers
+- managing OAuth provider callback URLs and provider secrets
+- monitoring, logging, alerting, backup, and restore testing
+
+Use [Environment Variables](/docs/reference/environment-variables),
+[System Config Reference](/docs/reference/system-config), and
+[Cookie, Session, And Token Reference](/docs/reference/cookies-sessions-tokens) when planning those
+deployment surfaces.
 
 ---
 
 ## Documentation Rule
 
-If you are documenting deployment work:
+When documenting deployment work:
 
-- label planned behavior clearly
-- do not present a future CLI command as already shipped
-- tie infrastructure claims to a source repo or implementation artifact
-
-This is especially important for agents and operators who may treat docs as source of truth.
+- do not describe `deploy` or `destroy` as shipped unless those commands exist in `../seamless-cli`
+- label future deployment flows as planned or in progress
+- tie infrastructure claims to current source code or generated files
+- keep operator-owned production hardening separate from CLI-generated local setup
 
 ---
 
 ## Next Step
 
-→ Learn about environment configuration and secrets
+Continue to [Environment Variables](/docs/reference/environment-variables).

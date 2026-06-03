@@ -2,15 +2,26 @@ export const meta = {
   title: 'Auth Data Model',
   order: 1,
   section: 'understand',
-  tags: ['data model', 'database', 'architecture', 'users', 'sessions', 'credentials', 'events'],
+  tags: [
+    'data model',
+    'database',
+    'architecture',
+    'users',
+    'sessions',
+    'credentials',
+    'events',
+    'organizations',
+    'oauth',
+    'totp',
+  ],
 }
 
 # Data Models
 
-Seamless Auth is built on a relational model that keeps users, sessions, passkeys, events, and
-configuration explicit and inspectable.
+Seamless Auth is built on a relational model that keeps users, sessions, passkeys, organizations,
+events, and configuration explicit and inspectable.
 
-This page focuses on the core entities in the auth server and how they relate.
+This page focuses on the core entities in `seamless-auth-api` and how they relate.
 
 ---
 
@@ -21,6 +32,12 @@ User -> has many -> Sessions
 User -> has many -> Credentials
 User -> has many -> Auth Events
 User -> has many -> Magic Link Tokens
+User -> has many -> OAuth Identities
+User -> has many -> TOTP Credentials
+User -> has many -> Organization Memberships
+
+Organization -> has many -> Organization Memberships
+Session -> may point to -> Active Organization
 
 System -> configured by -> System Config
 Bootstrap -> handled by -> Bootstrap Invites
@@ -32,18 +49,24 @@ Bootstrap -> handled by -> Bootstrap Invites
 
 Users represent authenticated identities.
 
-| Field           | Type             | Description                 |
-| --------------- | ---------------- | --------------------------- |
-| `id`            | `uuid`           | Unique user ID              |
-| `email`         | `string`         | Unique email                |
-| `phone`         | `string`         | Unique phone                |
-| `roles`         | `string[]`       | Assigned roles              |
-| `revoked`       | `boolean`        | Whether auth is disabled    |
-| `emailVerified` | `boolean`        | Email verification state    |
-| `phoneVerified` | `boolean`        | Phone verification state    |
-| `verified`      | `boolean`        | Fully verified state        |
-| `challenge`     | `string \| null` | In-progress challenge state |
-| `lastLogin`     | `timestamp`      | Last successful login       |
+| Field                    | Type                | Description                          |
+| ------------------------ | ------------------- | ------------------------------------ |
+| `id`                     | `uuid`              | Unique user ID                       |
+| `email`                  | `string`            | Unique email                         |
+| `phone`                  | `string`            | Unique phone                         |
+| `roles`                  | `string[]`          | Global roles assigned to the user    |
+| `revoked`                | `boolean`           | Whether auth is disabled             |
+| `emailVerificationToken` | `string \| null`    | In-progress email verification token |
+| `phoneVerificationToken` | `string \| null`    | In-progress phone verification token |
+| `emailVerified`          | `boolean`           | Email verification state             |
+| `phoneVerified`          | `boolean`           | Phone verification state             |
+| `verified`               | `boolean`           | Fully verified state                 |
+| `challenge`              | `string \| null`    | In-progress auth challenge           |
+| `challengeContext`       | `json \| null`      | Context for an in-progress challenge |
+| `lastLogin`              | `timestamp \| null` | Last successful login                |
+
+Users have child records for passkeys, sessions, OAuth identities, organization memberships, TOTP
+credentials, and auth events.
 
 ---
 
@@ -51,22 +74,28 @@ Users represent authenticated identities.
 
 Sessions are first-class records, not just opaque browser state.
 
-| Field                 | Type                | Description                      |
-| --------------------- | ------------------- | -------------------------------- |
-| `id`                  | `uuid`              | Session ID                       |
-| `userId`              | `uuid`              | Owning user                      |
-| `mode`                | `'web' \| 'server'` | Session mode                     |
-| `infraId`             | `string \| null`    | Infra/session context identifier |
-| `refreshTokenHash`    | `string`            | Stored refresh token hash        |
-| `lastUsedAt`          | `timestamp`         | Last activity timestamp          |
-| `expiresAt`           | `timestamp`         | Absolute expiration              |
-| `idleExpiresAt`       | `timestamp`         | Idle expiration                  |
-| `deviceName`          | `string \| null`    | Friendly device label            |
-| `userAgent`           | `string \| null`    | Request device/browser info      |
-| `ipAddress`           | `string \| null`    | Request origin                   |
-| `replacedBySessionId` | `uuid \| null`      | Rotation link                    |
-| `revokedAt`           | `timestamp \| null` | Revocation time                  |
-| `revokedReason`       | `string \| null`    | Revocation reason                |
+| Field                 | Type                | Description                                   |
+| --------------------- | ------------------- | --------------------------------------------- |
+| `id`                  | `uuid`              | Session ID                                    |
+| `userId`              | `uuid`              | Owning user                                   |
+| `infraId`             | `string \| null`    | Infra/session context identifier              |
+| `organizationId`      | `uuid \| null`      | Active organization context for the session   |
+| `mode`                | `'server'`          | Session mode currently stored by the auth API |
+| `refreshTokenHash`    | `string`            | Stored refresh token hash                     |
+| `refreshTokenLookup`  | `string \| null`    | Indexed refresh-token lookup fingerprint      |
+| `lastUsedAt`          | `timestamp`         | Last activity timestamp                       |
+| `expiresAt`           | `timestamp`         | Absolute expiration                           |
+| `idleExpiresAt`       | `timestamp`         | Idle expiration                               |
+| `stepUpVerifiedAt`    | `timestamp \| null` | Time of last fresh step-up verification       |
+| `stepUpMethod`        | `string \| null`    | Step-up method, such as `webauthn` or `totp`  |
+| `deviceName`          | `string \| null`    | Friendly device label                         |
+| `userAgent`           | `string \| null`    | Request device/browser info                   |
+| `ipAddress`           | `string \| null`    | Request origin                                |
+| `replacedBySessionId` | `uuid \| null`      | Rotation link                                 |
+| `revokedAt`           | `timestamp \| null` | Revocation time                               |
+| `revokedReason`       | `string \| null`    | Revocation reason                             |
+
+Refresh tokens are stored as hashes and lookup fingerprints, not as raw refresh tokens.
 
 ---
 
@@ -74,20 +103,92 @@ Sessions are first-class records, not just opaque browser state.
 
 Credentials store passkeys and related metadata.
 
-| Field          | Type                | Description                         |
-| -------------- | ------------------- | ----------------------------------- |
-| `id`           | `string`            | Credential ID                       |
-| `userId`       | `uuid`              | Owning user                         |
-| `publicKey`    | `binary`            | WebAuthn public key                 |
-| `counter`      | `number`            | Replay-protection counter           |
-| `transports`   | `json`              | Transport hints                     |
-| `deviceType`   | `string`            | Credential device type              |
-| `backedup`     | `boolean`           | Whether the credential is backed up |
-| `friendlyName` | `string \| null`    | User-friendly label                 |
-| `lastUsedAt`   | `timestamp \| null` | Last usage                          |
-| `platform`     | `string \| null`    | Platform classification             |
-| `browser`      | `string \| null`    | Browser classification              |
-| `deviceInfo`   | `string \| null`    | Device description                  |
+| Field          | Type                | Description                               |
+| -------------- | ------------------- | ----------------------------------------- |
+| `id`           | `string`            | Credential ID                             |
+| `userId`       | `uuid`              | Owning user                               |
+| `publicKey`    | `binary`            | WebAuthn public key                       |
+| `counter`      | `number`            | Replay-protection counter                 |
+| `transports`   | `json`              | Transport hints                           |
+| `deviceType`   | `string \| null`    | Credential device type                    |
+| `backedup`     | `boolean`           | Whether the credential is backed up       |
+| `prfCapable`   | `boolean`           | Whether registration reported PRF support |
+| `friendlyName` | `string \| null`    | User-friendly label                       |
+| `lastUsedAt`   | `timestamp \| null` | Last usage                                |
+| `platform`     | `string \| null`    | Platform classification                   |
+| `browser`      | `string \| null`    | Browser classification                    |
+| `deviceInfo`   | `string \| null`    | Device description                        |
+
+PRF output is not stored in credential records. Only PRF capability metadata is stored.
+
+---
+
+## Organizations
+
+Organizations group users for tenant-style access and active-session context.
+
+| Field             | Type           | Description                       |
+| ----------------- | -------------- | --------------------------------- |
+| `id`              | `uuid`         | Organization ID                   |
+| `name`            | `string`       | Display name                      |
+| `slug`            | `string`       | Unique slug                       |
+| `createdByUserId` | `uuid \| null` | User who created the organization |
+| `metadata`        | `json \| null` | Caller-defined metadata           |
+
+---
+
+## Organization Memberships
+
+Memberships connect users to organizations.
+
+| Field            | Type       | Description                     |
+| ---------------- | ---------- | ------------------------------- |
+| `id`             | `uuid`     | Membership ID                   |
+| `organizationId` | `uuid`     | Owning organization             |
+| `userId`         | `uuid`     | Member user                     |
+| `roles`          | `string[]` | Roles inside the organization   |
+| `scopes`         | `string[]` | Organization-scoped permissions |
+
+The database enforces one membership per `(organizationId, userId)` pair.
+
+---
+
+## OAuth Identities
+
+OAuth identities link external provider accounts to local users.
+
+| Field             | Type            | Description                          |
+| ----------------- | --------------- | ------------------------------------ |
+| `id`              | `uuid`          | OAuth identity ID                    |
+| `userId`          | `uuid`          | Local user                           |
+| `providerId`      | `string`        | Provider config ID, such as `google` |
+| `providerSubject` | `string`        | Provider subject/user ID             |
+| `email`           | `string`        | Email from provider profile          |
+| `profile`         | `jsonb \| null` | Redacted provider profile fields     |
+
+The auth API enforces uniqueness on `(providerId, providerSubject)`.
+
+---
+
+## TOTP Credentials
+
+TOTP credentials store encrypted authenticator-app secrets.
+
+| Field              | Type                | Description                        |
+| ------------------ | ------------------- | ---------------------------------- |
+| `id`               | `uuid`              | TOTP credential ID                 |
+| `userId`           | `uuid`              | Owning user                        |
+| `secretCiphertext` | `text`              | Encrypted TOTP secret              |
+| `secretIv`         | `string`            | Encryption IV                      |
+| `secretTag`        | `string`            | Encryption authentication tag      |
+| `issuer`           | `string`            | TOTP issuer                        |
+| `accountName`      | `string`            | TOTP account label                 |
+| `enabled`          | `boolean`           | Whether the credential can be used |
+| `verifiedAt`       | `timestamp \| null` | Enrollment verification time       |
+| `lastUsedAt`       | `timestamp \| null` | Last successful use                |
+| `lastUsedCounter`  | `number \| null`    | Replay prevention counter          |
+
+Production deployments should provide `TOTP_SECRET_ENCRYPTION_KEY`.
 
 ---
 
@@ -112,14 +213,17 @@ Magic links are stored as explicit records with request-context hashes.
 
 Auth events are the audit trail for the authentication system.
 
-| Field        | Type             | Description              |
-| ------------ | ---------------- | ------------------------ |
-| `id`         | `uuid`           | Event ID                 |
-| `user_id`    | `uuid \| null`   | Associated user          |
-| `type`       | `string`         | Event type               |
-| `ip_address` | `string \| null` | Origin IP                |
-| `user_agent` | `string \| null` | Device info              |
-| `metadata`   | `jsonb \| null`  | Additional event context |
+| Field        | Type             | Description            |
+| ------------ | ---------------- | ---------------------- |
+| `id`         | `uuid`           | Event ID               |
+| `user_id`    | `uuid \| null`   | Associated user        |
+| `type`       | `string`         | Event type             |
+| `ip_address` | `string \| null` | Origin IP              |
+| `user_agent` | `string \| null` | Device info            |
+| `metadata`   | `jsonb \| null`  | Redacted event context |
+
+Events cover registration, login, OTP, magic links, WebAuthn, OAuth, TOTP, admin actions,
+suspicious requests, and recovery flows.
 
 ---
 
@@ -129,13 +233,18 @@ System config controls auth behavior such as:
 
 - `default_roles`
 - `available_roles`
+- `login_methods`
+- `passkey_login_fallback_enabled`
+- `oauth_providers`
+- `lockout_policy`
 - `access_token_ttl`
 - `refresh_token_ttl`
 - `rate_limit`
 - `delay_after`
 - `rpid`
-- `origin`
-- `app_name`
+- `origins`
+
+Raw secrets should stay in environment variables or a secret manager, not in `system_config`.
 
 ---
 
@@ -166,15 +275,23 @@ users.id -> sessions.userId
 users.id -> credentials.userId
 users.id -> auth_events.user_id
 users.id -> magic_link_tokens.user_id
+users.id -> oauth_identities.user_id
+users.id -> totp_credentials.user_id
+users.id -> organization_memberships.user_id
+
+organizations.id -> organization_memberships.organization_id
+sessions.organizationId -> organizations.id
 ```
 
 ---
 
 ## Why This Model Matters
 
-- users carry roles directly, which keeps authorization explicit
-- sessions are durable records, which makes revocation and device visibility possible
-- credentials are first-class objects, which supports passkey management
+- users carry global roles directly, which keeps baseline authorization explicit
+- organization memberships add tenant-level roles and scopes without hiding the global user model
+- sessions are durable records, which makes revocation, active organization context, and step-up
+  freshness inspectable
+- credentials are first-class objects, which supports passkey management and PRF capability metadata
 - auth events provide an audit trail and feed dashboard metrics
 - system config is explicit instead of hidden inside code
 
@@ -182,4 +299,4 @@ users.id -> magic_link_tokens.user_id
 
 ## Next Step
 
-→ Continue to [Sessions](/docs/understand/sessions)
+Continue to [Sessions](/docs/understand/sessions).

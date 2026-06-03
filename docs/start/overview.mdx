@@ -13,8 +13,8 @@ application infrastructure.
 It combines a self-hostable auth server, official SDKs, a CLI for scaffolding a working stack, and
 an operator dashboard for managing users, sessions, security, and system configuration.
 
-The goal is to give you modern authentication without handing control of your application or user
-flows to a third-party identity provider.
+The goal is to give you modern authentication while keeping the auth engine, session boundary, and
+user experience inside your application stack.
 
 <Callout type="info">
   Seamless Auth is for teams that want passwordless auth with explicit boundaries, inspectable
@@ -22,9 +22,8 @@ flows to a third-party identity provider.
 </Callout>
 
 <Callout type="warning">
-  The ecosystem is strongest today for greenfield or freshly scaffolded local setups. Guided CLI
-  support for infrastructure deployment and deeper existing-project integration is still a later
-  milestone.
+  The ecosystem is strongest today for scaffolded full-stack setups and source-visible self-hosting.
+  Deeper existing-project integration and deployment automation docs still need more coverage.
 </Callout>
 
 ---
@@ -34,7 +33,7 @@ flows to a third-party identity provider.
 ### Exclusively Passwordless
 
 - Authentication is based on cryptographic verification, not shared secrets.
-- Supports intelligent, user-friendly fallback mechanisms.
+- Supports passkeys, magic links, email/phone OTP, TOTP MFA, and optional OAuth login.
 
 ---
 
@@ -76,7 +75,7 @@ Seamless Auth is made up of a few focused projects.
 
 | Piece                           | Role                                                          |
 | ------------------------------- | ------------------------------------------------------------- |
-| `create-seamless`               | Scaffolds a full local stack                                  |
+| `seamless-cli`                  | Scaffolds a full local stack                                  |
 | `seamless-auth-api`             | Runs the passwordless auth engine                             |
 | `@seamless-auth/core`           | Framework-agnostic server auth primitives                     |
 | `@seamless-auth/express`        | Official Express backend integration                          |
@@ -110,6 +109,7 @@ By the end of this guide, you will have:
 - Session management with device-level control
 - A clearer mental model of the ecosystem
 - Enough context to choose the right package for your next step
+- A path to customize auth UI and protect app routes when you leave the starter
 
 ---
 

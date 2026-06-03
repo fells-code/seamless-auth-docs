@@ -2,48 +2,59 @@ export const meta = {
   title: 'React SDK',
   order: 4,
   section: 'build',
-  tags: ['react', 'frontend', 'sdk', 'auth', 'AuthProvider', 'useAuth', 'AuthRoutes', 'passkeys'],
+  tags: [
+    'react',
+    'frontend',
+    'sdk',
+    'auth',
+    'AuthProvider',
+    'useAuth',
+    'AuthRoutes',
+    'passkeys',
+    'oauth',
+    'organizations',
+    'step-up',
+    'prf',
+  ],
 }
 
 # React SDK
 
 `@seamless-auth/react` is the official React integration for Seamless Auth.
 
-It gives your app auth state, built-in auth flows, and passkey-aware helpers without forcing you
-into a hosted identity UI.
+It gives your app an auth provider, optional built-in auth screens, and a headless client for
+building custom sign-in and account-management UI.
 
 ---
 
 ## What It Exports
 
-The package centers on three main exports:
+Core exports:
 
 - `AuthProvider`
 - `useAuth()`
 - `AuthRoutes`
+- `createSeamlessAuthClient()`
+- `useAuthClient()`
+- `usePasskeySupport()`
+- `hasScopedRole()` and `roleGrantsAccess()`
+- WebAuthn PRF helpers such as `encodePrfSalt()` and `isPasskeyPrfSupported()`
 
-Those cover provider setup, auth state access, and built-in auth route screens.
+Important exported types include `AuthContextType`, `User`, `Credential`, `Organization`,
+`OAuthProvider`, `StepUpStatus`, and the headless client input/result types.
 
 ---
 
-## What The SDK Handles
+## Choose Your Integration Style
 
-The React SDK helps with:
+| Style                        | Use it when                                                        |
+| ---------------------------- | ------------------------------------------------------------------ |
+| `AuthProvider` + `useAuth()` | You want app-wide auth state and high-level actions                |
+| `createSeamlessAuthClient()` | You want fully custom auth screens outside React context           |
+| `useAuthClient()`            | You want custom React screens while reusing the provider `apiHost` |
+| `AuthRoutes`                 | You want the built-in login, OTP, magic-link, and passkey screens  |
 
-- auth state and current user access
-- session validation on load
-- login initiation
-- passkey login
-- built-in auth route screens
-- credential update and deletion helpers
-- logout and user deletion helpers
-
-Your app still owns:
-
-- your routing tree
-- route protection strategy
-- product-specific authorization
-- application UI outside the built-in auth screens
+Most apps still wrap the route tree in `AuthProvider`.
 
 ---
 
@@ -52,15 +63,27 @@ Your app still owns:
 ```tsx
 import { BrowserRouter } from 'react-router-dom'
 import { AuthProvider } from '@seamless-auth/react'
-;<BrowserRouter>
-  <AuthProvider apiHost="http://localhost:3000" mode="server">
-    <App />
-  </AuthProvider>
-</BrowserRouter>
+
+export function Root() {
+  return (
+    <BrowserRouter>
+      <AuthProvider apiHost="http://localhost:3000">
+        <App />
+      </AuthProvider>
+    </BrowserRouter>
+  )
+}
 ```
 
-The provider needs your API host and supports an auth mode. In the wider ecosystem, `mode="server"`
-is commonly used when your app talks to a backend integration layer that owns the cookie boundary.
+`apiHost` points at your backend API, not the raw auth server. The SDK sends requests to
+`${apiHost}/auth/...`, so the backend usually mounts `@seamless-auth/express` at `/auth`.
+
+`AuthProvider` currently accepts:
+
+| Prop                       | Purpose                                          |
+| -------------------------- | ------------------------------------------------ |
+| `apiHost`                  | Backend API base URL                             |
+| `autoDetectPreviousSignin` | Optional localStorage-backed returning-user hint |
 
 ---
 
@@ -70,22 +93,25 @@ is commonly used when your app talks to a backend integration layer that owns th
 import { useAuth } from '@seamless-auth/react'
 
 function Dashboard() {
-  const { user, isAuthenticated, hasRole, logout } = useAuth()
+  const { user, isAuthenticated, hasScopedRole, logout } = useAuth()
 
   if (!isAuthenticated) return <div>Not signed in</div>
 
   return (
     <div>
       <p>{user?.email}</p>
-      {hasRole('admin') && <a href="/admin">Admin</a>}
-      <button onClick={logout}>Log out</button>
+      {hasScopedRole('admin:read') && <a href="/admin">Admin</a>}
+      <button onClick={() => void logout()}>Log out</button>
     </div>
   )
 }
 ```
 
-The context includes more than just `user` and `isAuthenticated`. It also includes credential
-management helpers and passkey login helpers.
+The provider state includes `user`, `credentials`, `organizations`, `activeOrganization`,
+`stepUpStatus`, `isAuthenticated`, and `loading`.
+
+Provider helpers include session refresh, logout, credential management, organization switching,
+OAuth start/callback helpers, passkey login, and step-up verification.
 
 ---
 
@@ -101,41 +127,262 @@ management helpers and passkey login helpers.
 - `/registerPasskey`
 - `/magiclinks-sent`
 
-That makes it easy to get a working auth flow running fast while still keeping routing inside your
-own app.
+The built-in routes are optional wrappers over the same primitives exposed by `useAuth()` and the
+headless client. Your app still owns route protection and redirects.
+
+---
+
+## Headless Client
+
+Use `createSeamlessAuthClient()` when you want your own UI flow.
+
+```ts
+import { createSeamlessAuthClient } from '@seamless-auth/react'
+
+const authClient = createSeamlessAuthClient({
+  apiHost: 'http://localhost:3000',
+})
+
+const loginStart = await authClient.login({
+  identifier: 'user@example.com',
+  passkeyAvailable: true,
+})
+```
+
+The headless client covers:
+
+- current-user/session lookup
+- login and passkey login
+- registration
+- phone and email OTP
+- magic-link request, polling, and verification
+- OAuth provider listing, start, and callback completion
+- passkey registration
+- step-up status and verification
+- logout and user deletion
+- credential update and deletion
+- organization and organization-member operations
+
+Most methods return `Response`. Convenience methods such as passkey login, OAuth provider listing,
+and step-up verification return typed result objects.
+
+---
+
+## Custom Auth UI
+
+For custom React screens, combine `useAuth()`, `useAuthClient()`, and `usePasskeySupport()`.
+
+```tsx
+import { useAuth, useAuthClient, usePasskeySupport } from '@seamless-auth/react'
+
+function CustomLogin() {
+  const { refreshSession } = useAuth()
+  const authClient = useAuthClient()
+  const { passkeySupported, loading } = usePasskeySupport()
+
+  async function startLogin() {
+    const response = await authClient.login({
+      identifier: 'user@example.com',
+      passkeyAvailable: passkeySupported,
+    })
+
+    if (response.ok) {
+      await refreshSession()
+    }
+  }
+
+  return (
+    <button disabled={loading} onClick={() => void startLogin()}>
+      Sign in
+    </button>
+  )
+}
+```
+
+Use `refreshSession()` after completing any custom flow that should update provider state.
+
+---
+
+## OAuth Login
+
+OAuth starts in the frontend, but provider secrets and callback policy belong on the auth API.
+
+```tsx
+import { useEffect, useState } from 'react'
+import { useAuth, type OAuthProvider } from '@seamless-auth/react'
+
+function OAuthButtons() {
+  const { listOAuthProviders, startOAuthLogin } = useAuth()
+  const [providers, setProviders] = useState<OAuthProvider[]>([])
+
+  useEffect(() => {
+    void listOAuthProviders().then((result) => setProviders(result.providers))
+  }, [listOAuthProviders])
+
+  async function signIn(providerId: string) {
+    const result = await startOAuthLogin({
+      providerId,
+      redirectUri: `${window.location.origin}/oauth/callback`,
+      returnTo: `${window.location.origin}/dashboard`,
+    })
+
+    window.location.assign(result.authorizationUrl)
+  }
+
+  return providers.map((provider) => (
+    <button key={provider.id} onClick={() => void signIn(provider.id)}>
+      Continue with {provider.name}
+    </button>
+  ))
+}
+```
+
+Complete the callback by passing the provider `code` and Seamless Auth `state` back to the SDK:
+
+```tsx
+const { finishOAuthLogin } = useAuth()
+
+await finishOAuthLogin({
+  providerId: 'google',
+  code: new URLSearchParams(window.location.search).get('code')!,
+  state: new URLSearchParams(window.location.search).get('state')!,
+})
+```
+
+OAuth requires `LOGIN_METHODS` to include `oauth` and at least one configured OAuth provider on the
+auth API.
+
+---
+
+## Organizations
+
+`useAuth()` exposes `organizations`, `activeOrganization`, and `switchOrganization()`.
+
+For full custom organization management, use the headless client methods:
+
+- `listOrganizations()`
+- `createOrganization(input)`
+- `getOrganization(organizationId)`
+- `updateOrganization(organizationId, input)`
+- `switchOrganization(organizationId)`
+- `listOrganizationMembers(organizationId)`
+- `addOrganizationMember(organizationId, input)`
+- `updateOrganizationMember(organizationId, userId, input)`
+- `removeOrganizationMember(organizationId, userId)`
+
+Switching organizations refreshes provider state so the active organization in `useAuth()` stays in
+sync with the session.
+
+---
+
+## Scoped Roles
+
+`hasRole(role)` is an exact role check. Use `hasScopedRole(required)` for scoped authorization.
+
+```tsx
+const { hasRole, hasScopedRole } = useAuth()
+
+hasRole('admin') // exact legacy check
+hasScopedRole('admin:read') // true for admin, admin:read, or admin:write
+hasScopedRole('admin:write') // true for admin or admin:write
+```
+
+The package also exports standalone `hasScopedRole(roles, required)` and `roleGrantsAccess(...)`
+helpers for code outside React context.
+
+---
+
+## Step-up Before Sensitive Actions
+
+Use step-up auth when a signed-in user needs fresh verification before a sensitive action.
+
+```tsx
+import { useAuth } from '@seamless-auth/react'
+
+function SensitiveActionButton() {
+  const { refreshStepUpStatus, verifyStepUpWithPasskey } = useAuth()
+
+  async function runSensitiveAction() {
+    const status = await refreshStepUpStatus()
+    const verified = status?.fresh ? true : (await verifyStepUpWithPasskey()).success
+
+    if (!verified) return
+
+    await performSensitiveAction()
+  }
+
+  return <button onClick={() => void runSensitiveAction()}>Continue</button>
+}
+```
+
+The current React SDK supports WebAuthn/passkey step-up helpers. The API also supports TOTP
+step-up through the TOTP route surface.
+
+---
+
+## WebAuthn PRF
+
+WebAuthn PRF lets compatible passkeys derive browser-local key material during a passkey assertion.
+Seamless Auth verifies the assertion, while PRF output stays in the browser caller.
+
+```ts
+const supported = await authClient.isPasskeyPrfSupported()
+
+if (supported) {
+  await authClient.registerPasskey({
+    metadata: {
+      friendlyName: 'My laptop',
+      platform: 'macOS',
+      browser: 'Chrome',
+      deviceInfo: navigator.userAgent,
+    },
+    requestPrf: true,
+  })
+}
+```
+
+For local key-unlock flows, request PRF during step-up:
+
+```ts
+const result = await authClient.verifyStepUpWithPasskeyPrf({
+  salt: vaultSaltBase64url,
+  credentialId,
+})
+
+if (result.success && result.prf) {
+  const keyMaterial = result.prf.output
+}
+```
+
+Do not log PRF salts or output. Do not send PRF output to Seamless Auth.
 
 ---
 
 ## Important Boundary
 
-The React SDK is not a full application framework and it does not replace your backend.
+The React SDK is not a backend and does not replace authorization enforcement.
 
 The intended shape is:
 
 ```txt
 React app
-  -> your backend API or mounted auth layer
+  -> your backend API with /auth adapter routes
   -> Seamless Auth API
 ```
 
-That backend layer is where cookie validation, role enforcement, and service-to-service auth should
-live.
-
----
-
-## When To Reach For It
-
-Use `@seamless-auth/react` when:
-
-- your frontend is React
-- you want a supported path for passkey and passwordless flows
-- you want ready-made auth routes but still control your app routing
-- you want auth state and helpers without outsourcing identity UX to a third party
+The backend layer owns cookie validation, role enforcement, and service-to-service auth.
 
 ---
 
 ## Related Docs
 
+- [How To Build Your Own Auth UI](/docs/build/custom-auth-ui)
+- [How To Add OAuth Login](/docs/build/oauth-login)
+- [How To Use Organizations And Memberships](/docs/build/organizations-memberships)
+- [How To Use TOTP And Step-Up](/docs/build/totp-step-up)
+- [How To Secure Routes](/docs/build/secure-routes)
 - [Server SDKs](/docs/build/server-sdks)
+- [Auth API Routes](/docs/reference/auth-api-routes)
+- [Cookie, Session, And Token Reference](/docs/reference/cookies-sessions-tokens)
 - [Sessions](/docs/understand/sessions)
 - [Users & Roles](/docs/understand/users)

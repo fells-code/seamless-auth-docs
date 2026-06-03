@@ -4,16 +4,23 @@
   <url><loc>https://docs.seamlessauth.com/docs</loc></url>
   <url><loc>https://docs.seamlessauth.com/docs/build/admin-dashboard</loc></url>
   <url><loc>https://docs.seamlessauth.com/docs/build/auth-api</loc></url>
+  <url><loc>https://docs.seamlessauth.com/docs/build/custom-auth-ui</loc></url>
   <url><loc>https://docs.seamlessauth.com/docs/build/ecosystem</loc></url>
+  <url><loc>https://docs.seamlessauth.com/docs/build/oauth-login</loc></url>
+  <url><loc>https://docs.seamlessauth.com/docs/build/organizations-memberships</loc></url>
   <url><loc>https://docs.seamlessauth.com/docs/build/react-sdk</loc></url>
+  <url><loc>https://docs.seamlessauth.com/docs/build/secure-routes</loc></url>
   <url><loc>https://docs.seamlessauth.com/docs/build/server-sdks</loc></url>
+  <url><loc>https://docs.seamlessauth.com/docs/build/totp-step-up</loc></url>
   <url><loc>https://docs.seamlessauth.com/docs/operate/CLI</loc></url>
   <url><loc>https://docs.seamlessauth.com/docs/operate/cli-init</loc></url>
   <url><loc>https://docs.seamlessauth.com/docs/operate/deploy</loc></url>
   <url><loc>https://docs.seamlessauth.com/docs/operate/dockerEnv</loc></url>
   <url><loc>https://docs.seamlessauth.com/docs/reference/auth-api-routes</loc></url>
   <url><loc>https://docs.seamlessauth.com/docs/reference/cli-commands</loc></url>
+  <url><loc>https://docs.seamlessauth.com/docs/reference/cookies-sessions-tokens</loc></url>
   <url><loc>https://docs.seamlessauth.com/docs/reference/environment-variables</loc></url>
+  <url><loc>https://docs.seamlessauth.com/docs/reference/system-config</loc></url>
   <url><loc>https://docs.seamlessauth.com/docs/start/adminUi</loc></url>
   <url><loc>https://docs.seamlessauth.com/docs/start/firstAdmin</loc></url>
   <url><loc>https://docs.seamlessauth.com/docs/start/firstPageAndRoute</loc></url>

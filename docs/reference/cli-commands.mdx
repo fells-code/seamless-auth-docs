@@ -2,26 +2,43 @@ export const meta = {
   title: 'CLI Command Reference',
   order: 1,
   section: 'reference',
-  tags: ['cli', 'commands', 'create-seamless', 'reference', 'init', 'check', 'bootstrap-admin'],
+  tags: [
+    'cli',
+    'commands',
+    'seamless-cli',
+    'seamless',
+    'reference',
+    'init',
+    'check',
+    'bootstrap-admin',
+  ],
 }
 
 # CLI Commands
 
-This page summarizes the current public command surface of `create-seamless`.
+This page summarizes the current public command surface of `seamless-cli`.
 
-The CLI is also exposed under the `seamless` binary name.
+The npm package is named `seamless-cli`. The executable binary is named `seamless`.
 
 ---
 
 ## Command Summary
 
-| Command                            | Purpose                                           |
-| ---------------------------------- | ------------------------------------------------- |
-| `seamless init [project-name]`     | Scaffold a new local Seamless Auth project        |
-| `seamless check`                   | Validate local project setup and running services |
-| `seamless bootstrap-admin [email]` | Create the first admin bootstrap invite           |
-| `seamless --help`                  | Print usage                                       |
-| `seamless --version`               | Print the installed CLI version                   |
+| Command                            | Purpose                                                                                    |
+| ---------------------------------- | ------------------------------------------------------------------------------------------ |
+| `seamless init [project-name]`     | Scaffold a new local Seamless Auth project                                                 |
+| `seamless check`                   | Validate generated project config, Docker, Compose, containers, and local health endpoints |
+| `seamless bootstrap-admin [email]` | Create the first admin bootstrap invite                                                    |
+| `seamless --help`                  | Print usage                                                                                |
+| `seamless --version`               | Print the installed CLI version                                                            |
+
+Use `npx seamless-cli ...` when you do not have the package installed globally:
+
+```bash
+npx seamless-cli init my-app
+npx seamless-cli check
+npx seamless-cli bootstrap-admin admin@example.com
+```
 
 ---
 
@@ -37,7 +54,8 @@ If you omit the project name:
 seamless init
 ```
 
-The CLI will try to scaffold into the current directory.
+The CLI uses the current directory. If the directory is not empty, the current source prints that an
+existing project was detected and exits; a full existing-project integration flow is not shipped yet.
 
 ### What it does
 
@@ -55,7 +73,21 @@ Today the supported generated path is centered on:
 - React for the frontend
 - Express for the backend
 - Seamless Auth API in Docker or local source mode
-- optional admin dashboard
+- optional admin dashboard in image or source mode
+
+### Shortcut behavior
+
+This is valid:
+
+```bash
+seamless my-app
+```
+
+It is treated as:
+
+```bash
+seamless init my-app
+```
 
 ---
 
@@ -65,14 +97,20 @@ Today the supported generated path is centered on:
 seamless check
 ```
 
-Use this when you want to validate a generated local project.
+Use this when you want to validate a generated project.
 
-It is intended to help answer questions like:
+It checks:
 
-- is Docker installed?
-- is the project initialized?
-- is `docker-compose.yml` present?
-- are the expected services running?
+- `seamless.config.json`
+- configured web and API paths
+- Docker availability
+- `docker-compose.yml`
+- expected running containers
+- API health at `http://localhost:3000/`
+- auth health at `http://localhost:5312/health/status`
+- admin availability at `http://localhost:5174`
+
+It does not currently check Terraform, AWS CLI, or deployment state.
 
 ---
 
@@ -94,6 +132,16 @@ The CLI attempts to resolve the bootstrap secret automatically from:
 
 If it cannot find the secret automatically, it prompts you for it.
 
+### API target
+
+The CLI sends the invite request to:
+
+```txt
+{SEAMLESS_API_URL or http://localhost:3000}/auth/internal/bootstrap/admin-invite
+```
+
+Set `SEAMLESS_API_URL` when your generated API is not reachable at `http://localhost:3000`.
+
 ### What happens next
 
 After the invite is created:
@@ -106,25 +154,23 @@ This is for the initial admin bootstrap flow, not general role management.
 
 ---
 
-## Shortcut Behavior
+## Removed Or Not Currently Shipped
 
-This is valid:
+The current `../seamless-cli` source does not include these commands:
 
-```bash
-seamless my-app
-```
+- `seamless deploy`
+- `seamless destroy`
+- `seamless contribute`
 
-It is treated as a shortcut for:
-
-```bash
-seamless init my-app
-```
+Do not document those commands as shipped unless they reappear in source.
 
 ---
 
-## Important Current-State Note
+## Help And Version
 
-The current public CLI does **not** expose a `deploy` command.
+If no command is provided, the CLI prints help.
 
-If you encounter older docs or notes that mention `seamless deploy`, treat that as planned work,
-not part of the current shipped command surface.
+```bash
+seamless --help
+seamless --version
+```

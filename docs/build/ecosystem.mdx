@@ -17,8 +17,8 @@ This page is the fastest way to understand what each repository is for and where
 ## Mental Model
 
 ```txt
-create-seamless
-  -> scaffolds your app and local stack
+seamless-cli
+  -> scaffolds and checks your local stack
 
 seamless-auth-api
   -> runs the auth engine
@@ -30,22 +30,22 @@ seamless-auth-api
   -> connects your frontend to the auth flow
 
 seamless-auth-admin-dashboard
-  -> gives operators a UI for users, sessions, events, security, and config
+  -> gives operators a UI for users, organizations, sessions, events, security, and config
 ```
 
 ---
 
 ## The Main Pieces
 
-| Project                         | What it is                                            | Use it when                                                         |
-| ------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------- |
-| `create-seamless`               | CLI for scaffolding a full stack around Seamless Auth | You want a working local project quickly                            |
-| `seamless-auth-api`             | Self-hostable auth server                             | You need the passwordless auth engine itself                        |
-| `@seamless-auth/core`           | Framework-agnostic server auth primitives             | You are building your own backend adapter                           |
-| `@seamless-auth/express`        | Official Express adapter                              | Your backend is Express and you want the supported integration path |
-| `@seamless-auth/react`          | React SDK and built-in auth screens                   | Your frontend is React and you want a ready-to-use auth integration |
-| `seamless-auth-admin-dashboard` | Operator dashboard app                                | You want a UI for admins and support teams                          |
-| `@seamless-auth/types`          | Shared request/response and domain types              | You want consistent types across apps and tooling                   |
+| Project                         | What it is                                     | Use it when                                                           |
+| ------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------- |
+| `seamless-cli`                  | CLI for scaffolding and checking a local stack | You want a working React + Express project with generated auth wiring |
+| `seamless-auth-api`             | Self-hostable auth server                      | You need the passwordless auth engine itself                          |
+| `@seamless-auth/core`           | Framework-agnostic server auth primitives      | You are building your own backend adapter                             |
+| `@seamless-auth/express`        | Official Express adapter                       | Your backend is Express and you want the supported integration path   |
+| `@seamless-auth/react`          | React SDK and built-in auth screens            | Your frontend is React and you want a ready-to-use auth integration   |
+| `seamless-auth-admin-dashboard` | Operator dashboard app                         | You want a UI for admins and support teams                            |
+| `@seamless-auth/types`          | Shared request/response and domain types       | You want consistent types across apps and tooling                     |
 
 ---
 
@@ -60,7 +60,10 @@ seamless-auth-admin-dashboard
 - OTP flows
 - WebAuthn / passkeys
 - magic links
+- OAuth
+- TOTP / MFA
 - sessions
+- organizations
 - JWKS
 - system configuration
 - admin and internal metrics endpoints
@@ -93,6 +96,10 @@ with `@seamless-auth/core`.
 - passkey login
 - email / phone OTP verification
 - magic link verification
+- OAuth login helpers
+- organization helpers
+- step-up helpers
+- WebAuthn PRF helpers
 - passkey registration
 
 The SDK gives you auth state and flow helpers, but your app still owns routing, authorization, and
@@ -115,9 +122,11 @@ That separation matters because:
 
 ### 5. The CLI Connects Everything
 
-`create-seamless` is the fastest way to get a working local stack. It currently scaffolds a React
-frontend, an Express API, the auth server in Docker or local mode, and an optional admin
-dashboard.
+`seamless-cli` is the fastest way to get a working stack. It currently scaffolds a React
+frontend, an Express API, the auth server in Docker or local mode, and an optional admin dashboard.
+
+It also includes `check` and `bootstrap-admin`. The current `../seamless-cli` source does not ship
+`deploy`, `destroy`, or contributor workspace commands.
 
 It is the easiest starting point if you want to learn the ecosystem through a working project
 rather than by assembling every piece manually.
@@ -140,13 +149,22 @@ Read [Auth API](/docs/build/auth-api).
 
 ### I need to integrate my backend
 
-Read [Server SDKs](/docs/build/server-sdks).
+Read [Server SDKs](/docs/build/server-sdks) and [How To Secure Routes](/docs/build/secure-routes).
 
 ---
 
 ### I need to integrate my React app
 
-Read [React SDK](/docs/build/react-sdk).
+Read [React SDK](/docs/build/react-sdk) and
+[How To Build Your Own Auth UI](/docs/build/custom-auth-ui).
+
+---
+
+### I need OAuth, teams, or MFA
+
+Read [How To Add OAuth Login](/docs/build/oauth-login),
+[How To Use Organizations And Memberships](/docs/build/organizations-memberships), and
+[How To Use TOTP And Step-Up](/docs/build/totp-step-up).
 
 ---
 

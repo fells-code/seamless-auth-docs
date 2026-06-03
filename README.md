@@ -4,7 +4,7 @@ This repository contains the docs site for the Seamless Auth ecosystem.
 
 It is a React + Vite + MDX application that publishes product documentation for:
 
-- `create-seamless`
+- `seamless-cli`
 - `seamless-auth-api`
 - `@seamless-auth/core`
 - `@seamless-auth/express`

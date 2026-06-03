@@ -9,12 +9,20 @@
       "operations",
       "operator ui",
       "runtime config",
-      "metrics"
+      "metrics",
+      "organizations",
+      "step-up"
     ],
     "headings": [
       "What It Is For",
       "Main Areas",
-      "How It Authenticates",
+      "Access Model",
+      "Operational Workflows",
+      "Users",
+      "Organizations",
+      "Sessions",
+      "Device replacement recovery",
+      "System configuration",
       "Runtime Configuration Model",
       "Deployment Shape",
       "Relationship To The Rest Of The Ecosystem",
@@ -35,19 +43,55 @@
       "jwks",
       "webauthn",
       "otp",
-      "magic links"
+      "magic links",
+      "oauth",
+      "totp",
+      "organizations"
     ],
     "headings": [
       "What It Owns",
       "When To Use It Directly",
       "Key Route Groups",
       "Architecture Boundary",
+      "Runtime Components",
+      "Authentication Methods",
       "Self-Hosting Model",
+      "Production Notes",
       "What Lives On Top Of It",
       "Good Next Reads"
     ],
     "excerpt": "seamless-auth-api is the self-hostable authentication engine in the Seamless Auth ecosystem.",
     "urlPath": "/docs/build/auth-api"
+  },
+  {
+    "slug": "build/custom-auth-ui",
+    "title": "How To Build Your Own Auth UI",
+    "section": "build",
+    "tags": [
+      "react",
+      "custom ui",
+      "auth ui",
+      "passkeys",
+      "magic links",
+      "otp",
+      "oauth",
+      "organizations"
+    ],
+    "headings": [
+      "What You Are Building",
+      "Step 1: Keep The Provider",
+      "Step 2: Choose The Right API Surface",
+      "Step 3: Build A Passkey-First Login",
+      "Step 4: Wire Fallback Methods",
+      "Step 5: Build Registration",
+      "Step 6: Add OAuth Buttons",
+      "Step 7: Show Organization State",
+      "Step 8: Keep Authorization Server-Side",
+      "Common Mistakes",
+      "Related Docs"
+    ],
+    "excerpt": "Use this guide when the built-in AuthRoutes screens work functionally, but your application needs its own layout, copy, validation, or route structure.",
+    "urlPath": "/docs/build/custom-auth-ui"
   },
   {
     "slug": "build/ecosystem",
@@ -76,12 +120,69 @@
       "I want to self-host the auth engine",
       "I need to integrate my backend",
       "I need to integrate my React app",
+      "I need OAuth, teams, or MFA",
       "I need an operator UI",
       "What This Docs Site Is Becoming",
       "Next Step"
     ],
     "excerpt": "Seamless Auth is not a single package. It is a small ecosystem of projects that work together to deliver passwordless authentication, self-hosted infrastructure, and operator tooling.",
     "urlPath": "/docs/build/ecosystem"
+  },
+  {
+    "slug": "build/oauth-login",
+    "title": "How To Add OAuth Login",
+    "section": "build",
+    "tags": [
+      "oauth",
+      "login",
+      "react",
+      "providers",
+      "callback",
+      "google",
+      "account linking"
+    ],
+    "headings": [
+      "How The Flow Works",
+      "Step 1: Enable OAuth In System Config",
+      "Step 2: Match Redirect URIs",
+      "Step 3: Show Provider Buttons",
+      "Step 4: Finish The Callback",
+      "Step 5: Understand Account Linking",
+      "Step 6: Debug Common Failures",
+      "Security Notes",
+      "Related Docs"
+    ],
+    "excerpt": "Use this guide when you want users to sign in with an external OAuth provider while still letting Seamless Auth own local users, sessions, cookies, and auth events.",
+    "urlPath": "/docs/build/oauth-login"
+  },
+  {
+    "slug": "build/organizations-memberships",
+    "title": "How To Use Organizations And Memberships",
+    "section": "build",
+    "tags": [
+      "organizations",
+      "memberships",
+      "tenant",
+      "teams",
+      "roles",
+      "scopes",
+      "react"
+    ],
+    "headings": [
+      "Data Model",
+      "Route Surface",
+      "Step 1: Read Current Organization State",
+      "Step 2: Create An Organization",
+      "Step 3: Switch Active Organization",
+      "Step 4: List Members",
+      "Step 5: Add Or Update Members",
+      "Step 6: Protect Product Data On Your Backend",
+      "Step 7: Choose Role And Scope Names",
+      "Common Mistakes",
+      "Related Docs"
+    ],
+    "excerpt": "Use this guide when your app needs team, workspace, tenant, or customer-account boundaries.",
+    "urlPath": "/docs/build/organizations-memberships"
   },
   {
     "slug": "build/react-sdk",
@@ -95,20 +196,61 @@
       "AuthProvider",
       "useAuth",
       "AuthRoutes",
-      "passkeys"
+      "passkeys",
+      "oauth",
+      "organizations",
+      "step-up",
+      "prf"
     ],
     "headings": [
       "What It Exports",
-      "What The SDK Handles",
+      "Choose Your Integration Style",
       "Basic Setup",
       "Reading Auth State",
       "Built-In Auth Routes",
+      "Headless Client",
+      "Custom Auth UI",
+      "OAuth Login",
+      "Organizations",
+      "Scoped Roles",
+      "Step-up Before Sensitive Actions",
+      "WebAuthn PRF",
       "Important Boundary",
-      "When To Reach For It",
       "Related Docs"
     ],
     "excerpt": "@seamless-auth/react is the official React integration for Seamless Auth.",
     "urlPath": "/docs/build/react-sdk"
+  },
+  {
+    "slug": "build/secure-routes",
+    "title": "How To Secure Routes",
+    "section": "build",
+    "tags": [
+      "routes",
+      "protected routes",
+      "authorization",
+      "express",
+      "react",
+      "requireAuth",
+      "requireRole",
+      "scoped roles",
+      "step-up"
+    ],
+    "headings": [
+      "Route Security Layers",
+      "Step 1: Mount Auth Routes On Your Backend",
+      "Step 2: Protect An Authenticated API Route",
+      "Step 3: Protect A Role-Based Route",
+      "Step 4: Add A React Route Guard",
+      "Step 5: Add A Role Guard In React",
+      "Step 6: Call Protected Routes With Cookies",
+      "Step 7: Use Step-Up For Sensitive Auth Actions",
+      "Step 8: Keep Tenant Checks Explicit",
+      "Checklist",
+      "Related Docs"
+    ],
+    "excerpt": "Use this guide when you need to protect application pages, API endpoints, or admin-style actions with Seamless Auth.",
+    "urlPath": "/docs/build/secure-routes"
   },
   {
     "slug": "build/server-sdks",
@@ -122,20 +264,57 @@
       "adapter",
       "middleware",
       "requireAuth",
-      "requireRole"
+      "requireRole",
+      "oauth",
+      "organizations"
     ],
     "headings": [
       "Which One Should You Use?",
       "What The Backend Layer Does",
       "`@seamless-auth/express`",
       "Typical shape",
-      "Use it when",
+      "Required options",
+      "Mounted Adapter Routes",
+      "Auth Middleware",
+      "Messaging Delivery",
+      "OAuth And Organizations",
+      "Admin Hardening Routes",
       "`@seamless-auth/core`",
       "Current Official Coverage",
-      "Next Step"
+      "Related Docs"
     ],
     "excerpt": "Seamless Auth currently ships two official server-side packages:",
     "urlPath": "/docs/build/server-sdks"
+  },
+  {
+    "slug": "build/totp-step-up",
+    "title": "How To Use TOTP And Step-Up",
+    "section": "build",
+    "tags": [
+      "totp",
+      "mfa",
+      "step-up",
+      "webauthn",
+      "passkeys",
+      "admin",
+      "device recovery"
+    ],
+    "headings": [
+      "Concepts",
+      "Required Secret",
+      "Step 1: Use Passkey Step-Up In React",
+      "Step 2: Know Which Built-In Routes Require Step-Up",
+      "Step 3: Read Step-Up Status",
+      "Step 4: Understand TOTP Route Contracts",
+      "Step 5: Add A Backend Bridge For TOTP",
+      "Step 6: Build TOTP Enrollment UI",
+      "Step 7: Use TOTP For Step-Up",
+      "Step 8: Handle Login MFA",
+      "Common Mistakes",
+      "Related Docs"
+    ],
+    "excerpt": "Use this guide when you need authenticator-app MFA or fresh verification before sensitive actions.",
+    "urlPath": "/docs/build/totp-step-up"
   },
   {
     "slug": "operate/CLI",
@@ -143,7 +322,8 @@
     "section": "operate",
     "tags": [
       "cli",
-      "create-seamless",
+      "seamless-cli",
+      "seamless",
       "scaffolding",
       "commands",
       "init",
@@ -154,18 +334,17 @@
       "Mental Model",
       "Installation",
       "Core Commands",
-      "init (default)",
+      "init",
       "check",
       "bootstrap-admin",
       "CLI Behavior",
-      "Help Menu",
       "What Happens During init",
       "Generated Files",
       "Design Philosophy",
-      "What It Does Not Do Yet",
+      "Current Boundaries",
       "Next Step"
     ],
-    "excerpt": "The Seamless Auth CLI (create-seamless, also available as seamless) is the entry point for scaffolding and checking a local Seamless Auth project.",
+    "excerpt": "The Seamless Auth CLI is published as seamless-cli and exposes the seamless binary. It is the entry point for scaffolding a local Seamless Auth project, checking the generated stack, and creating the first admin bootstra",
     "urlPath": "/docs/operate/CLI"
   },
   {
@@ -218,19 +397,20 @@
     "section": "operate",
     "tags": [
       "deploy",
+      "deployment",
       "status",
-      "roadmap",
-      "production",
-      "not yet shipped"
+      "cli",
+      "seamless-cli",
+      "planned"
     ],
     "headings": [
       "Current State",
-      "What Exists Today",
-      "Intended Direction",
+      "What The CLI Can Prepare Today",
+      "What Operators Still Own",
       "Documentation Rule",
       "Next Step"
     ],
-    "excerpt": "Deployment support is an area of active development, but it is important to separate the current state from the intended future workflow.",
+    "excerpt": "The current seamless-cli package does not ship a deployment command.",
     "urlPath": "/docs/operate/deploy"
   },
   {
@@ -279,7 +459,11 @@
       "otp",
       "webauthn",
       "magic links",
-      "sessions"
+      "oauth",
+      "totp",
+      "organizations",
+      "sessions",
+      "step-up"
     ],
     "headings": [
       "Route Groups",
@@ -288,15 +472,20 @@
       "OTP",
       "WebAuthn",
       "Magic Links",
+      "OAuth",
+      "TOTP",
+      "Step-up Authentication",
       "Users",
+      "Organizations",
       "Sessions",
       "Admin",
       "Internal",
       "System Config",
       "Bootstrap",
-      "JWKS"
+      "JWKS",
+      "Health"
     ],
-    "excerpt": "This page summarizes the current route groups exposed by seamless-auth-api.",
+    "excerpt": "This page maps the current route groups exposed by seamless-auth-api.",
     "urlPath": "/docs/reference/auth-api-routes"
   },
   {
@@ -306,7 +495,8 @@
     "tags": [
       "cli",
       "commands",
-      "create-seamless",
+      "seamless-cli",
+      "seamless",
       "reference",
       "init",
       "check",
@@ -317,15 +507,50 @@
       "`init`",
       "What it does",
       "Current generated stack",
+      "Shortcut behavior",
       "`check`",
       "`bootstrap-admin`",
       "How it resolves the secret",
+      "API target",
       "What happens next",
-      "Shortcut Behavior",
-      "Important Current-State Note"
+      "Removed Or Not Currently Shipped",
+      "Help And Version"
     ],
-    "excerpt": "This page summarizes the current public command surface of create-seamless.",
+    "excerpt": "This page summarizes the current public command surface of seamless-cli.",
     "urlPath": "/docs/reference/cli-commands"
+  },
+  {
+    "slug": "reference/cookies-sessions-tokens",
+    "title": "Cookie, Session, And Token Reference",
+    "section": "reference",
+    "tags": [
+      "cookies",
+      "sessions",
+      "tokens",
+      "jwt",
+      "jwks",
+      "refresh tokens",
+      "express",
+      "requireAuth"
+    ],
+    "headings": [
+      "Boundary Model",
+      "Default Cookie Names",
+      "Cookie Attributes",
+      "Access Cookie Payload",
+      "Refresh Cookie Payload",
+      "Registration And Pre-Auth Cookies",
+      "Auth API Token Types",
+      "Session Records",
+      "Refresh Rotation",
+      "Adapter Refresh Behavior",
+      "Logout And Revocation",
+      "JWKS And Signing Keys",
+      "Common Mistakes",
+      "Related Docs"
+    ],
+    "excerpt": "Seamless Auth uses signed browser cookies at the app boundary and bearer tokens at the auth API boundary.",
+    "urlPath": "/docs/reference/cookies-sessions-tokens"
   },
   {
     "slug": "reference/environment-variables",
@@ -336,22 +561,60 @@
       "environment variables",
       "configuration",
       "self-hosting",
-      "APP_ORIGIN",
+      "oauth",
+      "totp",
+      "jwks",
       "AUTH_SERVER_URL"
     ],
     "headings": [
-      "Auth API Core Environment",
-      "Roles And System Defaults",
+      "Auth API Server Runtime",
+      "System Config Bootstrap",
       "Database",
-      "Service-To-Service And Bootstrap Secrets",
-      "JWKS",
-      "WebAuthn And Browser Origins",
-      "Common Local URLs",
+      "Service And Security Secrets",
+      "WebAuthn",
+      "OAuth",
+      "Messaging",
+      "JWKS And Signing Keys",
       "Express Adapter Environment",
-      "Docs Rule"
+      "Frontend And Admin Runtime",
+      "Common Local URLs",
+      "Docs Rule",
+      "Related Docs"
     ],
-    "excerpt": "This page summarizes the most important environment variables currently visible in the Seamless Auth auth server and related local tooling.",
+    "excerpt": "This page summarizes the important environment variables currently visible in the Seamless Auth auth server, server adapter, local starters, and CLI-generated stack.",
     "urlPath": "/docs/reference/environment-variables"
+  },
+  {
+    "slug": "reference/system-config",
+    "title": "System Config Reference",
+    "section": "reference",
+    "tags": [
+      "system config",
+      "configuration",
+      "login methods",
+      "roles",
+      "oauth",
+      "lockout",
+      "webauthn",
+      "admin"
+    ],
+    "headings": [
+      "How System Config Is Loaded",
+      "Routes",
+      "Config Keys",
+      "Env Parsing Rules",
+      "Login Methods",
+      "Roles",
+      "OAuth Providers",
+      "Lockout Policy",
+      "WebAuthn Config",
+      "Runtime Cache",
+      "What Does Not Belong In System Config",
+      "Safe Update Pattern",
+      "Related Docs"
+    ],
+    "excerpt": "System config is the runtime configuration stored by seamless-auth-api in the systemconfig table.",
+    "urlPath": "/docs/reference/system-config"
   },
   {
     "slug": "start/adminUi",
@@ -364,7 +627,8 @@
       "operations",
       "security",
       "sessions",
-      "events"
+      "events",
+      "organizations"
     ],
     "headings": [
       "Explore the Admin Dashboard",
@@ -373,6 +637,7 @@
       "What You Can Do There",
       "Overview",
       "Users",
+      "Organizations",
       "Sessions",
       "Events",
       "Security",
@@ -498,7 +763,7 @@
       "quickstart",
       "getting started",
       "cli",
-      "create-seamless",
+      "seamless-cli",
       "docker",
       "local stack"
     ],
@@ -575,12 +840,16 @@
       "security",
       "anomalies",
       "metrics",
-      "login failed"
+      "login failed",
+      "oauth",
+      "totp",
+      "redaction"
     ],
     "headings": [
       "Mental Model",
       "What An Auth Event Is",
       "Important Event Fields",
+      "Redaction Rule",
       "Why Events Matter",
       "Security Use Cases",
       "How The Dashboard Uses Them",
@@ -600,13 +869,20 @@
       "users",
       "sessions",
       "credentials",
-      "events"
+      "events",
+      "organizations",
+      "oauth",
+      "totp"
     ],
     "headings": [
       "Mental Model",
       "Users",
       "Sessions",
       "Credentials",
+      "Organizations",
+      "Organization Memberships",
+      "OAuth Identities",
+      "TOTP Credentials",
       "Magic Link Tokens",
       "Auth Events",
       "System Config",
@@ -615,7 +891,7 @@
       "Why This Model Matters",
       "Next Step"
     ],
-    "excerpt": "Seamless Auth is built on a relational model that keeps users, sessions, passkeys, events, and configuration explicit and inspectable.",
+    "excerpt": "Seamless Auth is built on a relational model that keeps users, sessions, passkeys, organizations, events, and configuration explicit and inspectable.",
     "urlPath": "/docs/understand/data-model"
   },
   {
@@ -628,7 +904,9 @@
       "security",
       "revocation",
       "idle timeout",
-      "refresh token"
+      "refresh token",
+      "step-up",
+      "organizations"
     ],
     "headings": [
       "Mental Model",
@@ -637,10 +915,11 @@
       "Expiration Model",
       "Absolute expiration",
       "Idle expiration",
+      "Step-up Freshness",
+      "Organization Context",
       "Lifecycle",
       "How Sessions Are Created",
-      "Why Sessions Are First-Class",
-      "Revocation",
+      "Logout And Revocation",
       "Multi-Device Example",
       "Related Docs"
     ],
@@ -657,20 +936,24 @@
       "rbac",
       "authorization",
       "admin role",
+      "scoped roles",
+      "organizations",
       "default roles"
     ],
     "headings": [
       "Mental Model",
       "Important User Fields",
-      "Roles",
-      "System Role Configuration",
-      "Authorization Model",
+      "Global Roles",
+      "Scoped Admin Roles",
+      "Application Authorization",
+      "Organization Memberships",
       "Verification State",
+      "Credentials And MFA",
       "Revoked Users",
       "Admin Users",
       "Related Docs"
     ],
-    "excerpt": "Users represent identities in Seamless Auth and carry the role data your application uses for authorization.",
+    "excerpt": "Users represent identities in Seamless Auth and carry the global role data your application uses for authorization.",
     "urlPath": "/docs/understand/users"
   }
 ]

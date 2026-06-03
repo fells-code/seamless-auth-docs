@@ -31,7 +31,7 @@ Primary neighboring repos:
 
 When touching CLI docs, also inspect:
 
-- `../create-seamless`
+- `../seamless-cli`
 
 Do not preserve outdated claims just because they already exist in `/docs`.
 

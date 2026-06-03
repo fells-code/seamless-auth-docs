@@ -49,8 +49,8 @@ Inside the page, check the current user’s roles.
 Example pattern:
 
 ```tsx
-const { user, isAuthenticated } = useAuth()
-const hasAccess = user?.roles?.includes('team')
+const { isAuthenticated, hasScopedRole } = useAuth()
+const hasAccess = hasScopedRole('team')
 ```
 
 Use that to:
@@ -68,7 +68,7 @@ Your backend still needs its own authorization boundary.
 Typical shape in an Express app:
 
 ```ts
-app.post('/chat', requireRole('team'), (req, res) => {
+app.post('/chat', requireAuth({ cookieSecret }), requireRole('team'), (req, res) => {
   const { message } = req.body
 
   res.json({
@@ -148,6 +148,8 @@ The pattern is always the same:
 
 ## Related Docs
 
+- [How To Secure Routes](/docs/build/secure-routes)
+- [How To Build Your Own Auth UI](/docs/build/custom-auth-ui)
 - [React SDK](/docs/build/react-sdk)
 - [Server SDKs](/docs/build/server-sdks)
 - [Users & Roles](/docs/understand/users)

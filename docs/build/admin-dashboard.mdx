@@ -2,7 +2,16 @@ export const meta = {
   title: 'Admin Dashboard App',
   order: 5,
   section: 'build',
-  tags: ['admin', 'dashboard', 'operations', 'operator ui', 'runtime config', 'metrics'],
+  tags: [
+    'admin',
+    'dashboard',
+    'operations',
+    'operator ui',
+    'runtime config',
+    'metrics',
+    'organizations',
+    'step-up',
+  ],
 }
 
 # Admin Dashboard
@@ -20,7 +29,10 @@ auth server.
 Use the dashboard when you need a UI for:
 
 - browsing and managing users
-- inspecting sessions
+- editing global user roles
+- managing organizations and organization memberships
+- inspecting and revoking sessions
+- preparing an account for device replacement
 - reviewing auth events
 - investigating suspicious activity
 - checking dashboard metrics
@@ -37,17 +49,19 @@ The current dashboard app includes routes for:
 - overview
 - users
 - user detail
+- organizations
 - sessions
 - events
 - security
 - system configuration
 - profile
 
-That maps closely to the admin and internal route groups exposed by the auth API.
+That maps closely to the admin, internal, system-config, and session route groups exposed by the auth
+API.
 
 ---
 
-## How It Authenticates
+## Access Model
 
 The dashboard uses `@seamless-auth/react` and expects to talk to a backend/API layer that owns auth
 cookies.
@@ -61,7 +75,62 @@ Admin Dashboard
   -> admin-protected routes
 ```
 
-Only authenticated users with the `admin` role should be able to access the main operator screens.
+Dashboard access is based on scoped admin roles:
+
+| Role          | Dashboard meaning                       |
+| ------------- | --------------------------------------- |
+| `admin`       | Broad legacy admin access               |
+| `admin:read`  | Can read admin screens and data         |
+| `admin:write` | Can perform write actions and also read |
+
+Write actions are guarded separately from route access. Some sensitive writes require fresh step-up
+authentication.
+
+---
+
+## Operational Workflows
+
+### Users
+
+The users area supports user search, user detail review, role edits, session review, credential
+review, anomaly context, and user lifecycle actions.
+
+### Organizations
+
+The organizations area uses `/admin/organizations/*` routes to create organizations, edit names and
+slugs, list members, and manage membership roles and scopes.
+
+### Sessions
+
+The sessions area uses `/admin/sessions` and revocation routes to inspect active sessions across
+users and revoke stale or risky sessions.
+
+### Device replacement recovery
+
+The user detail page can call:
+
+```http
+POST /admin/users/:userId/recovery/device-replacement
+```
+
+That route requires `admin:write` access and fresh step-up authentication. It revokes sessions,
+removes passkeys, disables TOTP credentials, and returns counts only.
+
+### System configuration
+
+The system configuration area can update:
+
+- available and default roles
+- login methods
+- passkey fallback policy
+- OAuth provider configuration
+- token TTLs
+- rate limit and slowdown values
+- lockout policy
+- WebAuthn relying party and origin settings
+
+OAuth provider client secrets are referenced by env var name, not entered as raw secret values in
+the dashboard.
 
 ---
 
@@ -69,7 +138,8 @@ Only authenticated users with the `admin` role should be able to access the main
 
 The dashboard is built as static assets and is designed for runtime config injection.
 
-That matters because the same built image can be pointed at different environments without a rebuild.
+That matters because the same built image can be pointed at different environments without a
+rebuild.
 
 Current runtime model:
 
@@ -87,10 +157,9 @@ You can use the dashboard in a few ways:
 
 - run the official image
 - clone the source and customize it
-- include it from `create-seamless` during project setup
+- include it from `seamless-cli` during project setup
 
-The CLI already supports including the admin dashboard and lets you choose image mode or source
-mode.
+The CLI supports including the admin dashboard and lets you choose image mode or source mode.
 
 ---
 
@@ -101,9 +170,12 @@ The dashboard sits on top of the same auth system the rest of the ecosystem uses
 It depends on:
 
 - auth sessions being issued correctly
-- admin-only API access
-- internal metrics and anomaly endpoints
+- scoped admin access
+- admin and internal API routes
+- session revocation routes
+- organization routes
 - system configuration endpoints
+- step-up routes for sensitive writes
 
 It does not replace the auth server. It visualizes and operates it.
 
@@ -114,3 +186,5 @@ It does not replace the auth server. It visualizes and operates it.
 - [Admin UI](/docs/start/adminUi)
 - [Auth Events & Auditing](/docs/understand/authEvents)
 - [Sessions](/docs/understand/sessions)
+- [Auth API Routes](/docs/reference/auth-api-routes)
+- [System Config Reference](/docs/reference/system-config)

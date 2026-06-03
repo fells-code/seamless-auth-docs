@@ -2,15 +2,34 @@ export const meta = {
   title: 'Auth API Route Reference',
   order: 2,
   section: 'reference',
-  tags: ['api', 'routes', 'auth server', 'reference', 'otp', 'webauthn', 'magic links', 'sessions'],
+  tags: [
+    'api',
+    'routes',
+    'auth server',
+    'reference',
+    'otp',
+    'webauthn',
+    'magic links',
+    'oauth',
+    'totp',
+    'organizations',
+    'sessions',
+    'step-up',
+  ],
 }
 
 # Auth API Routes
 
-This page summarizes the current route groups exposed by `seamless-auth-api`.
+This page maps the current route groups exposed by `seamless-auth-api`.
 
-It is not a replacement for OpenAPI, but it gives you a reliable map of the auth server surface
-area as it exists in the codebase today.
+It is not a replacement for the generated OpenAPI document, but it gives you a reliable top-level
+map of the auth server surface as it exists in the source repo today.
+
+<Callout type="info">
+  The raw auth API uses bearer-token style contracts. Browser apps normally reach these routes
+  through a trusted backend adapter such as `@seamless-auth/express`, which is commonly mounted at
+  `/auth`.
+</Callout>
 
 ---
 
@@ -23,23 +42,32 @@ area as it exists in the codebase today.
 | OTP            | `/otp/*`                           | Email and phone OTP generation and verification      |
 | WebAuthn       | `/webauthn/*`                      | Passkey registration and login                       |
 | Magic Links    | `/magic-link*`                     | Magic link request, polling, verification            |
+| OAuth          | `/oauth/*`                         | External provider login start and callback           |
+| TOTP           | `/totp/*`                          | TOTP enrollment, login MFA, and step-up verification |
+| Step-up Auth   | `/step-up/*`                       | Fresh WebAuthn verification before sensitive actions |
 | Users          | `/users/*`                         | Authenticated user profile and credential operations |
+| Organizations  | `/organizations/*`                 | Self-service organization and membership operations  |
 | Sessions       | `/sessions*`                       | Session listing and revocation                       |
-| Admin          | `/admin/*`                         | Admin-only user, event, and session management       |
+| Admin          | `/admin/*`                         | Admin-only users, orgs, events, sessions, recovery   |
 | Internal       | `/internal/*`                      | Metrics, grouped events, login stats, anomalies      |
 | System Config  | `/system-config/*`                 | Available roles and runtime config                   |
 | Bootstrap      | `/internal/bootstrap/admin-invite` | First-admin bootstrap invite creation                |
 | JWKS           | `/.well-known/jwks.json`           | Public JWKS endpoint                                 |
+| Health         | `/health/*`                        | Status and version probes                            |
 
 ---
 
 ## Authentication
 
-| Method | Path       | Purpose                          |
-| ------ | ---------- | -------------------------------- |
-| `POST` | `/login`   | Start login using email or phone |
-| `GET`  | `/logout`  | Logout current user              |
-| `POST` | `/refresh` | Refresh access state             |
+| Method   | Path          | Purpose                                                |
+| -------- | ------------- | ------------------------------------------------------ |
+| `POST`   | `/login`      | Start login using email or phone                       |
+| `GET`    | `/logout`     | Deprecated compatibility route for all-session logout  |
+| `DELETE` | `/logout`     | Logout the current session                             |
+| `DELETE` | `/logout/all` | Logout every session owned by the current user         |
+| `POST`   | `/refresh`    | Refresh access state using a valid refresh token state |
+
+`POST /refresh` is the supported refresh method. The route explicitly rejects other HTTP methods.
 
 ---
 
@@ -77,6 +105,10 @@ These routes use ephemeral auth state during in-progress auth flows.
 | `POST` | `/webauthn/login/start`     | Start passkey login         |
 | `POST` | `/webauthn/login/finish`    | Finish passkey login        |
 
+Registration start accepts `requestPrf=true` or `requirePrf=true` query flags. Assertion start can
+accept an optional PRF request body. The auth server verifies the passkey assertion but does not
+store or return PRF output.
+
 ---
 
 ## Magic Links
@@ -89,6 +121,47 @@ These routes use ephemeral auth state during in-progress auth flows.
 
 ---
 
+## OAuth
+
+| Method | Path                          | Purpose                             |
+| ------ | ----------------------------- | ----------------------------------- |
+| `GET`  | `/oauth/providers`            | List enabled OAuth providers        |
+| `POST` | `/oauth/:providerId/start`    | Start provider authorization        |
+| `POST` | `/oauth/:providerId/callback` | Finish provider login and link user |
+
+OAuth provider secrets live in environment variables referenced by system config. Provider access
+tokens are used only during callback handling and are not returned to browser clients.
+
+---
+
+## TOTP
+
+| Method | Path                  | Purpose                                       |
+| ------ | --------------------- | --------------------------------------------- |
+| `GET`  | `/totp/status`        | Get TOTP status for the current user          |
+| `POST` | `/totp/enroll/start`  | Start TOTP enrollment                         |
+| `POST` | `/totp/enroll/verify` | Verify and enable TOTP enrollment             |
+| `POST` | `/totp/disable`       | Disable TOTP for the current user             |
+| `POST` | `/totp/verify-login`  | Verify TOTP during login                      |
+| `POST` | `/totp/verify-mfa`    | Verify TOTP for MFA or step-up authentication |
+
+TOTP verification requests use a six-digit `code` field.
+
+---
+
+## Step-up Authentication
+
+| Method | Path                       | Purpose                                       |
+| ------ | -------------------------- | --------------------------------------------- |
+| `GET`  | `/step-up/status`          | Return current session step-up freshness      |
+| `POST` | `/step-up/webauthn/start`  | Start passkey step-up verification            |
+| `POST` | `/step-up/webauthn/finish` | Finish passkey step-up and mark session fresh |
+
+These routes require an authenticated access session. TOTP step-up completion is exposed through
+`POST /totp/verify-mfa`.
+
+---
+
 ## Users
 
 | Method   | Path                 | Purpose                                   |
@@ -97,6 +170,24 @@ These routes use ephemeral auth state during in-progress auth flows.
 | `POST`   | `/users/credentials` | Update credential metadata                |
 | `DELETE` | `/users/credentials` | Delete a credential                       |
 | `DELETE` | `/users/delete`      | Delete the authenticated user             |
+
+---
+
+## Organizations
+
+| Method   | Path                                             | Purpose                             |
+| -------- | ------------------------------------------------ | ----------------------------------- |
+| `GET`    | `/organizations`                                 | List organizations for current user |
+| `POST`   | `/organizations`                                 | Create organization                 |
+| `GET`    | `/organizations/:organizationId`                 | Get organization                    |
+| `PATCH`  | `/organizations/:organizationId`                 | Update organization                 |
+| `POST`   | `/organizations/:organizationId/switch`          | Switch active organization          |
+| `GET`    | `/organizations/:organizationId/members`         | List organization members           |
+| `POST`   | `/organizations/:organizationId/members`         | Add organization member             |
+| `PATCH`  | `/organizations/:organizationId/members/:userId` | Update organization member roles    |
+| `DELETE` | `/organizations/:organizationId/members/:userId` | Remove organization member          |
+
+Organization member inputs accept either `userId` or `email` plus optional `roles` and `scopes`.
 
 ---
 
@@ -112,21 +203,35 @@ These routes use ephemeral auth state during in-progress auth flows.
 
 ## Admin
 
-| Method   | Path                                 | Purpose                          |
-| -------- | ------------------------------------ | -------------------------------- |
-| `GET`    | `/admin/users`                       | List users                       |
-| `POST`   | `/admin/users`                       | Create user                      |
-| `DELETE` | `/admin/users`                       | Delete user                      |
-| `GET`    | `/admin/users/:userId`               | Get user detail                  |
-| `PATCH`  | `/admin/users/:userId`               | Update user                      |
-| `GET`    | `/admin/users/:userId/anomalies`     | Get anomalies for a user         |
-| `GET`    | `/admin/auth-events`                 | Query auth events                |
-| `GET`    | `/admin/credential-count`            | Get credential counts            |
-| `GET`    | `/admin/sessions`                    | List all sessions                |
-| `GET`    | `/admin/sessions/:userId`            | List sessions for one user       |
-| `DELETE` | `/admin/sessions/:userId/revoke-all` | Revoke all sessions for one user |
+All admin routes require authenticated admin access. Read routes accept `admin`, `admin:read`, or
+`admin:write`; write routes accept `admin` or `admin:write`.
 
-All admin routes require authenticated admin access.
+| Method   | Path                                                   | Purpose                             |
+| -------- | ------------------------------------------------------ | ----------------------------------- |
+| `GET`    | `/admin/users`                                         | List users                          |
+| `POST`   | `/admin/users`                                         | Create user                         |
+| `DELETE` | `/admin/users`                                         | Delete user                         |
+| `GET`    | `/admin/users/:userId`                                 | Get user detail                     |
+| `PATCH`  | `/admin/users/:userId`                                 | Update user                         |
+| `GET`    | `/admin/users/:userId/anomalies`                       | Get anomalies for a user            |
+| `POST`   | `/admin/users/:userId/recovery/device-replacement`     | Prepare user for device replacement |
+| `GET`    | `/admin/auth-events`                                   | Query auth events                   |
+| `GET`    | `/admin/credential-count`                              | Get credential counts               |
+| `GET`    | `/admin/sessions`                                      | List all sessions                   |
+| `GET`    | `/admin/sessions/:userId`                              | List sessions for one user          |
+| `DELETE` | `/admin/sessions/by-id/:id`                            | Revoke one session by session ID    |
+| `DELETE` | `/admin/sessions/:userId/revoke-all`                   | Revoke all sessions for one user    |
+| `GET`    | `/admin/organizations`                                 | List organizations                  |
+| `POST`   | `/admin/organizations`                                 | Create organization                 |
+| `GET`    | `/admin/organizations/:organizationId`                 | Get organization                    |
+| `PATCH`  | `/admin/organizations/:organizationId`                 | Update organization                 |
+| `GET`    | `/admin/organizations/:organizationId/members`         | List organization members           |
+| `POST`   | `/admin/organizations/:organizationId/members`         | Add organization member             |
+| `PATCH`  | `/admin/organizations/:organizationId/members/:userId` | Update organization member          |
+| `DELETE` | `/admin/organizations/:organizationId/members/:userId` | Remove organization member          |
+
+The device-replacement recovery route requires fresh step-up authentication and returns counts for
+revoked sessions, removed passkeys, and disabled TOTP credentials.
 
 ---
 
@@ -153,6 +258,11 @@ These endpoints are especially important for the admin dashboard.
 | `GET`   | `/system-config/admin` | Read current system configuration |
 | `PATCH` | `/system-config/admin` | Update system configuration       |
 
+System config includes roles, token TTLs, login methods, OAuth providers, lockout policy, passkey
+fallback policy, WebAuthn relying party ID, and allowed origins.
+
+For field-level behavior, see [System Config Reference](/docs/reference/system-config).
+
 ---
 
 ## Bootstrap
@@ -170,3 +280,15 @@ This is an internal bootstrap route used by the CLI and guarded by the bootstrap
 | Method | Path                     | Purpose                              |
 | ------ | ------------------------ | ------------------------------------ |
 | `GET`  | `/.well-known/jwks.json` | Publish public keys for verification |
+
+For token and JWKS details, see
+[Cookie, Session, And Token Reference](/docs/reference/cookies-sessions-tokens).
+
+---
+
+## Health
+
+| Method | Path              | Purpose                 |
+| ------ | ----------------- | ----------------------- |
+| `GET`  | `/health/status`  | Health check endpoint   |
+| `GET`  | `/health/version` | API version information |

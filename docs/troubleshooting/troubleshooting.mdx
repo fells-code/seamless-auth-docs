@@ -102,15 +102,17 @@ If the local stack itself is the issue, also review [Docker & Local Environment]
 
 ### Common causes
 
-- the user does not actually have the `admin` role
+- the user does not actually have `admin`, `admin:read`, or `admin:write`
 - the session was created before the role change
 - you are signed in as the wrong user
+- a sensitive write action needs a fresh step-up verification
 
 ### What to do
 
 - verify the role on the user
 - sign out and sign back in after the change
 - confirm you are opening the dashboard on `http://localhost:5174`
+- complete step-up verification before retrying guarded write actions
 
 ---
 
@@ -134,6 +136,14 @@ Relevant route groups:
 - `/otp/*`
 - `/magic-link*`
 - `/webauthn/*`
+- `/oauth/*`
+- `/totp/*`
+- `/step-up/*`
+
+If the failure involves an active organization or membership, also inspect:
+
+- `/organizations/*`
+- `/admin/organizations/*`
 
 See [Auth API Routes](/docs/reference/auth-api-routes).
 
@@ -156,6 +166,7 @@ See [Auth API Routes](/docs/reference/auth-api-routes).
 - is auth middleware installed?
 - is the cookie present?
 - does the user have the required role?
+- are you using an exact role check when a scoped role check is intended?
 - did the user sign in again after the role was changed?
 
 ---

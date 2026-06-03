@@ -42,7 +42,7 @@ export default function DocsLayout() {
 
         <div className="meta-section">
           <div className="meta-title">Ecosystem</div>
-          <a href="https://github.com/fells-code/create-seamless" target="_blank" rel="noreferrer">
+          <a href="https://github.com/fells-code/seamless-cli" target="_blank" rel="noreferrer">
             CLI
           </a>
           <a
