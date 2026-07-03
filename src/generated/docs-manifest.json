@@ -178,7 +178,8 @@
       "commands",
       "init",
       "check",
-      "bootstrap-admin"
+      "bootstrap-admin",
+      "verify"
     ]
   },
   {
@@ -255,7 +256,9 @@
       "reference",
       "init",
       "check",
-      "bootstrap-admin"
+      "bootstrap-admin",
+      "verify",
+      "conformance"
     ]
   },
   {

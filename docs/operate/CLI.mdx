@@ -11,14 +11,15 @@ export const meta = {
     'init',
     'check',
     'bootstrap-admin',
+    'verify',
   ],
 }
 
 # Seamless Auth CLI
 
 The Seamless Auth CLI is published as `seamless-cli` and exposes the `seamless` binary. It is the
-entry point for scaffolding a local Seamless Auth project, checking the generated stack, and
-creating the first admin bootstrap invite.
+entry point for scaffolding a local Seamless Auth project, checking the generated stack, creating
+the first admin bootstrap invite, and verifying auth conformance across the ecosystem.
 
 Current commands cover:
 
@@ -27,6 +28,7 @@ Current commands cover:
 - optionally include the admin dashboard
 - validate generated config, Docker Compose, containers, and local health endpoints
 - bootstrap the first admin user
+- verify the full auth surface with the `seamless verify` conformance harness
 
 The current `../seamless-cli` source does not ship `deploy`, `destroy`, or `contribute` commands.
 
@@ -112,6 +114,21 @@ Creates a bootstrap admin invite for the first admin user.
 
 The CLI resolves the bootstrap secret from local project files before prompting manually. It sends
 the request through the backend adapter at `/auth/internal/bootstrap/admin-invite`.
+
+---
+
+### verify
+
+```bash
+seamless verify
+seamless verify --local
+```
+
+Runs the cross-package auth conformance harness: it stands up the ecosystem with Docker Compose and
+runs a Playwright matrix across the api, adapter, and React (browser) layers, then prints a flow x
+layer pass/fail grid. Use `--local` to build the `@seamless-auth/*` packages from local source
+(pre-publish contract testing); the default tests the published packages. See the
+[CLI command reference](/docs/reference/cli-commands) for all flags and environment overrides.
 
 ---
 

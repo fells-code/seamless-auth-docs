@@ -11,6 +11,8 @@ export const meta = {
     'init',
     'check',
     'bootstrap-admin',
+    'verify',
+    'conformance',
   ],
 }
 
@@ -29,6 +31,7 @@ The npm package is named `seamless-cli`. The executable binary is named `seamles
 | `seamless init [project-name]`     | Scaffold a new local Seamless Auth project                                                 |
 | `seamless check`                   | Validate generated project config, Docker, Compose, containers, and local health endpoints |
 | `seamless bootstrap-admin [email]` | Create the first admin bootstrap invite                                                    |
+| `seamless verify [flags]`          | Run the cross-package auth conformance harness (api / adapter / react matrix)               |
 | `seamless --help`                  | Print usage                                                                                |
 | `seamless --version`               | Print the installed CLI version                                                            |
 
@@ -151,6 +154,47 @@ After the invite is created:
 - the resulting account receives admin access
 
 This is for the initial admin bootstrap flow, not general role management.
+
+---
+
+## `verify`
+
+```bash
+seamless verify
+```
+
+Runs a cross-package auth conformance harness. It stands up the ecosystem with Docker Compose
+(Postgres, the auth API, the `@seamless-auth/express` adapter, and the React starter), then runs a
+Playwright matrix across three layers and prints a flow x layer pass/fail grid alongside JUnit and
+HTML reports.
+
+- **api** verifies the auth API directly (Bearer / JSON).
+- **adapter** verifies the `@seamless-auth/express` cookie path.
+- **react** drives the React starter in a real browser (Chromium), including passkeys via a virtual
+  authenticator and OAuth via an in-process mock OIDC provider.
+
+Covered flows include register, email and phone OTP, magic-link, passkey register and login, OAuth,
+TOTP, step-up, refresh, sessions, logout, organizations, admin bootstrap, and JWKS.
+
+### Modes and flags
+
+```bash
+seamless verify              # test the published @seamless-auth/* packages
+seamless verify --local      # build the SDKs from local source (pre-publish contract test)
+```
+
+| Flag              | Effect                                                             |
+| ----------------- | ----------------------------------------------------------------- |
+| `--local`         | Build `@seamless-auth/*` from local source instead of published   |
+| `--api-only`      | Run only the api project (skip adapter and react)                 |
+| `--no-react`      | Skip the browser layer                                            |
+| `--filter <grep>` | Run only tests matching the grep                                  |
+| `--keep-up`       | Leave the Docker stack running after the run                      |
+
+Requires Docker. The sibling repos are resolved relative to the CLI checkout and can be overridden
+with `SEAMLESS_API_DIR`, `SEAMLESS_SERVER_DIR`, `SEAMLESS_REACT_SDK_DIR` (the React SDK), and
+`SEAMLESS_REACT_DIR` (the starter app). A reusable GitHub workflow runs `seamless verify --local` on
+ecosystem PRs so a change in one repo is tested against the others.
 
 ---
 

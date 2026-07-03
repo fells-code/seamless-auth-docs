@@ -311,9 +311,12 @@ function OAuthButtons() {
   }, [listOAuthProviders])
 
   async function start(providerId: string) {
+    // Stash the provider so the callback route can finish the right flow.
+    sessionStorage.setItem('seamless:oauth:provider', providerId)
+
     const result = await startOAuthLogin({
       providerId,
-      redirectUri: `${window.location.origin}/auth/oauth/callback/${providerId}`,
+      redirectUri: `${window.location.origin}/oauth/callback`,
       returnTo: window.location.href,
     })
 
