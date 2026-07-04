@@ -124,8 +124,14 @@ OAuth start/callback helpers, passkey login, and step-up verification.
 - `/verifyPhoneOTP`
 - `/verifyEmailOTP`
 - `/verify-magiclink`
+- `/oauth/callback`
 - `/registerPasskey`
 - `/magiclinks-sent`
+
+The sign-in view registers with just an email (a phone is optional): submit an email, verify the
+emailed code, and you are signed in. It also renders a button for each configured OAuth provider and
+completes the flow at the built-in `/oauth/callback` route, so OAuth needs no extra UI wiring when
+you use `AuthRoutes`.
 
 The built-in routes are optional wrappers over the same primitives exposed by `useAuth()` and the
 headless client. Your app still owns route protection and redirects.

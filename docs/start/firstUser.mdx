@@ -51,26 +51,27 @@ You should see the starter UI.
 In the starter form:
 
 - enter an email address
-- enter a phone number
+- optionally enter a phone number
 - submit the flow
 
-In the default local experience, the system detects that the user does not already exist and moves
-into the registration path.
+Registration starts with just an email. The system detects that the user does not already exist and
+moves into email verification. (A phone number is optional and can be added and verified later.)
 
 ---
 
 ## Step 3: Complete Verification
 
-In local development:
+Registration sends a one-time code to the email address. In local development:
 
-- OTP values may be visible in logs or dev-oriented messaging flows
-- after verification, passkey registration is prompted
+- OTP values are returned in the dev delivery payload (visible in logs or dev-oriented messaging)
+- enter the code to verify the email
+- on a device that supports passkeys, you are then prompted to register one
 
-Once verification succeeds:
+Once the email code is verified:
 
 - a user record is created
-- passkey registration completes
-- a session is issued
+- a session is issued and you are signed in
+- passkey registration completes if you enroll one
 
 <Image
   src="/passkeyReg.png"

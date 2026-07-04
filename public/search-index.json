@@ -328,7 +328,8 @@
       "commands",
       "init",
       "check",
-      "bootstrap-admin"
+      "bootstrap-admin",
+      "verify"
     ],
     "headings": [
       "Mental Model",
@@ -337,6 +338,7 @@
       "init",
       "check",
       "bootstrap-admin",
+      "verify",
       "CLI Behavior",
       "What Happens During init",
       "Generated Files",
@@ -344,7 +346,7 @@
       "Current Boundaries",
       "Next Step"
     ],
-    "excerpt": "The Seamless Auth CLI is published as seamless-cli and exposes the seamless binary. It is the entry point for scaffolding a local Seamless Auth project, checking the generated stack, and creating the first admin bootstra",
+    "excerpt": "The Seamless Auth CLI is published as seamless-cli and exposes the seamless binary. It is the entry point for scaffolding a local Seamless Auth project, checking the generated stack, creating the first admin bootstrap in",
     "urlPath": "/docs/operate/CLI"
   },
   {
@@ -500,7 +502,9 @@
       "reference",
       "init",
       "check",
-      "bootstrap-admin"
+      "bootstrap-admin",
+      "verify",
+      "conformance"
     ],
     "headings": [
       "Command Summary",
@@ -513,6 +517,8 @@
       "How it resolves the secret",
       "API target",
       "What happens next",
+      "`verify`",
+      "Modes and flags",
       "Removed Or Not Currently Shipped",
       "Help And Version"
     ],

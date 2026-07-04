@@ -16,6 +16,13 @@ OAuth login is available through:
 - `@seamless-auth/express` adapter routes under `/auth/oauth/*`
 - `@seamless-auth/react` helpers on `useAuth()`
 
+<Callout type="info">
+  As of `@seamless-auth/react` 0.3.0, `AuthRoutes` renders OAuth provider buttons on the sign-in
+  view and includes the `/oauth/callback` route out of the box. If you use `AuthRoutes`, you only
+  need Step 1 (enable OAuth and configure providers). The custom UI steps that follow are for when
+  you build your own screens with the headless helpers.
+</Callout>
+
 ---
 
 ## How The Flow Works
@@ -46,7 +53,7 @@ LOGIN_METHODS=passkey,magic_link,email_otp,phone_otp,oauth
 Configure providers with `OAUTH_PROVIDERS`. This value is a JSON array.
 
 ```env
-OAUTH_PROVIDERS=[{"id":"google","name":"Google","enabled":true,"clientId":"google-client-id.apps.googleusercontent.com","clientSecretEnv":"GOOGLE_CLIENT_SECRET","authorizationUrl":"https://accounts.google.com/o/oauth2/v2/auth","tokenUrl":"https://oauth2.googleapis.com/token","userInfoUrl":"https://openidconnect.googleapis.com/v1/userinfo","scopes":["openid","email","profile"],"redirectUris":["http://localhost:5173/auth/oauth/callback/google"],"subjectJsonPath":"sub","emailJsonPath":"email","emailVerifiedJsonPath":"email_verified","nameJsonPath":"name","allowSignup":true,"accountLinking":"email","requireEmailVerified":true}]
+OAUTH_PROVIDERS=[{"id":"google","name":"Google","enabled":true,"clientId":"google-client-id.apps.googleusercontent.com","clientSecretEnv":"GOOGLE_CLIENT_SECRET","authorizationUrl":"https://accounts.google.com/o/oauth2/v2/auth","tokenUrl":"https://oauth2.googleapis.com/token","userInfoUrl":"https://openidconnect.googleapis.com/v1/userinfo","scopes":["openid","email","profile"],"redirectUris":["http://localhost:5173/oauth/callback"],"subjectJsonPath":"sub","emailJsonPath":"email","emailVerifiedJsonPath":"email_verified","nameJsonPath":"name","allowSignup":true,"accountLinking":"email","requireEmailVerified":true}]
 GOOGLE_CLIENT_SECRET=replace-with-provider-secret
 OAUTH_STATE_SECRET=replace-with-long-random-secret
 ```
@@ -87,13 +94,14 @@ If `redirectUris` or `redirectUri` is set, the requested redirect URI must exact
 those values. If no provider redirect allowlist is set, the auth API falls back to the configured
 Seamless Auth origins.
 
-For local React development, a practical callback route is:
+For local React development, the built-in callback route is:
 
 ```txt
-http://localhost:5173/auth/oauth/callback/google
+http://localhost:5173/oauth/callback
 ```
 
-That URI must also be registered with the external OAuth provider.
+That URI must also be registered with the external OAuth provider, and must appear in the provider's
+`redirectUris` allowlist above.
 
 ---
 
@@ -114,9 +122,12 @@ export function OAuthButtons() {
   }, [listOAuthProviders])
 
   async function start(provider: OAuthProvider) {
+    // Remember which provider so the callback can finish the right flow.
+    sessionStorage.setItem('seamless:oauth:provider', provider.id)
+
     const result = await startOAuthLogin({
       providerId: provider.id,
-      redirectUri: `${window.location.origin}/auth/oauth/callback/${provider.id}`,
+      redirectUri: `${window.location.origin}/oauth/callback`,
       returnTo: `${window.location.origin}/dashboard`,
     })
 
@@ -142,21 +153,21 @@ configured origins.
 
 ## Step 4: Finish The Callback
 
-Create a React route such as:
+Create a React route that matches the `redirectUri` you sent in Step 3:
 
 ```tsx
-<Route path="/auth/oauth/callback/:providerId" element={<OAuthCallback />} />
+<Route path="/oauth/callback" element={<OAuthCallback />} />
 ```
 
-Then finish the login from the callback page.
+Then finish the login from the callback page. The provider id was stashed in `sessionStorage`
+during Step 3, and the `code` and `state` come back on the URL.
 
 ```tsx
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@seamless-auth/react'
 
 export function OAuthCallback() {
-  const { providerId } = useParams()
   const { finishOAuthLogin } = useAuth()
   const navigate = useNavigate()
   const [error, setError] = useState<string | null>(null)
@@ -166,6 +177,7 @@ export function OAuthCallback() {
       const params = new URLSearchParams(window.location.search)
       const code = params.get('code')
       const state = params.get('state')
+      const providerId = sessionStorage.getItem('seamless:oauth:provider')
 
       if (!providerId || !code || !state) {
         setError('OAuth callback is missing required values.')
@@ -174,6 +186,7 @@ export function OAuthCallback() {
 
       try {
         await finishOAuthLogin({ providerId, code, state })
+        sessionStorage.removeItem('seamless:oauth:provider')
         navigate('/dashboard', { replace: true })
       } catch {
         setError('OAuth login failed.')
@@ -181,7 +194,7 @@ export function OAuthCallback() {
     }
 
     void finish()
-  }, [finishOAuthLogin, navigate, providerId])
+  }, [finishOAuthLogin, navigate])
 
   if (error) return <p>{error}</p>
 
