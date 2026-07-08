@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
   "scripts": {
     "dev": "node scripts/generate-sitemap.mjs && vite",
     "build": "node scripts/generate-sitemap.mjs && vite build",
