@@ -1,0 +1,231 @@
+---
+title: "Environment Variable Reference"
+description: "This page summarizes the important environment variables currently visible in the Seamless Auth auth server, server adapter, local starters, and…"
+sidebar:
+  order: 3
+---
+
+# Environment Variables
+
+This page summarizes the important environment variables currently visible in the Seamless Auth
+auth server, server adapter, local starters, and CLI-generated stack.
+
+The values here are meant to explain ownership boundaries. For exact defaults, always check the
+source repo `.env.example` or generated project files.
+
+---
+
+## Auth API Server Runtime
+
+These values belong to `seamless-auth-api`.
+
+| Variable      | Purpose                                      |
+| ------------- | -------------------------------------------- |
+| `NODE_ENV`    | Runtime environment                          |
+| `HOST`        | Bind host for the auth server                |
+| `PORT`        | Bind port for the auth server                |
+| `APP_NAME`    | Human-readable application name              |
+| `APP_ID`      | Application identifier                       |
+| `APP_ORIGINS` | CORS origins allowed to call the auth server |
+| `ISSUER`      | Token issuer value                           |
+
+`APP_ORIGINS` and WebAuthn `ORIGINS` are related but not identical. `APP_ORIGINS` controls CORS for
+the auth API; `ORIGINS` controls WebAuthn browser origins in system config.
+
+---
+
+## System Config Bootstrap
+
+These values seed the `system_config` table when missing.
+
+| Variable                         | Purpose                                                                           |
+| -------------------------------- | --------------------------------------------------------------------------------- |
+| `DEFAULT_ROLES`                  | Roles assigned to newly created users                                             |
+| `AVAILABLE_ROLES`                | Roles allowed in the system                                                       |
+| `LOGIN_METHODS`                  | Enabled login methods: `passkey`, `magic_link`, `email_otp`, `phone_otp`, `oauth` |
+| `PASSKEY_LOGIN_FALLBACK_ENABLED` | Whether fallback methods can appear alongside passkey login                       |
+| `OAUTH_PROVIDERS`                | JSON array of OAuth provider configs                                              |
+| `LOCKOUT_POLICY`                 | JSON login lockout policy                                                         |
+| `ACCESS_TOKEN_TTL`               | Access token lifetime, such as `30m`                                              |
+| `REFRESH_TOKEN_TTL`              | Refresh token lifetime, such as `1h`                                              |
+| `RATE_LIMIT`                     | Base request rate limit                                                           |
+| `DELAY_AFTER`                    | Slowdown threshold                                                                |
+| `RPID`                           | WebAuthn relying party ID                                                         |
+| `ORIGINS`                        | Comma-separated WebAuthn browser origins                                          |
+| `APP_NAME`                       | Application name shown in auth experiences                                        |
+
+`OAUTH_PROVIDERS` stores provider metadata, not provider client secrets. Each provider references a
+secret env var through `clientSecretEnv`.
+
+---
+
+## Database
+
+The auth API can use a single `DATABASE_URL` or individual Postgres fields.
+
+| Variable       | Purpose                                     |
+| -------------- | ------------------------------------------- |
+| `DATABASE_URL` | Full Postgres connection URL                |
+| `DB_HOST`      | Database host                               |
+| `DB_PORT`      | Database port                               |
+| `DB_NAME`      | Database name                               |
+| `DB_USER`      | Database user                               |
+| `DB_PASSWORD`  | Database password                           |
+| `DB_LOGGING`   | Enables SQL logging from app and migrations |
+
+Prefer `DATABASE_URL` in containers and hosted environments if your infrastructure already provides
+one.
+
+---
+
+## Service And Security Secrets
+
+| Variable                      | Purpose                                               |
+| ----------------------------- | ----------------------------------------------------- |
+| `API_SERVICE_TOKEN`           | Shared service token for trusted server-to-auth calls |
+| `REFRESH_TOKEN_LOOKUP_SECRET` | Secret for indexed refresh-token lookup fingerprints  |
+| `TOTP_SECRET_ENCRYPTION_KEY`  | Encryption key for TOTP secrets at rest               |
+| `OAUTH_STATE_SECRET`          | Signing secret for OAuth state                        |
+| `SEAMLESS_BOOTSTRAP_ENABLED`  | Enables the first-admin bootstrap flow                |
+| `SEAMLESS_BOOTSTRAP_SECRET`   | Secret used to authorize bootstrap invite creation    |
+
+Production should define stable dedicated values for `REFRESH_TOKEN_LOOKUP_SECRET`,
+`TOTP_SECRET_ENCRYPTION_KEY`, and `OAUTH_STATE_SECRET`. Development fallbacks exist, but they are not
+a production secret-rotation strategy.
+
+---
+
+## WebAuthn
+
+| Variable  | Purpose                            |
+| --------- | ---------------------------------- |
+| `RPID`    | Relying party ID used for passkeys |
+| `ORIGINS` | Allowed browser origins            |
+
+These are especially important for local development. Mismatched hostnames or ports can break
+passkey flows even when the rest of the stack looks healthy.
+
+---
+
+## OAuth
+
+| Variable             | Purpose                                         |
+| -------------------- | ----------------------------------------------- |
+| `LOGIN_METHODS`      | Must include `oauth` to offer OAuth login       |
+| `OAUTH_PROVIDERS`    | JSON provider config array                      |
+| `OAUTH_STATE_SECRET` | OAuth state signing secret                      |
+| Provider secret vars | Values referenced by provider `clientSecretEnv` |
+
+Example provider configs reference secrets by name:
+
+```json
+{
+  "id": "google",
+  "clientSecretEnv": "GOOGLE_CLIENT_SECRET"
+}
+```
+
+`GOOGLE_CLIENT_SECRET` belongs in the deployed environment or secret manager, not in
+`OAUTH_PROVIDERS` or `system_config`.
+
+---
+
+## Messaging
+
+The auth API can send OTPs, magic links, and bootstrap invites directly when delivery is enabled.
+
+| Variable                       | Purpose                                           |
+| ------------------------------ | ------------------------------------------------- |
+| `MESSAGING_ENABLE_IN_DEV`      | Enables direct delivery in development            |
+| `MESSAGING_AWS_REGION`         | AWS region for AWS-backed messaging               |
+| `MESSAGING_EMAIL_FROM`         | Sender address for email delivery                 |
+| `MESSAGING_SMS_PROVIDER`       | SMS provider selection, such as `aws` or `twilio` |
+| `MESSAGING_SMS_FROM`           | Sender number for SMS                             |
+| `MESSAGING_TWILIO_ACCOUNT_SID` | Twilio account SID                                |
+| `MESSAGING_TWILIO_AUTH_TOKEN`  | Twilio auth token                                 |
+
+When `@seamless-auth/express` owns delivery, the auth server can return external-delivery payloads
+to that trusted adapter instead of delivering messages itself.
+
+---
+
+## JWKS And Signing Keys
+
+Production access-token signing uses configured JWKS material.
+
+| Variable                          | Purpose                           |
+| --------------------------------- | --------------------------------- |
+| `SEAMLESS_JWKS_ACTIVE_KID`        | Active signing key ID             |
+| `SEAMLESS_JWKS_KEY_<kid>_PRIVATE` | Private key for the active key ID |
+| `JWKS_PUBLIC_KEYS`                | Public JWKS key material          |
+
+Keep retired public keys available until all tokens signed with them have expired.
+
+---
+
+## Express Adapter Environment
+
+The Express starter and `@seamless-auth/express` need their own backend environment.
+
+| Variable             | Purpose                                             |
+| -------------------- | --------------------------------------------------- |
+| `AUTH_SERVER_URL`    | Base URL for the private Seamless Auth API          |
+| `COOKIE_SIGNING_KEY` | Secret for signed application auth cookies          |
+| `API_SERVICE_TOKEN`  | Shared service token for API-to-auth communication  |
+| `APP_ORIGIN`         | Issuer/origin value for the application API         |
+| `JWKS_KID`           | Key ID used by the adapter for cookie verification  |
+| `UI_ORIGINS`         | Browser origins allowed by the Express starter CORS |
+
+The adapter is the browser-facing cookie boundary. Do not put browser cookie custody directly on
+the raw auth API.
+
+---
+
+## Frontend And Admin Runtime
+
+The React starter and admin dashboard need the URL for the backend API where the auth adapter is
+mounted.
+
+| Variable       | Used by                 | Purpose                       |
+| -------------- | ----------------------- | ----------------------------- |
+| `VITE_API_URL` | Vite frontend and admin | Backend API base URL          |
+| `/config.js`   | Admin dashboard image   | Runtime config injection path |
+
+The admin dashboard reads runtime config first, then falls back to Vite env values for local
+development.
+
+---
+
+## Common Local URLs
+
+In the generated local stack, these values often line up like this:
+
+| Service         | Common local URL        |
+| --------------- | ----------------------- |
+| Auth API        | `http://localhost:5312` |
+| Backend API     | `http://localhost:3000` |
+| Web app         | `http://localhost:5173` |
+| Admin dashboard | `http://localhost:5174` |
+
+Inside Docker, service-to-service URLs use service names. For example, the API should call the auth
+server at `http://auth:5312`, not `http://localhost:5312`.
+
+---
+
+## Docs Rule
+
+When documenting environment variables:
+
+- prefer `.env.example`, source config maps, or generated project files over older prose
+- label whether a variable belongs to the auth server, backend adapter, frontend, admin app, or CLI
+- keep raw secrets out of system config examples
+- distinguish required production secrets from development fallbacks
+
+---
+
+## Related Docs
+
+- [System Config Reference](/reference/system-config)
+- [Cookie, Session, And Token Reference](/reference/cookies-sessions-tokens)
+- [Auth API Routes](/reference/auth-api-routes)
+- [Server SDKs](/build/server-sdks)

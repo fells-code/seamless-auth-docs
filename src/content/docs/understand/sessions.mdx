@@ -1,0 +1,189 @@
+---
+title: "Session Model"
+description: "Sessions are one of the core security primitives in Seamless Auth."
+sidebar:
+  order: 2
+---
+
+# Sessions
+
+Sessions are one of the core security primitives in Seamless Auth.
+
+Unlike purely stateless browser tokens, Seamless Auth sessions are explicit records with lifecycle,
+device context, active organization context, step-up freshness, and revocation state.
+
+---
+
+## Mental Model
+
+```txt
+User verifies identity
+  -> auth API creates session record
+  -> trusted adapter owns browser cookies
+  -> app routes validate and authorize requests
+```
+
+---
+
+## What A Session Represents
+
+A session represents a logged-in browser, device, or server-side auth context.
+
+Each session:
+
+- belongs to one user
+- may carry one active organization ID
+- has absolute and idle expiration
+- can carry fresh step-up state
+- stores request/device context
+- can be revoked independently
+
+---
+
+## Important Session Fields
+
+| Field                 | Description                                           |
+| --------------------- | ----------------------------------------------------- |
+| `id`                  | Unique session ID                                     |
+| `userId`              | Owning user                                           |
+| `infraId`             | Optional infra/session context identifier             |
+| `organizationId`      | Active organization context, when selected            |
+| `mode`                | Current auth API value is `server`                    |
+| `refreshTokenHash`    | Stored refresh token hash                             |
+| `refreshTokenLookup`  | Lookup fingerprint for efficient refresh-token lookup |
+| `lastUsedAt`          | Most recent activity                                  |
+| `expiresAt`           | Absolute expiration                                   |
+| `idleExpiresAt`       | Idle timeout cutoff                                   |
+| `stepUpVerifiedAt`    | Last fresh step-up verification time                  |
+| `stepUpMethod`        | Step-up method, such as `webauthn` or `totp`          |
+| `deviceName`          | Friendly device label                                 |
+| `userAgent`           | Device/browser info                                   |
+| `ipAddress`           | Request origin                                        |
+| `replacedBySessionId` | Rotation link                                         |
+| `revokedAt`           | Revocation timestamp                                  |
+| `revokedReason`       | Revocation reason                                     |
+
+Refresh tokens are opaque to callers. The API stores hashes and lookup fingerprints, not raw refresh
+tokens.
+
+---
+
+## Expiration Model
+
+Seamless Auth uses two main expiration concepts.
+
+### Absolute expiration
+
+`expiresAt` is the hard stop for the session.
+
+### Idle expiration
+
+`idleExpiresAt` limits abandoned sessions and is based on activity.
+
+Refresh can extend usable auth state while the session remains valid under the configured policies.
+
+---
+
+## Step-up Freshness
+
+Step-up auth marks a session as recently verified for sensitive actions.
+
+The session stores:
+
+- `stepUpVerifiedAt`
+- `stepUpMethod`
+
+The API reports freshness through `GET /step-up/status` with:
+
+- `fresh`
+- `method`
+- `verifiedAt`
+- `expiresAt`
+- `maxAgeSeconds`
+
+The current API supports WebAuthn step-up through `/step-up/webauthn/*` and TOTP step-up completion
+through `/totp/verify-mfa`.
+
+---
+
+## Organization Context
+
+When a user switches active organization, the session can point at the selected organization through
+`organizationId`.
+
+That lets frontend and backend code distinguish:
+
+- the signed-in user
+- the active organization context for the current session
+- the user's global roles
+- the user's organization membership roles and scopes
+
+---
+
+## Lifecycle
+
+```txt
+Created -> Active -> Refreshed -> Idle -> Expired
+                 \          \
+                  \          -> Replaced
+                   -> Revoked
+```
+
+---
+
+## How Sessions Are Created
+
+1. the user completes a passwordless verification flow
+2. the auth server creates a session record
+3. the auth response returns token state
+4. the trusted backend adapter writes signed browser cookies
+5. app routes validate cookies and attach the session user
+
+The raw auth API does not need to be your public browser cookie boundary.
+
+---
+
+## Logout And Revocation
+
+Authenticated users can revoke sessions through:
+
+| Method   | Path            | Effect                                        |
+| -------- | --------------- | --------------------------------------------- |
+| `DELETE` | `/logout`       | Logout current session                        |
+| `DELETE` | `/logout/all`   | Logout all sessions owned by the current user |
+| `DELETE` | `/sessions/:id` | Revoke one current-user session               |
+| `DELETE` | `/sessions`     | Revoke all current-user sessions              |
+
+Admins can revoke sessions through:
+
+| Method   | Path                                 | Effect                           |
+| -------- | ------------------------------------ | -------------------------------- |
+| `DELETE` | `/admin/sessions/by-id/:id`          | Revoke one session by session ID |
+| `DELETE` | `/admin/sessions/:userId/revoke-all` | Revoke all sessions for one user |
+
+When revoked, the session can no longer be used, `revokedAt` is set, and `revokedReason` may be
+recorded.
+
+---
+
+## Multi-Device Example
+
+A user signs in from:
+
+- a laptop
+- a phone
+- a work browser
+
+That results in separate sessions. Revoking one does not require revoking the others.
+
+If that user reports a lost device, an admin can revoke one session, revoke all sessions, or use the
+device replacement recovery flow to revoke sessions, remove passkeys, and disable TOTP credentials.
+
+---
+
+## Related Docs
+
+- [Cookie, Session, And Token Reference](/reference/cookies-sessions-tokens)
+- [Users & Roles](/understand/users)
+- [Auth API Routes](/reference/auth-api-routes)
+- [Environment Variables](/reference/environment-variables)

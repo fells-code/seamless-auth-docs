@@ -1,0 +1,181 @@
+---
+title: "Admin Dashboard App"
+description: "seamless-auth-admin-dashboard is the operator-facing application for managing and observing a Seamless Auth deployment."
+sidebar:
+  order: 5
+---
+
+# Admin Dashboard
+
+`seamless-auth-admin-dashboard` is the operator-facing application for managing and observing a
+Seamless Auth deployment.
+
+It is a separate frontend app that runs alongside the auth stack, not a hidden screen inside the
+auth server.
+
+---
+
+## What It Is For
+
+Use the dashboard when you need a UI for:
+
+- browsing and managing users
+- editing global user roles
+- managing organizations and organization memberships
+- inspecting and revoking sessions
+- preparing an account for device replacement
+- reviewing auth events
+- investigating suspicious activity
+- checking dashboard metrics
+- editing system configuration
+
+It is the operational layer for your auth system.
+
+---
+
+## Main Areas
+
+The current dashboard app includes routes for:
+
+- overview
+- users
+- user detail
+- organizations
+- sessions
+- events
+- security
+- system configuration
+- profile
+
+That maps closely to the admin, internal, system-config, and session route groups exposed by the auth
+API.
+
+---
+
+## Access Model
+
+The dashboard uses `@seamless-auth/react` and expects to talk to a backend/API layer that owns auth
+cookies.
+
+Current app shape:
+
+```txt
+Admin Dashboard
+  -> API URL from runtime config or Vite env
+  -> @seamless-auth/react provider
+  -> admin-protected routes
+```
+
+Dashboard access is based on scoped admin roles:
+
+| Role          | Dashboard meaning                       |
+| ------------- | --------------------------------------- |
+| `admin`       | Broad legacy admin access               |
+| `admin:read`  | Can read admin screens and data         |
+| `admin:write` | Can perform write actions and also read |
+
+Write actions are guarded separately from route access. Some sensitive writes require fresh step-up
+authentication.
+
+---
+
+## Operational Workflows
+
+### Users
+
+The users area supports user search, user detail review, role edits, session review, credential
+review, anomaly context, and user lifecycle actions.
+
+### Organizations
+
+The organizations area uses `/admin/organizations/*` routes to create organizations, edit names and
+slugs, list members, and manage membership roles and scopes.
+
+### Sessions
+
+The sessions area uses `/admin/sessions` and revocation routes to inspect active sessions across
+users and revoke stale or risky sessions.
+
+### Device replacement recovery
+
+The user detail page can call:
+
+```http
+POST /admin/users/:userId/recovery/device-replacement
+```
+
+That route requires `admin:write` access and fresh step-up authentication. It revokes sessions,
+removes passkeys, disables TOTP credentials, and returns counts only.
+
+### System configuration
+
+The system configuration area can update:
+
+- available and default roles
+- login methods
+- passkey fallback policy
+- OAuth provider configuration
+- token TTLs
+- rate limit and slowdown values
+- lockout policy
+- WebAuthn relying party and origin settings
+
+OAuth provider client secrets are referenced by env var name, not entered as raw secret values in
+the dashboard.
+
+---
+
+## Runtime Configuration Model
+
+The dashboard is built as static assets and is designed for runtime config injection.
+
+That matters because the same built image can be pointed at different environments without a
+rebuild.
+
+Current runtime model:
+
+- `index.html` loads `/config.js`
+- container startup writes `window.__SEAMLESS_CONFIG__`
+- the app reads runtime config first, then falls back to `import.meta.env`
+
+For local development, `VITE_API_URL` is the main value to care about.
+
+---
+
+## Deployment Shape
+
+You can use the dashboard in a few ways:
+
+- run the official image
+- clone the source and customize it
+- include it from `seamless-cli` during project setup
+
+The CLI supports including the admin dashboard and lets you choose image mode or source mode.
+
+---
+
+## Relationship To The Rest Of The Ecosystem
+
+The dashboard sits on top of the same auth system the rest of the ecosystem uses.
+
+It depends on:
+
+- auth sessions being issued correctly
+- scoped admin access
+- admin and internal API routes
+- session revocation routes
+- organization routes
+- system configuration endpoints
+- step-up routes for sensitive writes
+
+It does not replace the auth server. It visualizes and operates it.
+
+---
+
+## Good Next Reads
+
+- [Admin UI](/start/adminui)
+- [Auth Events & Auditing](/understand/authevents)
+- [Sessions](/understand/sessions)
+- [Auth API Routes](/reference/auth-api-routes)
+- [System Config Reference](/reference/system-config)

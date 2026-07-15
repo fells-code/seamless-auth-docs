@@ -1,0 +1,158 @@
+---
+title: "Protect a Page and Route"
+description: "This guide shows the core pattern you will use in a real application:"
+sidebar:
+  order: 6
+---
+
+import { Card } from '@astrojs/starlight/components';
+import Image from '../../../components/Image.astro';
+
+## Protect a Page and Route
+
+This guide shows the core pattern you will use in a real application:
+
+- protect a frontend page with auth state
+- protect a backend route with role checks
+- use the admin dashboard to change a user’s role
+
+The specific example is a small `/chat` page, but the pattern applies to any protected product
+feature.
+
+---
+
+## What You Are Building
+
+<Card title="End Result">
+  - a protected `/chat` frontend route - a protected backend `/chat` endpoint - role-based access
+  using the `team` role
+</Card>
+
+---
+
+## Step 1: Protect The Frontend Route
+
+In your frontend app, add a new `/chat` route and render it inside the authenticated application
+shell.
+
+The key idea is:
+
+- use `AuthProvider` at the app boundary
+- use `useAuth()` inside the page
+- gate the page based on `isAuthenticated` and role data
+
+If you want the React package context first, see [React SDK](/build/react-sdk).
+
+---
+
+## Step 2: Require A Role In The UI
+
+Inside the page, check the current user’s roles.
+
+Example pattern:
+
+```tsx
+const { isAuthenticated, hasScopedRole } = useAuth()
+const hasAccess = hasScopedRole('team')
+```
+
+Use that to:
+
+- block unauthenticated access
+- show a “missing role” state when the user is signed in but not authorized
+- render the protected UI only when the required role is present
+
+---
+
+## Step 3: Protect The Backend Route
+
+Your backend still needs its own authorization boundary.
+
+Typical shape in an Express app:
+
+```ts
+app.post('/chat', requireAuth({ cookieSecret }), requireRole('team'), (req, res) => {
+  const { message } = req.body
+
+  res.json({
+    reply: `Echo: ${message}`,
+  })
+})
+```
+
+That keeps authorization explicit on the server even if the frontend also hides the feature.
+
+If you want the package-level backend view, see [Server SDKs](/build/server-sdks).
+
+---
+
+## Step 4: Test The Denied State
+
+With a normal authenticated user who does **not** have `team`:
+
+1. sign in
+2. open `/chat`
+3. confirm that the page stays blocked or limited
+
+<Image
+  src="/chatPageRestricted.png"
+  alt="Chat example page with restricted access"
+  caption="The route is authenticated, but the role is still missing"
+/>
+
+---
+
+## Step 5: Grant The Role In The Admin UI
+
+Log in as an admin and open the users screen in the admin dashboard.
+
+Then:
+
+1. select the user
+2. edit the user record
+3. add the `team` role
+4. sign out and sign back in as that user
+
+<Image
+  src="/adminEditUser.png"
+  alt="Admin portal user edit modal"
+  caption="Roles can be updated from the dashboard"
+/>
+
+---
+
+## Step 6: Test The Allowed State
+
+After the role is present:
+
+1. sign back in
+2. open `/chat`
+3. confirm the protected UI renders
+4. submit a request to the backend route
+
+<Image
+  src="/chatPage.png"
+  alt="Chat example page with access granted"
+  caption="The protected page is available once the role is present"
+/>
+
+---
+
+## Key Takeaway
+
+The pattern is always the same:
+
+- auth state on the frontend
+- role checks in the UI where helpful
+- authorization enforcement on the backend
+- role management through explicit user/admin flows
+
+---
+
+## Related Docs
+
+- [How To Secure Routes](/build/secure-routes)
+- [How To Build Your Own Auth UI](/build/custom-auth-ui)
+- [React SDK](/build/react-sdk)
+- [Server SDKs](/build/server-sdks)
+- [Users & Roles](/understand/users)
