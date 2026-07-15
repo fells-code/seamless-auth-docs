@@ -1,0 +1,82 @@
+---
+title: "Deployment Status"
+description: "The current seamless-cli package does not ship a deployment command."
+sidebar:
+  order: 4
+---
+
+# Deployment Status
+
+The current `seamless-cli` package does not ship a deployment command.
+
+This page intentionally preserves the existing `/docs/operate/deploy` route, but the old AWS
+dev-tier `deploy` and `destroy` command docs no longer describe the renamed CLI source in
+`../seamless-cli`.
+
+---
+
+## Current State
+
+The current public CLI command surface is:
+
+```bash
+seamless init [project-name]
+seamless check
+seamless bootstrap-admin [email]
+seamless --help
+seamless --version
+```
+
+There is no current `seamless deploy` or `seamless destroy` implementation in `../seamless-cli`.
+
+---
+
+## What The CLI Can Prepare Today
+
+`seamless-cli` can generate a local project with:
+
+- React web starter
+- Express API starter
+- Seamless Auth API in Docker or local-source mode
+- optional admin dashboard in Docker image or source mode
+- Docker Compose wiring
+- local secrets and service URLs
+- `seamless.config.json`
+
+That gives you a production-shaped local stack, but it is not a hosted deployment workflow.
+
+---
+
+## What Operators Still Own
+
+Until deployment automation ships again, operators own:
+
+- hosting the auth API, application API, web app, and optional admin dashboard
+- provisioning Postgres
+- setting stable production secrets
+- configuring JWKS signing keys
+- configuring HTTPS, CORS, origins, cookie domain, and proxy headers
+- managing OAuth provider callback URLs and provider secrets
+- monitoring, logging, alerting, backup, and restore testing
+
+Use [Environment Variables](/reference/environment-variables),
+[System Config Reference](/reference/system-config), and
+[Cookie, Session, And Token Reference](/reference/cookies-sessions-tokens) when planning those
+deployment surfaces.
+
+---
+
+## Documentation Rule
+
+When documenting deployment work:
+
+- do not describe `deploy` or `destroy` as shipped unless those commands exist in `../seamless-cli`
+- label future deployment flows as planned or in progress
+- tie infrastructure claims to current source code or generated files
+- keep operator-owned production hardening separate from CLI-generated local setup
+
+---
+
+## Next Step
+
+Continue to [Environment Variables](/reference/environment-variables).

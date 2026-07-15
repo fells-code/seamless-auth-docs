@@ -1,0 +1,398 @@
+---
+title: "How To Build Your Own Auth UI"
+description: "Use this guide when the built-in AuthRoutes screens work functionally, but your application needs its own layout, copy, validation, or route structure."
+sidebar:
+  order: 6
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# How To Build Your Own Auth UI
+
+Use this guide when the built-in `AuthRoutes` screens work functionally, but your application needs
+its own layout, copy, validation, or route structure.
+
+The safest custom-UI path is to keep `AuthProvider` and replace only the screens. That preserves the
+session state, cookie-aware fetch behavior, passkey helpers, OAuth helpers, organization state, and
+role helpers from `@seamless-auth/react`.
+
+---
+
+## What You Are Building
+
+```txt
+React app
+  -> AuthProvider
+  -> your custom login/register/settings screens
+  -> your backend /auth adapter routes
+  -> seamless-auth-api
+```
+
+Your frontend should call your backend API host. It should not call `seamless-auth-api` directly
+from the browser.
+
+<Aside type="caution">
+  `apiHost` points at your backend API. The React SDK sends auth requests to `${apiHost}/auth/...`,
+  so your backend should mount the Express adapter at `/auth`.
+</Aside>
+
+---
+
+## Step 1: Keep The Provider
+
+Wrap your app once near the router.
+
+```tsx
+import { AuthProvider } from '@seamless-auth/react'
+
+export function App() {
+  return (
+    <AuthProvider apiHost="http://localhost:3000">
+      <AppRoutes />
+    </AuthProvider>
+  )
+}
+```
+
+You only need `AuthRoutes` if you want the packaged screens:
+
+```tsx
+import { AuthProvider, AuthRoutes } from '@seamless-auth/react'
+```
+
+For fully custom UI, keep `AuthProvider` and route to your own components instead.
+
+---
+
+## Step 2: Choose The Right API Surface
+
+| API                          | Use it for                                          |
+| ---------------------------- | --------------------------------------------------- |
+| `useAuth()`                  | App-wide auth state and provider-managed helpers    |
+| `useAuthClient()`            | Custom React screens inside `AuthProvider`          |
+| `createSeamlessAuthClient()` | Non-React helpers or code outside the provider tree |
+
+Most custom React screens should use both `useAuth()` and `useAuthClient()`:
+
+```tsx
+import { useAuth, useAuthClient } from '@seamless-auth/react'
+
+function AccountMenu() {
+  const { user, isAuthenticated, logout } = useAuth()
+  const authClient = useAuthClient()
+
+  if (!isAuthenticated || !user) return null
+
+  return <button onClick={() => void logout()}>Sign out {user.email}</button>
+}
+```
+
+`useAuth()` gives you state that refreshes after login, logout, organization switching, and
+credential updates. `useAuthClient()` gives you direct access to lower-level request methods.
+
+---
+
+## Step 3: Build A Passkey-First Login
+
+The built-in login screen follows this shape:
+
+1. start login with an email or phone identifier
+2. read the login methods returned by the auth API
+3. try passkey login when the browser supports it and the server allows it
+4. show fallback options such as magic link, email OTP, or phone OTP
+
+```tsx
+import { useState } from 'react'
+import {
+  useAuth,
+  usePasskeySupport,
+  type LoginMethod,
+  type LoginStartResult,
+} from '@seamless-auth/react'
+
+const fallbackMethods: LoginMethod[] = ['magic_link', 'email_otp', 'phone_otp']
+
+export function CustomLogin() {
+  const { login, handlePasskeyLogin } = useAuth()
+  const { passkeySupported } = usePasskeySupport()
+  const [identifier, setIdentifier] = useState('')
+  const [methods, setMethods] = useState<LoginMethod[]>(fallbackMethods)
+  const [message, setMessage] = useState('')
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault()
+    setMessage('')
+
+    const response = await login(identifier, passkeySupported)
+
+    if (!response?.ok) {
+      setMessage('Could not start sign-in.')
+      return
+    }
+
+    const result = (await response.json()) as LoginStartResult
+    const allowedMethods = result.loginMethods?.length ? result.loginMethods : methods
+    setMethods(allowedMethods)
+
+    if (passkeySupported && allowedMethods.includes('passkey')) {
+      const signedIn = await handlePasskeyLogin()
+
+      if (signedIn) {
+        return
+      }
+    }
+
+    setMessage('Choose a fallback sign-in method.')
+  }
+
+  return (
+    <form onSubmit={submit}>
+      <label htmlFor="identifier">Email or phone</label>
+      <input
+        id="identifier"
+        value={identifier}
+        onChange={(event) => setIdentifier(event.target.value)}
+      />
+
+      <button type="submit">Continue</button>
+
+      {message && <p>{message}</p>}
+
+      {methods.includes('magic_link') && <button type="button">Send magic link</button>}
+      {methods.includes('email_otp') && <button type="button">Send email code</button>}
+      {methods.includes('phone_otp') && <button type="button">Send text code</button>}
+    </form>
+  )
+}
+```
+
+Those fallback buttons need to call the matching `useAuthClient()` methods described in the next
+step.
+
+---
+
+## Step 4: Wire Fallback Methods
+
+Fallback methods depend on the login pre-auth state created by `login(...)`.
+
+```tsx
+import { useAuthClient } from '@seamless-auth/react'
+
+function FallbackButtons() {
+  const authClient = useAuthClient()
+
+  async function sendMagicLink() {
+    const response = await authClient.requestMagicLink()
+    if (!response.ok) throw new Error('Could not send magic link')
+  }
+
+  async function sendEmailOtp() {
+    const response = await authClient.requestLoginEmailOtp()
+    if (!response.ok) throw new Error('Could not send email code')
+  }
+
+  async function sendPhoneOtp() {
+    const response = await authClient.requestLoginPhoneOtp()
+    if (!response.ok) throw new Error('Could not send phone code')
+  }
+
+  return (
+    <>
+      <button type="button" onClick={() => void sendMagicLink()}>
+        Magic link
+      </button>
+      <button type="button" onClick={() => void sendEmailOtp()}>
+        Email code
+      </button>
+      <button type="button" onClick={() => void sendPhoneOtp()}>
+        Text code
+      </button>
+    </>
+  )
+}
+```
+
+For OTP verification screens:
+
+```tsx
+import { useAuth, useAuthClient } from '@seamless-auth/react'
+
+function VerifyEmailCode({ code }: { code: string }) {
+  const { refreshSession } = useAuth()
+  const authClient = useAuthClient()
+
+  async function verify() {
+    const response = await authClient.verifyLoginEmailOtp(code)
+
+    if (!response.ok) {
+      throw new Error('Verification failed')
+    }
+
+    await refreshSession()
+  }
+
+  return <button onClick={() => void verify()}>Verify</button>
+}
+```
+
+Use `verifyLoginPhoneOtp(code)` for phone login codes, `verifyEmailOtp(code)` and
+`verifyPhoneOtp(code)` for registration verification, and `verifyMagicLink(token)` for magic-link
+completion.
+
+---
+
+## Step 5: Build Registration
+
+Registration starts with email and phone, then normally verifies OTP and registers a passkey.
+
+```tsx
+import { useAuth, useAuthClient, type PasskeyMetadata } from '@seamless-auth/react'
+
+function RegisterPasskeyButton() {
+  const { refreshSession } = useAuth()
+  const authClient = useAuthClient()
+
+  async function registerPasskey() {
+    const metadata: PasskeyMetadata = {
+      friendlyName: 'My device',
+      platform: navigator.platform,
+      browser: 'Browser',
+      deviceInfo: navigator.userAgent,
+    }
+
+    const result = await authClient.registerPasskey(metadata)
+
+    if (!result.success) {
+      throw new Error(result.message)
+    }
+
+    await refreshSession()
+  }
+
+  return <button onClick={() => void registerPasskey()}>Register passkey</button>
+}
+```
+
+If your product needs PRF-capable passkeys, use:
+
+```ts
+await authClient.registerPasskey({
+  metadata,
+  requestPrf: true,
+})
+```
+
+Use `requirePrf: true` only when the account cannot proceed without PRF support.
+
+---
+
+## Step 6: Add OAuth Buttons
+
+OAuth is still initiated from your UI, but provider configuration and provider secrets belong to
+`seamless-auth-api`.
+
+```tsx
+import { useEffect, useState } from 'react'
+import { useAuth, type OAuthProvider } from '@seamless-auth/react'
+
+function OAuthButtons() {
+  const { listOAuthProviders, startOAuthLogin } = useAuth()
+  const [providers, setProviders] = useState<OAuthProvider[]>([])
+
+  useEffect(() => {
+    void listOAuthProviders().then((result) => setProviders(result.providers))
+  }, [listOAuthProviders])
+
+  async function start(providerId: string) {
+    // Stash the provider so the callback route can finish the right flow.
+    sessionStorage.setItem('seamless:oauth:provider', providerId)
+
+    const result = await startOAuthLogin({
+      providerId,
+      redirectUri: `${window.location.origin}/oauth/callback`,
+      returnTo: window.location.href,
+    })
+
+    window.location.assign(result.authorizationUrl)
+  }
+
+  return providers.map((provider) => (
+    <button key={provider.id} onClick={() => void start(provider.id)}>
+      Continue with {provider.name}
+    </button>
+  ))
+}
+```
+
+Your callback page should call `finishOAuthLogin(...)`, then route the user back into your app.
+
+---
+
+## Step 7: Show Organization State
+
+The provider exposes the user's organizations and active organization.
+
+```tsx
+import { useAuth } from '@seamless-auth/react'
+
+function OrganizationSwitcher() {
+  const { organizations, activeOrganization, switchOrganization } = useAuth()
+
+  return (
+    <select
+      value={activeOrganization?.id ?? ''}
+      onChange={(event) => void switchOrganization(event.target.value)}
+    >
+      {organizations.map((organization) => (
+        <option key={organization.id} value={organization.id}>
+          {organization.name}
+        </option>
+      ))}
+    </select>
+  )
+}
+```
+
+For full management screens, use the headless client methods such as `createOrganization(...)`,
+`listOrganizationMembers(...)`, and `updateOrganizationMember(...)`.
+
+---
+
+## Step 8: Keep Authorization Server-Side
+
+It is fine to hide UI with `hasScopedRole(...)`:
+
+```tsx
+const { hasScopedRole } = useAuth()
+
+if (hasScopedRole('admin:read')) {
+  return <a href="/admin">Admin</a>
+}
+```
+
+That is only a UI decision. Your backend still needs `requireAuth(...)`, `requireRole(...)`, or
+equivalent authorization for protected API routes.
+
+---
+
+## Common Mistakes
+
+| Mistake                                           | Fix                                                                        |
+| ------------------------------------------------- | -------------------------------------------------------------------------- |
+| Calling the raw auth API from the browser         | Call your backend `apiHost`; let `/auth` proxy to the auth API             |
+| Removing `AuthProvider` for custom screens        | Keep the provider and replace `AuthRoutes`                                 |
+| Treating hidden UI as authorization               | Enforce auth and roles on the backend                                      |
+| Starting OTP fallback before `login(...)`         | Start login first so the pre-auth cookie exists                            |
+| Forgetting `refreshSession()` after a custom flow | Refresh provider state after OTP, magic-link, OAuth, or passkey completion |
+
+---
+
+## Related Docs
+
+- [How To Add OAuth Login](/build/oauth-login)
+- [How To Use Organizations And Memberships](/build/organizations-memberships)
+- [How To Use TOTP And Step-Up](/build/totp-step-up)
+- [React SDK](/build/react-sdk)
+- [How To Secure Routes](/build/secure-routes)
+- [Server SDKs](/build/server-sdks)
+- [Auth API Routes](/reference/auth-api-routes)

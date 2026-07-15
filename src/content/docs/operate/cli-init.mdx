@@ -1,0 +1,305 @@
+---
+title: "CLI Init Flow"
+description: "This guide explains exactly what happens when you run:"
+sidebar:
+  order: 2
+---
+
+# CLI Init Deep Dive
+
+This guide explains exactly what happens when you run:
+
+```bash
+npx seamless-cli my-app
+```
+
+That project-name shorthand runs the same init path as `npx seamless-cli init my-app`. Running the
+CLI with no command prints help.
+
+This guide focuses on local project generation, auth wiring, Docker setup, and admin dashboard
+inclusion.
+
+---
+
+## Mental Model
+
+```
+init → prompts → generators → config → ready-to-run app
+```
+
+---
+
+## Step 0: Directory Setup
+
+If you pass a project name:
+
+```bash
+npx seamless-cli my-app
+```
+
+The CLI will:
+
+- Create a new folder
+- Ensure it does not already exist
+- Use it as the project root
+
+If you run `npx seamless-cli init` with no project name, it uses the current directory. If that
+directory is not empty, the current CLI prints that an existing project was detected and exits; the
+existing-project integration flow is still future work.
+
+---
+
+## Step 1: Interactive Prompts
+
+The CLI asks a series of questions to shape your stack.
+
+### Web Framework
+
+- React (Vite)
+- Next.js is listed as coming soon, not currently generated
+
+This determines your frontend scaffold.
+
+---
+
+### Backend Framework
+
+- Express
+- Fastify, FastAPI, and Axum are listed as coming soon, not currently generated
+
+This determines your API server.
+
+---
+
+### Auth Mode
+
+- Docker (recommended)
+- Local dev server (advanced)
+
+**Docker mode**:
+
+- Runs full auth stack in containers
+- Closest to production
+
+**Local mode**:
+
+- Generates the auth server source into `./auth`
+- Still relies on Docker for the full local stack
+- Prompts about Docker, but the current source enables Docker either way because it is required for
+  the full generated stack
+
+---
+
+### Admin Dashboard
+
+You choose whether to include the Admin UI.
+
+If enabled:
+
+#### Admin Source
+
+- Docker image (recommended)
+- Source (for customization)
+
+---
+
+## Step 2: Generators Run
+
+Based on your answers, the CLI executes generators.
+
+### Frontend
+
+```ts
+await generateReactStarter({ root })
+```
+
+Creates:
+
+- React app (Vite)
+- Auth-aware starter frontend
+
+---
+
+### Backend
+
+```ts
+await generateExpressStarter({ root })
+```
+
+Creates:
+
+- Express API
+- Auth-ready endpoints
+
+---
+
+### Auth Server
+
+If using local mode:
+
+```ts
+await generateAuthServer({ root }, 'local')
+```
+
+This generates the Seamless Auth server locally.
+
+---
+
+### Docker Setup
+
+```ts
+await generateDockerCompose(root, {
+  authMode,
+  adminMode,
+  includeAdmin,
+})
+```
+
+Creates:
+
+- Postgres container
+- Auth server container
+- Admin UI container (optional)
+
+---
+
+## Step 3: Environment Configuration
+
+The CLI wires environment variables automatically.
+
+### API
+
+```ts
+configureApiEnv(root, sharedConfig)
+```
+
+### Web
+
+```ts
+configureWebEnv(root)
+```
+
+### Auth
+
+```ts
+configureAuthLocalEnv(root)
+```
+
+This ensures:
+
+- Services can communicate
+- URLs and ports are aligned
+
+---
+
+## Step 4: Project Config File
+
+```ts
+generateSeamlessConfig(root, { ... })
+```
+
+Creates:
+
+```txt
+seamless.config.json
+```
+
+This file stores:
+
+- Framework choices
+- Auth mode
+- Admin configuration
+
+---
+
+## Step 5: Final Output
+
+The CLI prints next steps. In the Docker-backed path, those are:
+
+- `docker compose up`
+- `seamless bootstrap-admin`
+- complete registration in the browser
+
+It also prints the expected local service URLs for auth, API, web, and admin.
+
+---
+
+## Generated Project Structure
+
+```txt
+my-app/
+  web/
+  api/
+  auth/                  # local auth mode only
+  admin/                 # admin source mode only
+  docker-compose.yml
+  seamless.config.json
+  README.md
+```
+
+---
+
+## What Gets Wired Automatically
+
+- Auth endpoints
+- Session handling
+- Secure cookies
+- Frontend SDK integration
+- Backend auth validation
+
+---
+
+## Key Design Decisions
+
+### Opinionated Defaults
+
+The CLI chooses:
+
+- Secure session handling
+- Passwordless flows
+- Best-practice structure
+
+---
+
+### Full-Stack by Default
+
+You always get:
+
+- `web/` frontend starter
+- `api/` backend starter
+- local Docker Compose wiring
+- `seamless.config.json`
+- auth server runtime wiring
+
+You may also get:
+
+- `auth/` source when local auth mode is selected
+- `admin/` source when admin source mode is selected
+
+---
+
+### Docker-First
+
+Even in local mode, Docker is used to ensure consistency.
+
+---
+
+## Common Pitfalls
+
+- Running in a non-empty directory
+- Skipping Docker setup
+- Misunderstanding auth mode differences
+
+---
+
+## Prompt for AI Help
+
+Copy this into ChatGPT:
+
+"Explain what happens internally when I run seamless-cli init and how the project is generated."
+
+---
+
+## Next Step
+
+→ Learn how Docker and local services work together

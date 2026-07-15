@@ -1,0 +1,229 @@
+---
+title: "Quickstart"
+description: "This guide walks through the fastest supported way to get Seamless Auth running locally: scaffold a project with the CLI, start the stack, and complete…"
+sidebar:
+  order: 2
+---
+
+import { Aside, Card } from '@astrojs/starlight/components';
+import Image from '../../../components/Image.astro';
+
+## Quickstart
+
+This guide walks through the fastest supported way to get Seamless Auth running locally: scaffold a
+project with the CLI, start the stack, and complete the first admin bootstrap flow.
+
+---
+
+## What you will need to complete this walkthrough
+
+- A machine with node > 20.11.x installed
+- A way to run a postgres database locally (we recommend via a container)
+- A terminal like application or interface
+- A web browser
+
+<Aside type="note">
+  We utilize docker and docker compose for the entire demonstration. For best follow along
+  experience we encourage you to do the same.
+</Aside>
+
+---
+
+## What is the CLI?
+
+The Seamless Auth CLI is published as `seamless-cli` and exposes the `seamless` binary. It
+scaffolds a working local project around the auth ecosystem.
+
+Today it is primarily used to:
+
+- Scaffold the web app and API starter
+- Configure the auth server in Docker or local mode
+- Optionally include the admin dashboard
+- Generate local secrets and service-to-service wiring
+- Validate the generated local stack
+- Bootstrap the first admin user
+
+<Aside type="note">
+  The current CLI is opinionated on purpose. It prefers giving you a working local stack over
+  exposing every possible architecture choice up front.
+</Aside>
+
+---
+
+## Explore the Project
+
+You can inspect the CLI here:
+
+- GitHub
+  [https://github.com/fells-code/seamless-cli](https://github.com/fells-code/seamless-cli)
+
+---
+
+## CLI Help Menu
+
+Before starting, you can inspect available commands:
+
+```bash
+npx seamless-cli --help
+```
+
+This will show:
+
+- Available commands (`init`, `check`, `bootstrap-admin`)
+- Usage patterns
+- Default CLI behavior
+
+---
+
+## Step 1: Initialize a Project
+
+Run the CLI:
+
+```bash
+npx seamless-cli init my-app
+cd my-app
+```
+
+You can also use the project-name shorthand:
+
+```bash
+npx seamless-cli my-app
+```
+
+Running the CLI with no command prints help.
+
+---
+
+## Step 2: Interactive Setup
+
+The CLI will guide you through:
+
+- The frontend framework
+- The backend framework
+- How to run the auth server
+- Whether to include the admin dashboard
+- Whether to use the dashboard image or source
+
+<Aside type="tip">
+  Choose Docker mode for the most reliable local environment. It closely mirrors production
+  behavior.
+</Aside>
+
+<Image
+  src="/cliResult.png"
+  alt="Seamless CLI init output"
+  caption="Use seamless-cli init to scaffold a full-stack local auth project"
+/>
+
+---
+
+## Step 3: Generated Project Structure
+
+After setup, your project will look like:
+
+```txt
+my-app/
+  web/
+  api/
+  auth/                  # only when local auth mode is selected
+  admin/                 # only when admin source mode is selected
+  docker-compose.yml
+  seamless.config.json
+  README.md
+```
+
+The exact shape depends on the options you selected, but the CLI always wires the generated pieces
+together for local development.
+
+---
+
+## Step 4: Start with Docker (Recommended)
+
+The CLI generates a Docker-based development environment.
+
+Start services:
+
+```bash
+docker compose up
+```
+
+This will:
+
+- Start Postgres
+- Start the Seamless Auth server
+- Start a template web application
+- Start a template API server
+- Start the admin dashboard if you included it
+- Use the generated local config and service tokens
+
+---
+
+## Step 5: View the App
+
+Open:
+
+```
+http://localhost:5173
+```
+
+You should see the starter UI with:
+
+- Login / signup flow
+- Passwordless authentication
+- Session management
+
+<Image
+  src="/uiStarterTemplate.png"
+  alt="Seamless Auth starter UI"
+  caption="Seamless Auth starter UI"
+/>
+
+---
+
+## Step 6: Bootstrap Your First Admin
+
+Once the stack is running, create your first admin invite:
+
+```bash
+npx seamless-cli bootstrap-admin admin@example.com
+```
+
+If the CLI can resolve the bootstrap secret locally, it will use it automatically. Otherwise it
+will prompt you for the secret.
+
+After the invite is created:
+
+- open the registration URL
+- complete the registration flow with the invited email
+- the resulting user will receive admin access
+
+---
+
+## What Just Happened
+
+You now have a local stack with:
+
+- A full-stack application
+- A running auth server
+- Connected frontend and backend services
+- Passwordless authentication enabled
+- A bootstrap path for your first admin user
+- A CLI that can also check the generated stack
+
+<Card title="What You Just Built">
+  - Web app - API - Auth server - Optional admin dashboard - Local Docker-based infrastructure
+</Card>
+
+---
+
+## Prompt for AI Help
+
+Copy this into ChatGPT:
+
+"Help me customize a Seamless Auth project created with seamless-cli. I want to add roles, protect routes, and understand which package does what."
+
+---
+
+## Next Step
+
+Continue to [Create Your First User](/start/firstuser).

@@ -1,0 +1,120 @@
+---
+title: "What Is Seamless Auth?"
+description: "Seamless Auth is a passwordless authentication ecosystem designed to run as part of your own application infrastructure."
+sidebar:
+  order: 1
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Seamless Auth
+
+Seamless Auth is a passwordless authentication ecosystem designed to run as part of your own
+application infrastructure.
+
+It combines a self-hostable auth server, official SDKs, a CLI for scaffolding a working stack, and
+an operator dashboard for managing users, sessions, security, and system configuration.
+
+The goal is to give you modern authentication while keeping the auth engine, session boundary, and
+user experience inside your application stack.
+
+<Aside type="note">
+  Seamless Auth is for teams that want passwordless auth with explicit boundaries, inspectable
+  components, and application-owned UX.
+</Aside>
+
+<Aside type="caution">
+  The ecosystem is strongest today for scaffolded full-stack setups and source-visible self-hosting.
+  Deeper existing-project integration and deployment automation docs still need more coverage.
+</Aside>
+
+---
+
+## Key Characteristics
+
+### Exclusively Passwordless
+
+- Authentication is based on cryptographic verification, not shared secrets.
+- Supports passkeys, magic links, email/phone OTP, TOTP MFA, and optional OAuth login.
+
+---
+
+### Loosely Coupled
+
+- The auth engine runs as its own service inside your stack.
+- SDKs are thin integration layers, not hidden platforms.
+- Frontend auth flows stay inside your application.
+- The admin dashboard is a separate app, not a magical control plane.
+
+---
+
+### Server-Side Session Validation
+
+- Sessions are issued and validated using secure, HTTP-only cookies.
+- Defense-in-depth approach to authentication.
+- Sessions are tracked per device and per browser.
+
+---
+
+### Explicit Authorization
+
+- Roles and access control are defined and enforced in your own application code.
+- No hidden authorization layers or assumptions.
+
+---
+
+### Consistent Environments
+
+- The same core model works locally, in staging, and in production.
+- Local development is designed to stay close to deployment reality.
+- The CLI can scaffold a production-shaped local stack quickly.
+
+---
+
+## The Ecosystem
+
+Seamless Auth is made up of a few focused projects.
+
+| Piece                           | Role                                                          |
+| ------------------------------- | ------------------------------------------------------------- |
+| `seamless-cli`                  | Scaffolds a full local stack                                  |
+| `seamless-auth-api`             | Runs the passwordless auth engine                             |
+| `@seamless-auth/core`           | Framework-agnostic server auth primitives                     |
+| `@seamless-auth/express`        | Official Express backend integration                          |
+| `@seamless-auth/react`          | React auth provider and built-in auth routes                  |
+| `seamless-auth-admin-dashboard` | Operator UI for users, sessions, events, security, and config |
+| `@seamless-auth/types`          | Shared domain and API types                                   |
+
+If you want the fuller package map, continue to [Ecosystem Overview](/build/ecosystem).
+
+---
+
+## Core Idea
+
+Seamless Auth treats authentication as infrastructure:
+
+```txt
+CLI -> Local stack
+SDKs -> App integration
+Auth API -> Passwordless auth engine
+Admin Dashboard -> Operator workflows
+```
+
+---
+
+## What You Will Build
+
+By the end of this guide, you will have:
+
+- A working local stack
+- Passwordless authentication
+- Session management with device-level control
+- A clearer mental model of the ecosystem
+- Enough context to choose the right package for your next step
+- A path to customize auth UI and protect app routes when you leave the starter
+
+---
+
+## Next Step
+
+→ Continue to Quickstart

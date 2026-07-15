@@ -1,0 +1,314 @@
+---
+title: "Cookie, Session, And Token Reference"
+description: "Seamless Auth uses signed browser cookies at the app boundary and bearer tokens at the auth API boundary."
+sidebar:
+  order: 4
+---
+
+# Cookie, Session, And Token Reference
+
+Seamless Auth uses signed browser cookies at the app boundary and bearer tokens at the auth API
+boundary.
+
+This page explains which cookies exist, what they carry, when sessions are created or rotated, and
+which token types are currently used by `seamless-auth-api`, `@seamless-auth/express`, and
+`@seamless-auth/core`.
+
+---
+
+## Boundary Model
+
+```txt
+Browser
+  -> signed HttpOnly cookies on your app/API domain
+  -> your backend with @seamless-auth/express
+  -> bearer tokens forwarded to seamless-auth-api
+```
+
+The browser should not need to read Seamless Auth tokens directly. The Express adapter signs local
+cookies with `cookieSecret`, then uses the token values inside those cookies when it forwards
+requests to `seamless-auth-api`.
+
+---
+
+## Default Cookie Names
+
+`createSeamlessAuthServer(...)` defaults to these cookie names.
+
+| Cookie              | Default name         | Purpose                                                 |
+| ------------------- | -------------------- | ------------------------------------------------------- |
+| Access cookie       | `seamless-access`    | Authenticated app/API session                           |
+| Refresh cookie      | `seamless-refresh`   | Opaque refresh-token storage for session rotation       |
+| Registration cookie | `seamless-ephemeral` | In-progress registration, OTP, and passkey registration |
+| Pre-auth cookie     | `seamless-ephemeral` | In-progress login, OTP, magic-link, and passkey login   |
+
+Registration and pre-auth use the same default cookie name. You can override them separately if
+your application needs distinct cookies.
+
+```ts
+createSeamlessAuthServer({
+  authServerUrl: process.env.AUTH_SERVER_URL!,
+  cookieSecret: process.env.COOKIE_SIGNING_KEY!,
+  serviceSecret: process.env.SERVICE_SECRET!,
+  issuer: process.env.JWT_ISSUER!,
+  audience: process.env.JWT_AUDIENCE!,
+  accessCookieName: 'sa_access',
+  refreshCookieName: 'sa_refresh',
+  registrationCookieName: 'sa_registration',
+  preAuthCookieName: 'sa_pre_auth',
+})
+```
+
+---
+
+## Cookie Attributes
+
+The Express adapter sets cookies as:
+
+| Attribute  | Current behavior                               |
+| ---------- | ---------------------------------------------- |
+| `httpOnly` | Always true                                    |
+| `path`     | `/`                                            |
+| `domain`   | `cookieDomain` option, if provided             |
+| `maxAge`   | Token TTL returned by the auth API             |
+| `secure`   | true when `NODE_ENV=production`                |
+| `sameSite` | `none` in production, `lax` outside production |
+
+For cross-site browser deployments, use HTTPS and set a cookie domain that matches the frontend/API
+shape you are deploying.
+
+---
+
+## Access Cookie Payload
+
+The access cookie is a local HS256 JWT signed by the Express adapter with `cookieSecret`.
+
+It stores enough information for the adapter to forward authenticated requests and for your backend
+to perform route checks.
+
+| Field            | Meaning                                          |
+| ---------------- | ------------------------------------------------ |
+| `sub`            | User ID                                          |
+| `sessionId`      | Current auth API session ID                      |
+| `token`          | RS256 access token issued by `seamless-auth-api` |
+| `roles`          | User global roles                                |
+| `email`          | User email                                       |
+| `phone`          | User phone                                       |
+| `organizationId` | Active organization ID, when selected            |
+
+`requireAuth({ cookieSecret })` verifies this signed cookie and attaches `req.user`.
+
+```ts
+app.get('/api/me', requireAuth({ cookieSecret }), (req, res) => {
+  res.json({ user: req.user })
+})
+```
+
+`req.user` contains:
+
+```ts
+type SeamlessAuthUser = {
+  id: string
+  sub: string
+  roles: string[]
+  email: string
+  phone: string
+  iat?: number
+  exp?: number
+}
+```
+
+`requireAuth(...)` does not call the auth API and does not rotate refresh tokens. It only verifies
+the local access cookie. Route-specific refresh behavior happens in the adapter middleware mounted
+inside `createSeamlessAuthServer(...)`.
+
+---
+
+## Refresh Cookie Payload
+
+The refresh cookie is also a local HS256 JWT signed with `cookieSecret`.
+
+It contains:
+
+| Field          | Meaning                                            |
+| -------------- | -------------------------------------------------- |
+| `sub`          | User ID                                            |
+| `refreshToken` | Opaque refresh token issued by `seamless-auth-api` |
+
+The opaque refresh token is stored server-side as:
+
+- `refreshTokenHash`: bcrypt hash
+- `refreshTokenLookup`: HMAC lookup fingerprint derived from `REFRESH_TOKEN_LOOKUP_SECRET` or
+  `API_SERVICE_TOKEN`
+
+The raw refresh token is not stored in the database.
+
+---
+
+## Registration And Pre-Auth Cookies
+
+Registration and login flows use short-lived ephemeral cookies before a full access session exists.
+
+| Flow                                      | Cookie              | Carries                   |
+| ----------------------------------------- | ------------------- | ------------------------- |
+| Start registration                        | registration cookie | `sub`, ephemeral `token`  |
+| Verify registration OTP                   | registration cookie | forwarded bearer identity |
+| Register passkey                          | registration cookie | forwarded bearer identity |
+| Start login                               | pre-auth cookie     | `sub`, ephemeral `token`  |
+| Login OTP/magic link/passkey continuation | pre-auth cookie     | forwarded bearer identity |
+
+The auth API signs ephemeral tokens as RS256 JWTs with `typ: "ephemeral"` and a five-minute
+expiration.
+
+---
+
+## Auth API Token Types
+
+| Token           | Format                | Used for                                              |
+| --------------- | --------------------- | ----------------------------------------------------- |
+| Access token    | RS256 JWT             | Authenticated auth API requests                       |
+| Ephemeral token | RS256 JWT             | In-progress login/registration steps                  |
+| Refresh token   | Opaque random string  | Refresh-token rotation                                |
+| Service token   | Adapter-created token | Trusted service-to-service refresh and delivery calls |
+
+Access tokens include:
+
+| Claim    | Meaning                               |
+| -------- | ------------------------------------- |
+| `sub`    | User ID                               |
+| `sid`    | Session ID                            |
+| `iss`    | Auth API issuer                       |
+| `typ`    | `access`                              |
+| `roles`  | User roles                            |
+| `org_id` | Active organization ID, when selected |
+
+Refresh tokens are currently opaque random strings. The auth API refresh endpoint expects the raw
+opaque refresh token in the bearer header, not the access JWT.
+
+---
+
+## Session Records
+
+The auth API stores sessions in the `sessions` table.
+
+| Field                 | Meaning                                 |
+| --------------------- | --------------------------------------- |
+| `id`                  | Session ID                              |
+| `userId`              | Owning user                             |
+| `infraId`             | App or infrastructure identifier        |
+| `organizationId`      | Active organization for the session     |
+| `mode`                | Currently `server`                      |
+| `refreshTokenHash`    | Bcrypt hash of the opaque refresh token |
+| `refreshTokenLookup`  | HMAC lookup fingerprint                 |
+| `lastUsedAt`          | Last refresh/use timestamp              |
+| `expiresAt`           | Absolute session expiry                 |
+| `idleExpiresAt`       | Idle session expiry                     |
+| `stepUpVerifiedAt`    | Last fresh step-up verification         |
+| `stepUpMethod`        | `webauthn` or `totp`                    |
+| `replacedBySessionId` | Refresh rotation successor              |
+| `revokedAt`           | Revocation timestamp                    |
+| `revokedReason`       | Revocation reason                       |
+
+Current session records use a one-day absolute lifetime and one-day idle timeout in the auth API.
+Access and refresh cookie TTLs are controlled separately by system config.
+
+---
+
+## Refresh Rotation
+
+On successful refresh:
+
+1. the adapter verifies the refresh cookie with `cookieSecret`
+2. the adapter sends the raw refresh token to `POST /refresh`
+3. the auth API finds the active session by `refreshTokenLookup`
+4. the auth API creates a new session record
+5. the old session gets `replacedBySessionId`
+6. the auth API returns a new access token and opaque refresh token
+7. the adapter sets fresh access and refresh cookies
+
+If an already-rotated refresh token is reused, the auth API treats it as suspicious and revokes the
+session chain.
+
+The core refresh helper deduplicates simultaneous refreshes briefly so parallel browser requests do
+not normally race each other into token reuse.
+
+---
+
+## Adapter Refresh Behavior
+
+`createSeamlessAuthServer(...)` installs `ensureCookies(...)` for routes it owns under `/auth`.
+
+For those adapter routes, if a required access cookie is missing or does not contain the upstream
+access token, and a valid refresh cookie exists, the adapter attempts refresh and sets new cookies.
+
+This applies to adapter-owned auth routes such as:
+
+- `/auth/users/me`
+- `/auth/logout`
+- `/auth/organizations/*`
+- `/auth/step-up/*`
+- `/auth/admin/*`
+- `/auth/internal/*`
+- `/auth/system-config/*`
+
+For your own application routes, `requireAuth(...)` only verifies the access cookie. If you need
+refresh before custom app routes, call an adapter-owned route such as `/auth/users/me` from the
+client before retrying, or implement an explicit server-side refresh strategy with `@seamless-auth/core`.
+
+---
+
+## Logout And Revocation
+
+Current logout behavior:
+
+| Route                     | Meaning                                         |
+| ------------------------- | ----------------------------------------------- |
+| `DELETE /auth/logout`     | Revoke current session and clear auth cookies   |
+| `DELETE /auth/logout/all` | Revoke all user sessions and clear auth cookies |
+| `GET /auth/logout`        | Compatibility route for all-sessions logout     |
+
+Session revocation sets `revokedAt` and `revokedReason`. Admin session routes can revoke individual
+sessions or all sessions for a user.
+
+---
+
+## JWKS And Signing Keys
+
+`seamless-auth-api` signs access and ephemeral JWTs with RS256.
+
+In development:
+
+- the API generates local keys under `./keys/dev`
+- the active key ID is `dev-main`
+- `/.well-known/jwks.json` serves the generated dev public key
+
+In production:
+
+- `SEAMLESS_JWKS_ACTIVE_KID` identifies the active signing key
+- `SEAMLESS_JWKS_KEY_<kid>_PRIVATE` contains the private key PEM for the active key
+- `JWKS_PUBLIC_KEYS` contains public keys served by `/.well-known/jwks.json`
+
+The Express/core handlers verify signed auth API responses against the auth API JWKS before setting
+local cookies.
+
+---
+
+## Common Mistakes
+
+| Mistake                                                            | Fix                                                                              |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| Using the access JWT as the refresh bearer token                   | Use the opaque refresh token from the refresh cookie payload                     |
+| Expecting `requireAuth(...)` to refresh sessions                   | Let `/auth` adapter routes refresh, or add explicit refresh handling             |
+| Changing cookie names in the adapter but not in `requireAuth(...)` | Pass the same `cookieName` to `requireAuth(...)`                                 |
+| Calling raw auth API routes from browser code                      | Call your backend adapter routes unless you are building a custom server adapter |
+| Rotating JWKS private keys without publishing public keys          | Keep `SEAMLESS_JWKS_ACTIVE_KID`, private key, and `JWKS_PUBLIC_KEYS` aligned     |
+
+---
+
+## Related Docs
+
+- [System Config Reference](/reference/system-config)
+- [Server SDKs](/build/server-sdks)
+- [Sessions](/understand/sessions)
+- [Environment Variables](/reference/environment-variables)
+- [Auth API Routes](/reference/auth-api-routes)

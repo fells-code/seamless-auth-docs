@@ -1,0 +1,126 @@
+---
+title: "Create Your First Admin"
+description: "This guide walks through the first-admin bootstrap flow in a local Seamless Auth stack."
+sidebar:
+  order: 4
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import Image from '../../../components/Image.astro';
+
+## Create Your First Admin
+
+This guide walks through the first-admin bootstrap flow in a local Seamless Auth stack.
+
+The goal is simple: create an initial admin invite, complete the registration flow with that email,
+and verify access to the admin dashboard.
+
+---
+
+## Before You Start
+
+Make sure:
+
+- your local stack is running
+- you have already gone through the first-user flow once
+- you can access the web app at `http://localhost:5173`
+
+---
+
+## Why Bootstrap Exists
+
+The first admin flow is intentionally separate from normal role management.
+
+That bootstrap path exists so you can create the initial operator account without manually editing
+the database.
+
+<Aside type="note">
+  After the first admin exists, normal administration should happen through your application and
+  admin tooling, not by repeatedly relying on bootstrap.
+</Aside>
+
+---
+
+## Step 1: Create The Invite
+
+Run:
+
+```bash
+npx seamless-cli bootstrap-admin admin001@test.com
+```
+
+The CLI will:
+
+- resolve the bootstrap secret from local project files when possible
+- call the auth API bootstrap route
+- print a registration URL when available
+
+The invited email should match the account you want to become the first admin.
+
+---
+
+## Step 2: Complete Registration
+
+Open the generated registration URL and finish the same kind of registration flow you used for your
+first user.
+
+Use the same email address you passed to `bootstrap-admin`.
+
+Once registration completes:
+
+- the user is granted the `admin` role
+- future sessions for that user include admin access
+
+<Aside type="caution">
+  The bootstrap invite is not the user account. It is a one-time authorization path that lets that
+  email become the initial admin during registration.
+</Aside>
+
+---
+
+## Step 3: Verify The Role
+
+After successful registration, the session should include the `admin` role.
+
+```json
+{
+  "roles": ["admin"]
+}
+```
+
+<Image
+  src="/adminSession.png"
+  alt="Admin session with role attached"
+  caption="Admin users have the admin role attached to their session"
+/>
+
+---
+
+## Step 4: Open The Dashboard
+
+Navigate to:
+
+```txt
+http://localhost:5174
+```
+
+You should be able to reach the admin dashboard.
+
+<Image src="/adminOverview.png" alt="Seamless Admin portal" caption="Admin dashboard overview" />
+
+---
+
+## What Just Happened
+
+- you created the first admin bootstrap invite
+- registration completed with the invited email
+- the resulting user received the `admin` role
+- the dashboard became accessible through normal auth state
+
+---
+
+## Related Docs
+
+- [CLI Commands](/reference/cli-commands)
+- [Users & Roles](/understand/users)
+- [Admin UI](/start/adminui)

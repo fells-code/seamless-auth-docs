@@ -1,0 +1,12 @@
+/* Seamless Auth docs accent, layered on top of Starlight's dark theme. */
+:root {
+  --sl-color-accent-low: #10243a;
+  --sl-color-accent: #2169a8;
+  --sl-color-accent-high: #a9cdec;
+}
+
+:root[data-theme='light'] {
+  --sl-color-accent-low: #cfe2f3;
+  --sl-color-accent: #1b5a8e;
+  --sl-color-accent-high: #0f3352;
+}

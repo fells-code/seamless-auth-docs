@@ -1,0 +1,259 @@
+---
+title: "How To Add OAuth Login"
+description: "Use this guide when you want users to sign in with an external OAuth provider while still letting Seamless Auth own local users, sessions, cookies, and…"
+sidebar:
+  order: 8
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# How To Add OAuth Login
+
+Use this guide when you want users to sign in with an external OAuth provider while still letting
+Seamless Auth own local users, sessions, cookies, and auth events.
+
+OAuth login is available through:
+
+- `seamless-auth-api` raw routes under `/oauth/*`
+- `@seamless-auth/express` adapter routes under `/auth/oauth/*`
+- `@seamless-auth/react` helpers on `useAuth()`
+
+<Aside type="note">
+  As of `@seamless-auth/react` 0.3.0, `AuthRoutes` renders OAuth provider buttons on the sign-in
+  view and includes the `/oauth/callback` route out of the box. If you use `AuthRoutes`, you only
+  need Step 1 (enable OAuth and configure providers). The custom UI steps that follow are for when
+  you build your own screens with the headless helpers.
+</Aside>
+
+---
+
+## How The Flow Works
+
+```txt
+React UI
+  -> POST /auth/oauth/:providerId/start
+  -> redirect browser to provider
+  -> provider redirects back to your React callback route
+  -> POST /auth/oauth/:providerId/callback
+  -> backend adapter sets Seamless Auth cookies
+  -> React provider refreshes session state
+```
+
+The OAuth provider secret never belongs in browser code. The auth API reads it from an environment
+variable named by the provider config.
+
+---
+
+## Step 1: Enable OAuth In System Config
+
+`LOGIN_METHODS` must include `oauth`.
+
+```env
+LOGIN_METHODS=passkey,magic_link,email_otp,phone_otp,oauth
+```
+
+Configure providers with `OAUTH_PROVIDERS`. This value is a JSON array.
+
+```env
+OAUTH_PROVIDERS=[{"id":"google","name":"Google","enabled":true,"clientId":"google-client-id.apps.googleusercontent.com","clientSecretEnv":"GOOGLE_CLIENT_SECRET","authorizationUrl":"https://accounts.google.com/o/oauth2/v2/auth","tokenUrl":"https://oauth2.googleapis.com/token","userInfoUrl":"https://openidconnect.googleapis.com/v1/userinfo","scopes":["openid","email","profile"],"redirectUris":["http://localhost:5173/oauth/callback"],"subjectJsonPath":"sub","emailJsonPath":"email","emailVerifiedJsonPath":"email_verified","nameJsonPath":"name","allowSignup":true,"accountLinking":"email","requireEmailVerified":true}]
+GOOGLE_CLIENT_SECRET=replace-with-provider-secret
+OAUTH_STATE_SECRET=replace-with-long-random-secret
+```
+
+Provider config fields:
+
+| Field                   | Purpose                                                             |
+| ----------------------- | ------------------------------------------------------------------- |
+| `id`                    | Route identifier, such as `google`                                  |
+| `name`                  | Display name returned to the UI                                     |
+| `enabled`               | Whether the provider is visible and usable                          |
+| `clientId`              | OAuth client ID                                                     |
+| `clientSecretEnv`       | Env var name that contains the client secret                        |
+| `authorizationUrl`      | Provider authorization endpoint                                     |
+| `tokenUrl`              | Provider token endpoint                                             |
+| `userInfoUrl`           | Provider userinfo endpoint                                          |
+| `scopes`                | Provider scopes sent as a space-delimited OAuth `scope` value       |
+| `redirectUri`           | Optional single redirect URI                                        |
+| `redirectUris`          | Optional allowlist of exact redirect URIs                           |
+| `subjectJsonPath`       | Profile field used as provider subject, default `sub`               |
+| `emailJsonPath`         | Profile field used as email, default `email`                        |
+| `emailVerifiedJsonPath` | Profile field used for email verification, default `email_verified` |
+| `nameJsonPath`          | Optional profile field used as display name metadata                |
+| `allowSignup`           | Whether OAuth can create a new local user                           |
+| `accountLinking`        | `email` or `disabled`                                               |
+| `requireEmailVerified`  | Whether profile email must be verified                              |
+
+In production, set `OAUTH_STATE_SECRET`. Development can fall back, but production should not rely
+on derived local state secrets.
+
+---
+
+## Step 2: Match Redirect URIs
+
+The redirect URI passed to `startOAuthLogin(...)` must be allowed by the provider config.
+
+If `redirectUris` or `redirectUri` is set, the requested redirect URI must exactly match one of
+those values. If no provider redirect allowlist is set, the auth API falls back to the configured
+Seamless Auth origins.
+
+For local React development, the built-in callback route is:
+
+```txt
+http://localhost:5173/oauth/callback
+```
+
+That URI must also be registered with the external OAuth provider, and must appear in the provider's
+`redirectUris` allowlist above.
+
+---
+
+## Step 3: Show Provider Buttons
+
+Use `listOAuthProviders()` so your UI follows the server config.
+
+```tsx
+import { useEffect, useState } from 'react'
+import { useAuth, type OAuthProvider } from '@seamless-auth/react'
+
+export function OAuthButtons() {
+  const { listOAuthProviders, startOAuthLogin } = useAuth()
+  const [providers, setProviders] = useState<OAuthProvider[]>([])
+
+  useEffect(() => {
+    void listOAuthProviders().then((result) => setProviders(result.providers))
+  }, [listOAuthProviders])
+
+  async function start(provider: OAuthProvider) {
+    // Remember which provider so the callback can finish the right flow.
+    sessionStorage.setItem('seamless:oauth:provider', provider.id)
+
+    const result = await startOAuthLogin({
+      providerId: provider.id,
+      redirectUri: `${window.location.origin}/oauth/callback`,
+      returnTo: `${window.location.origin}/dashboard`,
+    })
+
+    window.location.assign(result.authorizationUrl)
+  }
+
+  return (
+    <div>
+      {providers.map((provider) => (
+        <button key={provider.id} onClick={() => void start(provider)}>
+          Continue with {provider.name}
+        </button>
+      ))}
+    </div>
+  )
+}
+```
+
+`returnTo` must be a full URL. The auth API only preserves it when its origin is allowed by the
+configured origins.
+
+---
+
+## Step 4: Finish The Callback
+
+Create a React route that matches the `redirectUri` you sent in Step 3:
+
+```tsx
+<Route path="/oauth/callback" element={<OAuthCallback />} />
+```
+
+Then finish the login from the callback page. The provider id was stashed in `sessionStorage`
+during Step 3, and the `code` and `state` come back on the URL.
+
+```tsx
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '@seamless-auth/react'
+
+export function OAuthCallback() {
+  const { finishOAuthLogin } = useAuth()
+  const navigate = useNavigate()
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    async function finish() {
+      const params = new URLSearchParams(window.location.search)
+      const code = params.get('code')
+      const state = params.get('state')
+      const providerId = sessionStorage.getItem('seamless:oauth:provider')
+
+      if (!providerId || !code || !state) {
+        setError('OAuth callback is missing required values.')
+        return
+      }
+
+      try {
+        await finishOAuthLogin({ providerId, code, state })
+        sessionStorage.removeItem('seamless:oauth:provider')
+        navigate('/dashboard', { replace: true })
+      } catch {
+        setError('OAuth login failed.')
+      }
+    }
+
+    void finish()
+  }, [finishOAuthLogin, navigate])
+
+  if (error) return <p>{error}</p>
+
+  return <p>Signing you in...</p>
+}
+```
+
+When the Express adapter handles `/auth/oauth/:providerId/callback`, it verifies the auth API
+response and sets the access and refresh cookies.
+
+---
+
+## Step 5: Understand Account Linking
+
+OAuth identity rows link a provider subject to a local user.
+
+The current auth API behavior is:
+
+| Case                                                           | Behavior                                        |
+| -------------------------------------------------------------- | ----------------------------------------------- |
+| Existing `oauth_identities` row                                | Reuse the linked local user                     |
+| No identity, matching user email, `accountLinking: "email"`    | Link provider identity to that user             |
+| No identity, matching user email, `accountLinking: "disabled"` | Reject login                                    |
+| No matching user, `allowSignup: true`                          | Create a verified local user with default roles |
+| No matching user, `allowSignup: false`                         | Reject login                                    |
+
+The profile email must exist. If `requireEmailVerified` is true, the provider profile must also
+report a verified email.
+
+---
+
+## Step 6: Debug Common Failures
+
+| Symptom                                            | Likely cause                                                                                      |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Provider does not appear                           | `LOGIN_METHODS` does not include `oauth`, provider is disabled, or config failed validation       |
+| OAuth start returns `400`                          | `redirectUri` is not in the provider allowlist                                                    |
+| Provider rejects redirect                          | Provider console does not include the same redirect URI                                           |
+| Callback returns `Invalid OAuth state`             | State expired, wrong provider ID, or `OAUTH_STATE_SECRET` changed mid-flow                        |
+| Callback returns `OAuth signup is disabled`        | No matching local user and `allowSignup` is false                                                 |
+| Callback succeeds but React still looks signed out | Callback did not hit the backend adapter, cookies were blocked, or `refreshSession()` did not run |
+
+---
+
+## Security Notes
+
+- Keep provider client secrets in environment variables.
+- Use exact redirect URI allowlists for production providers.
+- Set a stable `OAUTH_STATE_SECRET` in production.
+- Treat OAuth as authentication only; app authorization still belongs in your backend.
+- Keep `APP_ORIGINS`, `ORIGINS`, cookie domain, and provider redirect URIs aligned.
+
+---
+
+## Related Docs
+
+- [React SDK](/build/react-sdk)
+- [How To Build Your Own Auth UI](/build/custom-auth-ui)
+- [Auth API Routes](/reference/auth-api-routes)
+- [Environment Variables](/reference/environment-variables)

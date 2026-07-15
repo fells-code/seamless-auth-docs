@@ -1,0 +1,216 @@
+---
+title: "Troubleshooting the Local Stack"
+description: "This page is a practical debugging guide for the local Seamless Auth stack."
+sidebar:
+  order: 1
+---
+
+# Troubleshooting & Debugging
+
+This page is a practical debugging guide for the local Seamless Auth stack.
+
+When something breaks, trace the request path one layer at a time.
+
+---
+
+## Mental Model
+
+```txt
+Frontend -> API -> Auth -> Database
+```
+
+If you skip layers while debugging, it is easy to misdiagnose the problem.
+
+---
+
+## 1. Session Does Not Persist
+
+### Symptoms
+
+- the user appears to log in and then becomes unauthenticated immediately
+- `isAuthenticated` stays false after the flow
+
+### Check
+
+- is the cookie being set?
+- is the request using credentials?
+- are your browser origins and cookie assumptions correct?
+
+### Good places to inspect
+
+- frontend network requests
+- backend auth integration layer
+- browser cookie storage
+- origin-related environment configuration
+
+For env details, see [Environment Variables](/reference/environment-variables).
+
+---
+
+## 2. API Cannot Reach The Auth Server
+
+### Symptoms
+
+- API returns 500s during auth-related flows
+- login or `/users/me` calls fail unexpectedly
+
+### Common cause
+
+The API is using the wrong auth server URL.
+
+### In Docker
+
+Use:
+
+```txt
+http://auth:5312
+```
+
+Not `http://localhost:5312`.
+
+For route context, see [Auth API Routes](/reference/auth-api-routes).
+
+---
+
+## 3. Docker Stack Is Not Healthy
+
+### Symptoms
+
+- one or more services never become reachable
+- `docker compose up` exits early or loops
+- local ports are in use
+
+### Useful commands
+
+```bash
+docker compose logs -f
+docker compose down
+docker compose up --build
+docker ps
+```
+
+If the local stack itself is the issue, also review [Docker & Local Environment](/operate/dockerenv).
+
+---
+
+## 4. Admin UI Is Not Accessible
+
+### Symptoms
+
+- dashboard redirects away
+- user can sign in but cannot access admin screens
+
+### Common causes
+
+- the user does not actually have `admin`, `admin:read`, or `admin:write`
+- the session was created before the role change
+- you are signed in as the wrong user
+- a sensitive write action needs a fresh step-up verification
+
+### What to do
+
+- verify the role on the user
+- sign out and sign back in after the change
+- confirm you are opening the dashboard on `http://localhost:5174`
+- complete step-up verification before retrying guarded write actions
+
+---
+
+## 5. OTP Or Magic Link Flow Fails
+
+### Symptoms
+
+- OTP is never accepted
+- magic link never completes
+- login flow stalls mid-way
+
+### Good checks
+
+- confirm the auth server is healthy
+- confirm the current flow is using the correct route group
+- check local logs for dev-mode OTP or link handling
+- verify the token or code is not expired
+
+Relevant route groups:
+
+- `/otp/*`
+- `/magic-link*`
+- `/webauthn/*`
+- `/oauth/*`
+- `/totp/*`
+- `/step-up/*`
+
+If the failure involves an active organization or membership, also inspect:
+
+- `/organizations/*`
+- `/admin/organizations/*`
+
+See [Auth API Routes](/reference/auth-api-routes).
+
+---
+
+## 6. Protected Backend Route Returns 401 Or 403
+
+### Symptoms
+
+- authenticated user still cannot reach an app route
+- backend says unauthorized or forbidden
+
+### Distinguish the failure
+
+- `401` usually means the request is not authenticated correctly
+- `403` usually means the user is authenticated but missing the required role or permission
+
+### Check
+
+- is auth middleware installed?
+- is the cookie present?
+- does the user have the required role?
+- are you using an exact role check when a scoped role check is intended?
+- did the user sign in again after the role was changed?
+
+---
+
+## Useful Local Inspection Commands
+
+View logs:
+
+```bash
+docker compose logs -f
+```
+
+Open a Postgres shell:
+
+```bash
+docker exec -it seamless-db psql -U myuser
+```
+
+Inspect sessions:
+
+```sql
+SELECT * FROM sessions;
+```
+
+Inspect users:
+
+```sql
+SELECT * FROM users;
+```
+
+---
+
+## Practical Debugging Order
+
+1. confirm which browser request is failing
+2. confirm the API request target and response
+3. confirm the auth service is reachable
+4. confirm the database state if needed
+5. confirm role/session state after any admin change
+
+---
+
+## Related Docs
+
+- [Docker & Local Environment](/operate/dockerenv)
+- [Environment Variables](/reference/environment-variables)
+- [Auth API Routes](/reference/auth-api-routes)

@@ -1,3 +1,4 @@
 User-agent: *
 Allow: /
-Sitemap: https://docs.seamlessauth.com/sitemap.xml
+
+Sitemap: https://docs.seamlessauth.com/sitemap-index.xml

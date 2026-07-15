@@ -1,0 +1,345 @@
+---
+title: "How To Use Organizations And Memberships"
+description: "Use this guide when your app needs team, workspace, tenant, or customer-account boundaries."
+sidebar:
+  order: 9
+---
+
+# How To Use Organizations And Memberships
+
+Use this guide when your app needs team, workspace, tenant, or customer-account boundaries.
+
+Seamless Auth organizations give you:
+
+- organization records
+- membership records
+- organization membership roles and scopes
+- an active organization pointer on the current session
+- admin routes for operator-level organization management
+
+They do not replace app-specific authorization for your product data. Your backend still needs to
+check whether the authenticated user can read or mutate each app resource.
+
+---
+
+## Data Model
+
+```txt
+User
+  -> OrganizationMembership
+    -> Organization
+
+Session
+  -> active organizationId
+```
+
+An organization has:
+
+| Field             | Meaning                            |
+| ----------------- | ---------------------------------- |
+| `id`              | Organization UUID                  |
+| `name`            | Display name                       |
+| `slug`            | Unique slug                        |
+| `createdByUserId` | User that created the organization |
+| `metadata`        | Optional caller-defined object     |
+
+A membership has:
+
+| Field            | Meaning                                                     |
+| ---------------- | ----------------------------------------------------------- |
+| `organizationId` | Owning organization                                         |
+| `userId`         | Member user                                                 |
+| `roles`          | Organization-level roles such as `owner`, `admin`, `member` |
+| `scopes`         | Organization-level scopes such as `members:read`            |
+
+When a user creates an organization, Seamless Auth gives that user membership roles
+`owner` and `admin`, with the scopes `organization:read`, `organization:write`, `members:read`,
+and `members:write`.
+
+---
+
+## Route Surface
+
+Through the Express adapter, browser apps call these routes at `/auth/organizations/*`.
+
+| Method   | Route                                                 | Purpose                                         |
+| -------- | ----------------------------------------------------- | ----------------------------------------------- |
+| `GET`    | `/auth/organizations`                                 | List current user's organizations               |
+| `POST`   | `/auth/organizations`                                 | Create an organization                          |
+| `GET`    | `/auth/organizations/:organizationId`                 | Get one organization                            |
+| `PATCH`  | `/auth/organizations/:organizationId`                 | Update an organization                          |
+| `POST`   | `/auth/organizations/:organizationId/switch`          | Set active organization for the current session |
+| `GET`    | `/auth/organizations/:organizationId/members`         | List members                                    |
+| `POST`   | `/auth/organizations/:organizationId/members`         | Add a member                                    |
+| `PATCH`  | `/auth/organizations/:organizationId/members/:userId` | Update member roles and scopes                  |
+| `DELETE` | `/auth/organizations/:organizationId/members/:userId` | Remove a member                                 |
+
+Admin routes are also exposed under `/auth/admin/organizations/*` and require scoped admin access
+in the auth API.
+
+---
+
+## Step 1: Read Current Organization State
+
+`AuthProvider` keeps the current user, organizations, and active organization in context.
+
+```tsx
+import { useAuth } from '@seamless-auth/react'
+
+export function CurrentOrganizationBadge() {
+  const { activeOrganization } = useAuth()
+
+  if (!activeOrganization) {
+    return <span>No organization selected</span>
+  }
+
+  return <span>{activeOrganization.name}</span>
+}
+```
+
+The provider refreshes this state after sign-in and after `switchOrganization(...)`.
+
+---
+
+## Step 2: Create An Organization
+
+Use the headless client for create/update/member operations.
+
+```tsx
+import { useState } from 'react'
+import { useAuth, useAuthClient, type OrganizationResult } from '@seamless-auth/react'
+
+export function CreateOrganizationForm() {
+  const authClient = useAuthClient()
+  const { refreshSession } = useAuth()
+  const [name, setName] = useState('')
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault()
+
+    const response = await authClient.createOrganization({
+      name,
+      metadata: { source: 'self-service' },
+    })
+
+    if (!response.ok) {
+      throw new Error('Could not create organization')
+    }
+
+    const result = (await response.json()) as OrganizationResult
+
+    await authClient.switchOrganization(result.organization.id)
+    await refreshSession()
+  }
+
+  return (
+    <form onSubmit={submit}>
+      <label htmlFor="organizationName">Organization name</label>
+      <input id="organizationName" value={name} onChange={(event) => setName(event.target.value)} />
+      <button type="submit">Create</button>
+    </form>
+  )
+}
+```
+
+If you omit `slug`, the auth API derives one from the name and makes it unique.
+
+---
+
+## Step 3: Switch Active Organization
+
+For basic switching, use the provider helper:
+
+```tsx
+import { useAuth } from '@seamless-auth/react'
+
+export function OrganizationSwitcher() {
+  const { organizations, activeOrganization, switchOrganization } = useAuth()
+
+  return (
+    <select
+      value={activeOrganization?.id ?? ''}
+      onChange={(event) => void switchOrganization(event.target.value)}
+    >
+      <option value="" disabled>
+        Select organization
+      </option>
+      {organizations.map((organization) => (
+        <option key={organization.id} value={organization.id}>
+          {organization.name}
+        </option>
+      ))}
+    </select>
+  )
+}
+```
+
+Switching updates the server-side session `organizationId` and causes the adapter to set a fresh
+access cookie.
+
+---
+
+## Step 4: List Members
+
+```tsx
+import { useEffect, useState } from 'react'
+import {
+  useAuth,
+  useAuthClient,
+  type OrganizationMembership,
+  type OrganizationMembersResult,
+} from '@seamless-auth/react'
+
+export function MemberList() {
+  const { activeOrganization } = useAuth()
+  const authClient = useAuthClient()
+  const [members, setMembers] = useState<OrganizationMembership[]>([])
+
+  useEffect(() => {
+    if (!activeOrganization) return
+
+    async function load() {
+      const response = await authClient.listOrganizationMembers(activeOrganization.id)
+
+      if (!response.ok) {
+        setMembers([])
+        return
+      }
+
+      const result = (await response.json()) as OrganizationMembersResult
+      setMembers(result.members)
+    }
+
+    void load()
+  }, [activeOrganization, authClient])
+
+  return (
+    <ul>
+      {members.map((member) => (
+        <li key={member.id}>
+          {member.user?.email ?? member.userId}: {member.roles.join(', ')}
+        </li>
+      ))}
+    </ul>
+  )
+}
+```
+
+Members can be listed by users with `members:read`, organization managers, or global admin read
+access.
+
+---
+
+## Step 5: Add Or Update Members
+
+Add a member by `userId` or `email`.
+
+```ts
+await authClient.addOrganizationMember(activeOrganization.id, {
+  email: 'teammate@example.com',
+  roles: ['member'],
+  scopes: ['organization:read'],
+})
+```
+
+Update membership roles or scopes:
+
+```ts
+await authClient.updateOrganizationMember(activeOrganization.id, userId, {
+  roles: ['admin'],
+  scopes: ['organization:read', 'organization:write', 'members:read', 'members:write'],
+})
+```
+
+Remove a member:
+
+```ts
+await authClient.removeOrganizationMember(activeOrganization.id, userId)
+```
+
+The auth API protects owner removal: an organization must keep at least one owner.
+
+---
+
+## Step 6: Protect Product Data On Your Backend
+
+Organization membership is not the same thing as app data authorization.
+
+Use Seamless Auth for organization identity and membership state, then enforce your product's
+resource rules on the backend.
+
+```ts
+import { requireAuth } from '@seamless-auth/express'
+
+app.get(
+  '/api/organizations/:organizationId/projects',
+  requireAuth({ cookieSecret }),
+  async (req, res) => {
+    const allowed = await canReadProjects({
+      userId: req.user.id,
+      organizationId: req.params.organizationId,
+    })
+
+    if (!allowed) {
+      res.status(403).json({ error: 'Insufficient organization access' })
+      return
+    }
+
+    res.json({
+      projects: await listProjects(req.params.organizationId),
+    })
+  },
+)
+```
+
+Prefer route parameters or explicit request data for app resources. Do not rely on hiding an
+organization selector in the UI as your tenant boundary.
+
+---
+
+## Step 7: Choose Role And Scope Names
+
+Seamless Auth has two role concepts:
+
+| Concept                              | Stored on                  | Use for                                             |
+| ------------------------------------ | -------------------------- | --------------------------------------------------- |
+| Global user roles                    | `users.roles`              | App-wide access such as `admin:read`                |
+| Organization membership roles/scopes | `organization_memberships` | Tenant-level membership and organization management |
+
+Membership roles are intentionally simple. A pragmatic default is:
+
+| Membership role | Use for                                        |
+| --------------- | ---------------------------------------------- |
+| `owner`         | Billing, ownership, destructive tenant actions |
+| `admin`         | Organization management                        |
+| `member`        | Normal team access                             |
+
+Scopes should be concrete and action-oriented:
+
+- `organization:read`
+- `organization:write`
+- `members:read`
+- `members:write`
+- app-specific scopes such as `projects:read` or `projects:write`
+
+---
+
+## Common Mistakes
+
+| Mistake                                                          | Fix                                                            |
+| ---------------------------------------------------------------- | -------------------------------------------------------------- |
+| Treating organization membership as automatic access to app data | Add backend checks for each app resource                       |
+| Using global `admin` for tenant actions                          | Use membership roles/scopes for tenant-level access            |
+| Removing the last owner                                          | Keep at least one `owner` membership                           |
+| Forgetting to refresh after create/switch                        | Call `switchOrganization(...)` or `refreshSession()`           |
+| Assuming active organization is always set                       | Handle users with no organizations or no selected organization |
+
+---
+
+## Related Docs
+
+- [How To Secure Routes](/build/secure-routes)
+- [React SDK](/build/react-sdk)
+- [Server SDKs](/build/server-sdks)
+- [Auth Data Model](/understand/data-model)
+- [Users & Roles](/understand/users)
