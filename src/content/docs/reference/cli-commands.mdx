@@ -17,12 +17,24 @@ The npm package is named `seamless-cli`. The executable binary is named `seamles
 
 | Command                            | Purpose                                                                                    |
 | ---------------------------------- | ------------------------------------------------------------------------------------------ |
-| `seamless init [project-name]`     | Scaffold a new local Seamless Auth project                                                 |
+| `seamless init [project-name]`     | Scaffold a new self-hosted local Seamless Auth project                                     |
 | `seamless check`                   | Validate generated project config, Docker, Compose, containers, and local health endpoints |
 | `seamless bootstrap-admin [email]` | Create the first admin bootstrap invite                                                    |
 | `seamless verify [flags]`          | Run the cross-package auth conformance harness (api / adapter / react matrix)               |
+| `seamless profile <sub>`           | Manage named pointers to the instances the CLI targets                                     |
+| `seamless login [identifier]`      | Log in to the active profile's instance with email OTP                                     |
+| `seamless whoami`                  | Show the identity, profile, and instance URL behind the current session                    |
+| `seamless logout [--all]`          | End the session and clear local tokens                                                     |
+| `seamless sessions <sub>`          | List or revoke sessions for the logged-in user                                             |
+| `seamless config <sub>`            | Read and write instance system configuration (admin)                                       |
+| `seamless users <sub>`             | Admin user management (admin)                                                              |
+| `seamless org <sub>`               | Admin organization and membership management (admin)                                       |
 | `seamless --help`                  | Print usage                                                                                |
 | `seamless --version`               | Print the installed CLI version                                                            |
+
+The `init`, `check`, `bootstrap-admin`, and `verify` commands are for building and testing a
+self-hosted stack. The `profile`, `login`, `whoami`, `logout`, `sessions`, `config`, `users`, and
+`org` commands act as an authenticated client against a running instance (managed or self-hosted).
 
 Use `npx seamless-cli ...` when you do not have the package installed globally:
 
@@ -80,6 +92,16 @@ It is treated as:
 ```bash
 seamless init my-app
 ```
+
+### Managed init (planned)
+
+Today `init` only scaffolds a self-hosted local stack. It hardwires the auth URL to
+`http://localhost:5312` and the API URL to `http://localhost:3000` and generates tokens locally. It
+does not read your logged-in profile or connect a scaffolded app to a hosted managed instance.
+
+A managed `init` flow that connects a scaffolded app to your managed instance is planned and tracked
+as `fells-code/seamless-cli#59`. Until it ships, use the [Managed Quickstart](/start/managed-quickstart)
+to connect an app to a hosted instance by hand.
 
 ---
 
@@ -187,6 +209,130 @@ ecosystem PRs so a change in one repo is tested against the others.
 
 ---
 
+## `profile`
+
+Profiles are named pointers to the Seamless Auth instances the CLI targets. They are stored in
+`~/.config/seamless/config.json` (respects `XDG_CONFIG_HOME`). The file holds only non-secret instance
+and identity metadata, never tokens.
+
+```bash
+seamless profile list
+seamless profile add <name> --instance-url <url> [--identifier-type email|phone]
+seamless profile use <name>
+seamless profile remove <name>
+```
+
+- `list` shows configured profiles; the active one is marked with `*`.
+- `add` creates or updates a profile and prompts interactively if flags are omitted. Non-local URLs
+  must be `https`.
+- `use` sets the active profile for later commands.
+- `remove` deletes a profile and clears its keychain tokens.
+
+Choose the active profile per command with `--profile <name>` or the `SEAMLESS_PROFILE` environment
+variable.
+
+---
+
+## `login`
+
+```bash
+seamless login [identifier] [--identifier <email>] [--profile <name>]
+```
+
+Logs in to the active profile's instance using email OTP. Prompts for the identifier (or pass it
+positionally or with `--identifier`) and the emailed code, then stores the session in the OS keychain
+(macOS Keychain, Windows Credential Manager, or Linux Secret Service). For headless use,
+`SEAMLESS_REFRESH_TOKEN` is used directly when set.
+
+---
+
+## `whoami`
+
+```bash
+seamless whoami [--profile <name>]
+```
+
+Shows the identity behind the active session (`sub`, email, roles), along with the profile name and
+instance URL. Fails cleanly if you are not logged in.
+
+---
+
+## `logout`
+
+```bash
+seamless logout [--all] [--profile <name>]
+```
+
+Ends the current session on the instance and clears the local keychain tokens. `--all` revokes every
+session for the user before clearing local tokens.
+
+---
+
+## `sessions`
+
+```bash
+seamless sessions list
+seamless sessions revoke <id>
+seamless sessions revoke --all
+```
+
+Lists active sessions for the logged-in user (session id, device or user agent, IP, and last-used
+time, with the current session marked) and revokes them. Revoking the current session or `--all`
+prompts for confirmation and then clears local tokens.
+
+---
+
+## `config`
+
+Read and write the instance system configuration. Requires an admin role on the target instance.
+
+```bash
+seamless config get [key] [--json]
+seamless config set <key> <value>
+seamless config roles [--json]
+seamless config diff <file>
+seamless config apply <file> [--dry-run]
+```
+
+`set` parses the value as JSON, falling back to a string (for example
+`seamless config set login_methods '["email_otp","passkey"]'`). `apply` writes a local JSON config
+file after a confirmation prompt.
+
+---
+
+## `users`
+
+Admin user management. Requires an admin role.
+
+```bash
+seamless users list [--limit <n>] [--offset <n>] [--json]
+seamless users delete <id>
+seamless users credentials <id> [--json]
+seamless users prepare-device-replacement <id> [--keep-sessions] [--keep-passkeys] [--keep-totp]
+```
+
+`prepare-device-replacement` is admin-assisted account recovery and needs an elevated (stepped-up)
+session.
+
+---
+
+## `org`
+
+Admin organization and membership management. Requires an admin role.
+
+```bash
+seamless org list [--json]
+seamless org create <name> [--slug <slug>]
+seamless org get <id> [--json]
+seamless org update <id> [--name <name>] [--slug <slug>]
+seamless org members list <orgId> [--json]
+seamless org members add <orgId> (--user <id> | --email <email>) [--roles a,b] [--scopes a,b]
+seamless org members update <orgId> <userId> [--roles a,b] [--scopes a,b]
+seamless org members remove <orgId> <userId>
+```
+
+---
+
 ## Removed Or Not Currently Shipped
 
 The current `../seamless-cli` source does not include these commands:
@@ -195,7 +341,8 @@ The current `../seamless-cli` source does not include these commands:
 - `seamless destroy`
 - `seamless contribute`
 
-Do not document those commands as shipped unless they reappear in source.
+A managed `init` flow (`seamless-cli#59`) is planned but not yet shipped. Do not document these as
+shipped unless they exist in source.
 
 ---
 

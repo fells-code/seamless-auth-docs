@@ -62,15 +62,30 @@ export function Root() {
 }
 ```
 
-`apiHost` points at your backend API, not the raw auth server. The SDK sends requests to
-`${apiHost}/auth/...`, so the backend usually mounts `@seamless-auth/express` at `/auth`.
-
 `AuthProvider` currently accepts:
 
 | Prop                       | Purpose                                          |
 | -------------------------- | ------------------------------------------------ |
-| `apiHost`                  | Backend API base URL                             |
+| `apiHost`                  | Auth base URL (required)                          |
 | `autoDetectPreviousSignin` | Optional localStorage-backed returning-user hint |
+
+There is no service token, client id, or app id prop. The browser SDK carries no secret and relies on
+cookies. `apiHost` may be given with or without a trailing slash; the SDK sends requests to
+`${apiHost}/auth/...`.
+
+### What `apiHost` points at
+
+The value of `apiHost` depends on which path you are on:
+
+| Path            | Set `apiHost` to                                                                          |
+| --------------- | ----------------------------------------------------------------------------------------- |
+| **Managed**     | Your application's Auth Server URL from the portal, for example `https://<app-id>.seamlessauth.com` |
+| **Self-hosted** | Your backend API that mounts `@seamless-auth/express` at `/auth`, for example `http://localhost:3000` |
+
+On the managed path, use the Auth Server URL from your application's **Auth API Configuration** card.
+See the [Managed Quickstart](/start/managed-quickstart). On the self-hosted path, `apiHost` points at
+your own backend, which proxies to the private auth API. The `localhost` example below is a
+self-hosted local setup.
 
 ---
 
