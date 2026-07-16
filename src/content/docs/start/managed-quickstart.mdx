@@ -1,0 +1,254 @@
+---
+title: "Managed Quickstart"
+description: "Sign up to the Seamless Auth portal, create an application and pick a plan, get a service token, connect a real app with the SDKs, and see a user sign in."
+sidebar:
+  order: 3
+---
+
+import { Aside, Card } from '@astrojs/starlight/components';
+
+## Managed Quickstart
+
+This guide takes you from signing up on the Seamless Auth portal to a real app where a user can sign
+in, using a hosted auth instance that Seamless runs for you. You do not run a database, signing keys,
+or an auth server on this path.
+
+If you would rather run the whole stack yourself, follow the
+[Self-Hosted Quickstart](/start/quickstart) instead. Not sure which path fits? See
+[Managed or Self-Hosted](/start/choose-your-path).
+
+---
+
+## What you will need
+
+- Node.js 20.11.x or newer and a package manager (`npm` is used below)
+- An existing app, or two empty projects: a React frontend and an Express backend
+- A web browser and an email inbox you control
+- About ten minutes
+
+<Aside type="note">
+  You do not need Docker, Postgres, or the CLI for the managed path. Those are for self-hosting.
+</Aside>
+
+---
+
+## Step 1: Sign up to the portal
+
+Open the Seamless Auth portal at
+[https://dashboard.seamlessauth.com](https://dashboard.seamlessauth.com) and sign up.
+
+The portal is itself passwordless and built on Seamless Auth, so there is no password to choose:
+
+1. Enter your email on the sign-up screen.
+2. Open the verification code sent to your inbox and enter it.
+3. Register a passkey when prompted, or continue with email and magic links.
+
+You now have a portal account. The portal is where you create applications, manage plans and billing,
+generate service tokens, and watch users and auth events for each application.
+
+---
+
+## Step 2: Create an application
+
+An application is one hosted auth instance. From the dashboard, choose **Create your first
+application** (or **New Application**) and fill in the form.
+
+**Basic fields:**
+
+- **App Name** (3 to 32 characters, letters and numbers)
+- **Frontend URL** (your app's origin, must be `https://...`)
+- **Service Plan** (see the plans below)
+
+**Advanced fields** are optional and have safe defaults. They include notification email(s),
+application roles and default role, a development-mode toggle, AWS region, access and refresh token
+TTLs, and rate-limit thresholds.
+
+### Plans
+
+| Plan       | Price      | Notes                                             |
+| ---------- | ---------- | ------------------------------------------------- |
+| Trial      | Free       | 14 days, no credit card required                  |
+| MVP        | $49 / mo   |                                                   |
+| Startup    | $99 / mo   | Recommended for most new products                 |
+| Pro        | $399 / mo  |                                                   |
+| Enterprise | Contact sales | Not self-serve, email support@seamlessauth.com |
+
+<Aside type="tip">
+  Start on the Trial plan to get a working instance without entering payment details. You can upgrade
+  to a paid plan from the application's billing page later. Each account gets one lifetime trial.
+</Aside>
+
+For a paid plan, the portal sends you through Stripe checkout before provisioning. On the Trial plan,
+provisioning starts immediately.
+
+### Provisioning
+
+After you submit, Seamless provisions the instance. This takes a few minutes (the portal estimates
+about five). When it finishes, the application has its own **Auth Server URL** of the form:
+
+```txt
+https://<your-app-id>.seamlessauth.com
+```
+
+This URL is what your SDKs point at. You can find it on the application's **Auth API Configuration**
+card at any time.
+
+---
+
+## Step 3: Get a service token
+
+Your backend authenticates to the hosted auth instance with a **service token**. Generate it from the
+application's **Auth API Configuration** card:
+
+1. Open your application in the portal.
+2. Find the **Auth API Configuration** card and its **Service Token** section.
+3. Choose **Generate Token**.
+
+The full token is shown **once**. Copy it immediately and store it as a server-side secret. The portal
+keeps only a masked copy (the last few characters) for reference, so it cannot show you the full value
+again.
+
+<Aside type="caution">
+  Treat the service token like a password. Keep it in a server-side environment variable, never in
+  frontend code, and never commit it. If it leaks, use **Rotate Token** on the same card. Rotating
+  invalidates the previous token immediately.
+</Aside>
+
+The service token is a long, URL-safe secret. Your backend reads it from an environment variable
+(shown as `SEAMLESS_SERVICE_TOKEN` below); the frontend never sees it.
+
+---
+
+## Step 4: Connect your frontend
+
+Install the React SDK in your frontend project:
+
+```bash
+npm install @seamless-auth/react
+```
+
+Wrap your app in `AuthProvider`, using your application's **Auth Server URL** as `apiHost`, then read
+session state with `useAuth()`:
+
+```tsx
+import { AuthProvider, useAuth } from '@seamless-auth/react';
+
+const AUTH_URL = 'https://<your-app-id>.seamlessauth.com';
+
+export function App() {
+  return (
+    <AuthProvider apiHost={AUTH_URL}>
+      <AppRoutes />
+    </AuthProvider>
+  );
+}
+
+function AppRoutes() {
+  const { isAuthenticated, user } = useAuth();
+
+  return isAuthenticated ? <p>Signed in as {user?.email}</p> : <LoginPage />;
+}
+```
+
+`AuthProvider` takes only `apiHost` (required) and an optional `autoDetectPreviousSignin`. There is no
+frontend token or client id: the browser SDK carries no secret and relies on cookies. For built-in
+sign-in screens, mount `AuthRoutes`; for custom UI, use the headless client. See the
+[React SDK](/build/react-sdk) reference for the full API.
+
+<Aside type="tip">
+  Put `AUTH_URL` in a frontend environment variable (for example `VITE_AUTH_URL` in a Vite app) rather
+  than hardcoding it, so the value differs cleanly between environments.
+</Aside>
+
+---
+
+## Step 5: Connect your backend
+
+Install the Express SDK in your backend project:
+
+```bash
+npm install @seamless-auth/express
+```
+
+Mount the auth server and read the service token from a server-side environment variable. Point
+`authServerUrl` and `audience` at the same **Auth Server URL** as the frontend:
+
+```ts
+import express from 'express';
+import createSeamlessAuthServer from '@seamless-auth/express';
+
+const AUTH_URL = 'https://<your-app-id>.seamlessauth.com';
+
+const app = express();
+
+app.use(
+  '/auth',
+  createSeamlessAuthServer({
+    authServerUrl: AUTH_URL,
+    cookieSecret: process.env.COOKIE_SIGNING_KEY!,
+    serviceSecret: process.env.SEAMLESS_SERVICE_TOKEN!, // from the portal, shown once
+    jwksKid: process.env.JWKS_KID!,
+    issuer: process.env.APP_ORIGIN!,
+    audience: AUTH_URL,
+  }),
+);
+```
+
+Set these environment variables on your backend:
+
+| Variable                 | Value                                                              |
+| ------------------------ | ----------------------------------------------------------------- |
+| `SEAMLESS_SERVICE_TOKEN` | The service token generated in Step 3                             |
+| `COOKIE_SIGNING_KEY`     | A strong random secret your backend uses to sign its auth cookies |
+| `JWKS_KID`               | The signing key id for your instance                              |
+| `APP_ORIGIN`             | Your backend's own origin, used as the token issuer               |
+
+The service token is never sent raw. The adapter uses it to sign short-lived service tokens for
+machine-to-machine calls to your hosted instance. To protect routes, add `requireAuth` and
+`requireRole` from the same package. See the [Server SDKs](/build/server-sdks) reference for the full
+option list and middleware.
+
+<Aside type="note">
+  The portal shows these same install commands and snippets in its built-in **Get connected** wizard,
+  with your Auth Server URL already filled in. This guide mirrors that wizard so you can follow either
+  one.
+</Aside>
+
+---
+
+## Step 6: Test a login
+
+Run your frontend and backend, then sign in:
+
+1. Open your app and start the sign-in flow.
+2. Sign in with a passkey or an emailed code.
+3. Confirm the session resolves and `useAuth()` reports the user as authenticated.
+
+Back in the portal, the new account appears on the application's **Users** page once it authenticates,
+and the sign-in shows up under **Auth Events**.
+
+<Card title="What you just built">
+  A real app authenticating against a hosted Seamless Auth instance: passwordless sign-in, a
+  server-side security boundary, and a portal to manage users, plans, and tokens. No auth
+  infrastructure to operate.
+</Card>
+
+---
+
+## Where things live in the portal
+
+| You need to                    | Go to                                             |
+| ------------------------------ | ------------------------------------------------- |
+| Copy your Auth Server URL      | Application → Auth API Configuration card         |
+| Generate or rotate the token   | Application → Auth API Configuration → Service Token |
+| See users and their sign-ins   | Application → Users, Application → Auth Events     |
+| Change or upgrade your plan     | Application → Billing                              |
+| Re-run the connection steps     | Application → Get connected                        |
+
+---
+
+## Next Step
+
+- Build custom sign-in UI: [How To Build Your Own Auth UI](/build/custom-auth-ui)
+- Protect pages and API routes: [How To Secure Routes](/build/secure-routes)
+- Understand the SDKs in depth: [React SDK](/build/react-sdk) and [Server SDKs](/build/server-sdks)

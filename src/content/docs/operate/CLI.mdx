@@ -5,11 +5,14 @@ sidebar:
   order: 1
 ---
 
+import { Aside } from '@astrojs/starlight/components';
+
 # Seamless Auth CLI
 
-The Seamless Auth CLI is published as `seamless-cli` and exposes the `seamless` binary. It is the
-entry point for scaffolding a local Seamless Auth project, checking the generated stack, creating
-the first admin bootstrap invite, and verifying auth conformance across the ecosystem.
+The Seamless Auth CLI is published as `seamless-cli` and exposes the `seamless` binary. It scaffolds
+a self-hosted local project, checks the generated stack, verifies auth conformance, and also acts as
+an authenticated client against a running Seamless Auth instance (log in, inspect sessions, and run
+admin operations).
 
 Current commands cover:
 
@@ -19,8 +22,18 @@ Current commands cover:
 - validate generated config, Docker Compose, containers, and local health endpoints
 - bootstrap the first admin user
 - verify the full auth surface with the `seamless verify` conformance harness
+- log in to an instance and manage the active profile, session, and account
+- run admin `config`, `users`, and `org` operations against an instance
 
 The current `../seamless-cli` source does not ship `deploy`, `destroy`, or `contribute` commands.
+
+<Aside type="note">
+  The CLI does not yet have a managed `init` flow. `seamless init` scaffolds a self-hosted local
+  stack pointed at localhost; it does not read your logged-in profile or connect a scaffolded app to a
+  hosted managed instance. That managed connect flow is planned and tracked as
+  `fells-code/seamless-cli#59`. For the managed path, follow the
+  [Managed Quickstart](/start/managed-quickstart).
+</Aside>
 
 ---
 
@@ -119,6 +132,54 @@ runs a Playwright matrix across the api, adapter, and React (browser) layers, th
 layer pass/fail grid. Use `--local` to build the `@seamless-auth/*` packages from local source
 (pre-publish contract testing); the default tests the published packages. See the
 [CLI command reference](/reference/cli-commands) for all flags and environment overrides.
+
+---
+
+## Account And Instance Commands
+
+Beyond scaffolding, the CLI can authenticate against a running Seamless Auth instance and act as a
+client. It targets whichever instance is set in the active profile.
+
+### profile
+
+```bash
+seamless profile add work --instance-url https://<your-app-id>.seamlessauth.com
+seamless profile list
+seamless profile use work
+seamless profile remove work
+```
+
+Profiles are named pointers to Seamless Auth instances, stored in `~/.config/seamless/config.json`
+(respects `XDG_CONFIG_HOME`). The config file holds only non-secret instance and identity metadata,
+not tokens. Set the active profile per command with `--profile <name>` or the `SEAMLESS_PROFILE`
+environment variable.
+
+### login, whoami, logout
+
+```bash
+seamless login              # email OTP against the active profile's instance
+seamless whoami             # show the current identity, profile, and instance URL
+seamless logout             # end the session and clear local tokens
+seamless logout --all       # revoke every session first, then clear local tokens
+```
+
+`login` authenticates with email OTP and stores the session in the OS keychain (macOS Keychain,
+Windows Credential Manager, or Linux Secret Service), not in a plaintext file.
+
+### sessions
+
+```bash
+seamless sessions list
+seamless sessions revoke <id>
+seamless sessions revoke --all
+```
+
+Lists and revokes sessions for the logged-in user.
+
+### Admin commands
+
+With an admin role on the target instance, the CLI can also run `config`, `users`, and `org`
+operations. See the [CLI command reference](/reference/cli-commands) for the full flag surface.
 
 ---
 

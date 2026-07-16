@@ -9,6 +9,8 @@ export default defineConfig({
   redirects: {
     // The site used to be served under /docs/*. Preserve those deep links.
     '/': '/start/overview',
+    // The portal's welcome email points new managed signups here.
+    '/getting-started': '/start/managed-quickstart',
     '/docs': '/start/overview',
     '/docs/[...slug]': '/[...slug]',
     // Old mixed-case slugs now resolve to their lowercased routes.

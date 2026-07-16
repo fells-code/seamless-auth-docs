@@ -9,14 +9,21 @@ import { Aside } from '@astrojs/starlight/components';
 
 ## Seamless Auth
 
-Seamless Auth is a passwordless authentication ecosystem designed to run as part of your own
-application infrastructure.
+Seamless Auth is a passwordless authentication ecosystem. You can run it as a managed hosted service
+or self-host the whole stack inside your own infrastructure.
 
-It combines a self-hostable auth server, official SDKs, a CLI for scaffolding a working stack, and
-an operator dashboard for managing users, sessions, security, and system configuration.
+It combines a hosted or self-hostable auth server, official SDKs, a CLI for scaffolding a working
+stack, a developer portal for the managed offering, and an operator dashboard for managing users,
+sessions, security, and system configuration.
 
-The goal is to give you modern authentication while keeping the auth engine, session boundary, and
-user experience inside your application stack.
+The goal is to give you modern authentication with the same SDKs and session model whether Seamless
+hosts the auth instance for you or you keep the auth engine and data inside your own stack.
+
+<Aside type="tip">
+  New here? Start with [Managed or Self-Hosted](/start/choose-your-path) to pick a path, then follow
+  the [Managed Quickstart](/start/managed-quickstart) or the
+  [Self-Hosted Quickstart](/start/quickstart).
+</Aside>
 
 <Aside type="note">
   Seamless Auth is for teams that want passwordless auth with explicit boundaries, inspectable
@@ -24,8 +31,9 @@ user experience inside your application stack.
 </Aside>
 
 <Aside type="caution">
-  The ecosystem is strongest today for scaffolded full-stack setups and source-visible self-hosting.
-  Deeper existing-project integration and deployment automation docs still need more coverage.
+  On the self-hosted path, the ecosystem is strongest today for scaffolded full-stack setups and
+  source-visible self-hosting. Deeper existing-project integration and self-hosted deployment
+  automation still need more coverage. The managed path handles hosting for you.
 </Aside>
 
 ---
@@ -77,7 +85,8 @@ Seamless Auth is made up of a few focused projects.
 
 | Piece                           | Role                                                          |
 | ------------------------------- | ------------------------------------------------------------- |
-| `seamless-cli`                  | Scaffolds a full local stack                                  |
+| Seamless Auth portal            | Managed offering: create apps, pick plans, issue service tokens |
+| `seamless-cli`                  | Scaffolds a full local stack for self-hosting                 |
 | `seamless-auth-api`             | Runs the passwordless auth engine                             |
 | `@seamless-auth/core`           | Framework-agnostic server auth primitives                     |
 | `@seamless-auth/express`        | Official Express backend integration                          |
@@ -117,4 +126,4 @@ By the end of this guide, you will have:
 
 ## Next Step
 
-→ Continue to Quickstart
+→ Continue to [Managed or Self-Hosted](/start/choose-your-path)

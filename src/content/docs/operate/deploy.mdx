@@ -1,39 +1,67 @@
 ---
-title: "Deployment Status"
-description: "The current seamless-cli package does not ship a deployment command."
+title: "Running In Production"
+description: "How Seamless Auth runs in production: the managed hosted offering, and what self-hosted operators own since the CLI ships no deployment command."
 sidebar:
   order: 4
 ---
 
-# Deployment Status
+import { Aside } from '@astrojs/starlight/components';
 
-The current `seamless-cli` package does not ship a deployment command.
+# Running In Production
 
-This page intentionally preserves the existing `/docs/operate/deploy` route, but the old AWS
-dev-tier `deploy` and `destroy` command docs no longer describe the renamed CLI source in
-`../seamless-cli`.
+There are two ways to run Seamless Auth in production. The managed offering hosts the auth instance
+for you. Self-hosting means you provision and operate the stack yourself.
+
+This page previously documented an AWS dev-tier `deploy` and `destroy` command flow. That flow is not
+in the current `../seamless-cli` source, so it is no longer described here as shipped.
 
 ---
 
-## Current State
+## Managed hosting
 
-The current public CLI command surface is:
+On the managed path, Seamless runs the auth instance for you. You create an application in the portal
+at [https://dashboard.seamlessauth.com](https://dashboard.seamlessauth.com), pick a plan, and Seamless
+provisions a dedicated hosted instance at `https://<your-app-id>.seamlessauth.com`. You point the SDKs
+at that URL and a portal-issued service token.
+
+On this path you do not provision Postgres, manage signing keys, or run the auth server. See the
+[Managed Quickstart](/start/managed-quickstart).
+
+---
+
+## Self-hosted CLI surface today
+
+For self-hosting, the public CLI command surface is:
 
 ```bash
 seamless init [project-name]
 seamless check
 seamless bootstrap-admin [email]
+seamless verify
+seamless login
+seamless profile <list|add|use|remove>
 seamless --help
 seamless --version
 ```
 
-There is no current `seamless deploy` or `seamless destroy` implementation in `../seamless-cli`.
+The CLI also exposes `whoami`, `logout`, `sessions`, and the admin commands `config`, `users`, and
+`org` against a configured instance. See the [CLI command reference](/reference/cli-commands) for the
+full surface.
+
+There is no `seamless deploy` or `seamless destroy` implementation in `../seamless-cli`.
+
+<Aside type="note">
+  A managed `init` flow, where `seamless init` connects a scaffolded app to your hosted managed
+  instance instead of hardwiring localhost, is planned but not shipped. It is tracked as
+  `fells-code/seamless-cli#59`. Today `seamless init` only scaffolds a self-hosted local stack pointed
+  at localhost.
+</Aside>
 
 ---
 
-## What The CLI Can Prepare Today
+## What the CLI can prepare today
 
-`seamless-cli` can generate a local project with:
+`seamless-cli` can generate a local self-hosted project with:
 
 - React web starter
 - Express API starter
@@ -47,9 +75,9 @@ That gives you a production-shaped local stack, but it is not a hosted deploymen
 
 ---
 
-## What Operators Still Own
+## What self-hosted operators still own
 
-Until deployment automation ships again, operators own:
+If you self-host, until deployment automation ships you own:
 
 - hosting the auth API, application API, web app, and optional admin dashboard
 - provisioning Postgres
@@ -64,6 +92,8 @@ Use [Environment Variables](/reference/environment-variables),
 [Cookie, Session, And Token Reference](/reference/cookies-sessions-tokens) when planning those
 deployment surfaces.
 
+The managed offering handles these for you.
+
 ---
 
 ## Documentation Rule
@@ -71,6 +101,7 @@ deployment surfaces.
 When documenting deployment work:
 
 - do not describe `deploy` or `destroy` as shipped unless those commands exist in `../seamless-cli`
+- do not describe managed `init` as shipped until `seamless-cli#59` lands
 - label future deployment flows as planned or in progress
 - tie infrastructure claims to current source code or generated files
 - keep operator-owned production hardening separate from CLI-generated local setup

@@ -101,13 +101,30 @@ app.get(
 
 | Option          | Purpose                                                         |
 | --------------- | --------------------------------------------------------------- |
-| `authServerUrl` | Base URL for the private Seamless Auth API                      |
+| `authServerUrl` | Base URL for the Seamless Auth instance                         |
 | `cookieSecret`  | Secret used to verify and sign adapter cookies                  |
-| `serviceSecret` | Shared service secret matching the auth API `API_SERVICE_TOKEN` |
+| `serviceSecret` | Shared service secret for machine-to-machine calls to the auth instance |
 | `issuer`        | Issuer/origin value for app-issued cookies                      |
 | `audience`      | Expected audience, usually the auth server URL                  |
 
 Optional values include `jwksKid`, `cookieDomain`, custom cookie names, and `messaging`.
+
+### Managed vs self-hosted configuration
+
+The options are the same on both paths. Only the values differ, and where the service secret comes
+from.
+
+| Option          | Managed                                                          | Self-hosted                                          |
+| --------------- | --------------------------------------------------------------- | ---------------------------------------------------- |
+| `authServerUrl` | Your Auth Server URL, for example `https://<app-id>.seamlessauth.com` | The auth API, for example `http://localhost:5312`    |
+| `audience`      | The same Auth Server URL                                         | The same auth server URL                             |
+| `serviceSecret` | A service token generated in the portal (shown once)            | The auth API's `API_SERVICE_TOKEN` from your local stack |
+
+On the managed path, generate the service token from your application's **Auth API Configuration**
+card and read it from a server-side environment variable. The portal's connection snippet reads it
+from `SEAMLESS_SERVICE_TOKEN`. See the [Managed Quickstart](/start/managed-quickstart). The
+`serviceSecret` is never sent raw: the adapter uses it to sign short-lived service tokens for calls
+to the auth instance.
 
 ---
 
