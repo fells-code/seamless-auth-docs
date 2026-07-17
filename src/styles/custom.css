@@ -1,7 +1,8 @@
-/* Seamless Auth docs accent, layered on top of Starlight's dark theme. */
+/* Seamless Auth docs accent, aligned to the Fells Code family blue and layered
+   on top of Starlight's dark theme. */
 :root {
   --sl-color-accent-low: #10243a;
-  --sl-color-accent: #2169a8;
+  --sl-color-accent: #2f88c8;
   --sl-color-accent-high: #a9cdec;
 }
 
@@ -9,4 +10,61 @@
   --sl-color-accent-low: #cfe2f3;
   --sl-color-accent: #1b5a8e;
   --sl-color-accent-high: #0f3352;
+}
+
+/* Fells Code family endorsement in the footer. */
+.fells-family {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--sl-color-gray-5);
+}
+
+.fells-family-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+  color: var(--sl-color-gray-3);
+  font-size: var(--sl-text-sm);
+  text-decoration: none;
+}
+
+.fells-family-lockup img {
+  display: block;
+}
+
+.fells-family-lockup strong {
+  color: var(--sl-color-white);
+  font-weight: 600;
+}
+
+.fells-family-lockup:hover {
+  color: var(--sl-color-white);
+}
+
+.fells-family-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.15rem;
+}
+
+.fells-family-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--sl-color-gray-2);
+  font-size: var(--sl-text-sm);
+  text-decoration: none;
+}
+
+.fells-family-links a::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--fells-dot, var(--sl-color-accent));
+}
+
+.fells-family-links a:hover {
+  color: var(--sl-color-white);
 }

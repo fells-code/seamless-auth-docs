@@ -29,6 +29,9 @@ export default defineConfig({
       description:
         'Documentation and technical reference for Seamless Auth, the passwordless authentication ecosystem you run inside your own application stack.',
       favicon: '/key_s_logo.ico',
+      components: {
+        Footer: './src/components/Footer.astro',
+      },
       social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/fells-code' }],
       editLink: {
         baseUrl: 'https://github.com/fells-code/seamless-auth-docs/edit/main/',

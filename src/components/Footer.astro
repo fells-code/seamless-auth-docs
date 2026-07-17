@@ -1,0 +1,48 @@
+---
+import Default from '@astrojs/starlight/components/Footer.astro'
+
+// Fells Code family endorsement, appended below Starlight's default footer.
+// Mirrors the canonical brand/products.json registry in the fellscode repo;
+// each product owns one accent from the logo palette.
+const family = [
+  { name: 'Seamless Auth', url: 'https://seamlessauth.com', accent: '#2f88c8' },
+  {
+    name: 'Seamless Secrets',
+    url: 'https://fellscode.com/products/seamlessSecrets',
+    accent: '#2fa585',
+  },
+  {
+    name: 'Review Board',
+    url: 'https://fellscode.com/products/seamlessReviewBoard',
+    accent: '#e35a4d',
+  },
+  {
+    name: 'Seamless CLI',
+    url: 'https://fellscode.com/products/createSeamless',
+    accent: '#ffaa1a',
+  },
+  {
+    name: 'Seamless Glance',
+    url: 'https://fellscode.com/products/seamlessGlance',
+    accent: '#2bb6a6',
+  },
+]
+---
+
+<Default {...Astro.props}><slot /></Default>
+
+<div class="fells-family">
+  <a class="fells-family-lockup" href="https://fellscode.com">
+    <img src="/fells-code-mark.svg" alt="" aria-hidden="true" width="20" height="20" />
+    <span>Part of the <strong>Fells Code</strong> family</span>
+  </a>
+  <div class="fells-family-links">
+    {
+      family.map((member) => (
+        <a href={member.url} style={`--fells-dot:${member.accent}`}>
+          {member.name}
+        </a>
+      ))
+    }
+  </div>
+</div>

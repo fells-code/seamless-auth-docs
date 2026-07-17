@@ -1,0 +1,10 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Fells Code">
+  <title>Fells Code</title>
+  <desc>Four woven ribbons forming an interlocking square.</desc>
+  <!-- Pinwheel weave: each ribbon owns one side and tucks under the next,
+       leaving a square hole in the center. Draw order sets the over/under. -->
+  <rect x="20" y="20" width="76" height="22" rx="8" fill="#d81818"/>
+  <rect x="86" y="20" width="22" height="76" rx="8" fill="#f0a800"/>
+  <rect x="32" y="86" width="76" height="22" rx="8" fill="#2fa585"/>
+  <rect x="20" y="32" width="22" height="76" rx="8" fill="#2f88c8"/>
+</svg>
