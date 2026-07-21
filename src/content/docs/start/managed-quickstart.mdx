@@ -55,7 +55,7 @@ application** (or **New Application**) and fill in the form.
 
 **Basic fields:**
 
-- **App Name** (3 to 32 characters, letters and numbers)
+- **App Name** (3 to 32 characters, letters, numbers, and single spaces)
 - **Frontend URL** (your app's origin, must be `https://...`)
 - **Service Plan** (see the plans below)
 
@@ -69,8 +69,7 @@ TTLs, and rate-limit thresholds.
 | ---------- | ---------- | ------------------------------------------------- |
 | Trial      | Free       | 14 days, no credit card required                  |
 | MVP        | $49 / mo   |                                                   |
-| Startup    | $99 / mo   | Recommended for most new products                 |
-| Pro        | $399 / mo  |                                                   |
+| Business   | $99 / mo   | Recommended for most new products                 |
 | Enterprise | Contact sales | Not self-serve, email support@seamlessauth.com |
 
 <Aside type="tip">
@@ -225,11 +224,11 @@ Run your frontend and backend, then sign in:
 3. Confirm the session resolves and `useAuth()` reports the user as authenticated.
 
 Back in the portal, the new account appears on the application's **Users** page once it authenticates,
-and the sign-in shows up under **Auth Events**.
+and the sign-in shows up under **Auth Events**. Here you can manage users and roles. This is the managed-path equivalent of role editing.
 
 <Card title="What you just built">
   A real app authenticating against a hosted Seamless Auth instance: passwordless sign-in, a
-  server-side security boundary, and a portal to manage users, plans, and tokens. No auth
+  server-side security boundary, and a portal to manage users, roles, plans, and tokens. No auth
   infrastructure to operate.
 </Card>
 
