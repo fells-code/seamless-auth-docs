@@ -28,10 +28,10 @@ Current commands cover:
 The current `../seamless-cli` source does not ship `deploy`, `destroy`, or `contribute` commands.
 
 <Aside type="note">
-  The CLI does not yet have a managed `init` flow. `seamless init` scaffolds a self-hosted local
+  The CLI does have a managed `init` flow. When a profile is logged in, init defaults to the managed path,
+  When not logged in it will integrate the existing project. `seamless init` scaffolds a self-hosted local
   stack pointed at localhost; it does not read your logged-in profile or connect a scaffolded app to a
-  hosted managed instance. That managed connect flow is planned and tracked as
-  `fells-code/seamless-cli#59`. For the managed path, follow the
+  hosted managed instance. For the managed path, follow the
   [Managed Quickstart](/start/managed-quickstart).
 </Aside>
 
