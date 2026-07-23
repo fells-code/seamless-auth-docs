@@ -286,7 +286,7 @@ In production:
 
 - `SEAMLESS_JWKS_ACTIVE_KID` identifies the active signing key
 - `SEAMLESS_JWKS_KEY_<kid>_PRIVATE` contains the private key PEM for the active key
-- `JWKS_PUBLIC_KEYS` contains public keys served by `/.well-known/jwks.json`
+- `SEAMLESS_JWKS_PUBLIC_KEYS` contains public keys served by `/.well-known/jwks.json`
 
 The Express/core handlers verify signed auth API responses against the auth API JWKS before setting
 local cookies.
@@ -301,7 +301,7 @@ local cookies.
 | Expecting `requireAuth(...)` to refresh sessions                   | Let `/auth` adapter routes refresh, or add explicit refresh handling             |
 | Changing cookie names in the adapter but not in `requireAuth(...)` | Pass the same `cookieName` to `requireAuth(...)`                                 |
 | Calling raw auth API routes from browser code                      | Call your backend adapter routes unless you are building a custom server adapter |
-| Rotating JWKS private keys without publishing public keys          | Keep `SEAMLESS_JWKS_ACTIVE_KID`, private key, and `JWKS_PUBLIC_KEYS` aligned     |
+| Rotating JWKS private keys without publishing public keys          | Keep `SEAMLESS_JWKS_ACTIVE_KID`, private key, and `SEAMLESS_JWKS_PUBLIC_KEYS` aligned     |
 
 ---
 
