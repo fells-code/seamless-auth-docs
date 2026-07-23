@@ -95,13 +95,14 @@ seamless init my-app
 
 ### Managed init (planned)
 
-Today `init` only scaffolds a self-hosted local stack. It hardwires the auth URL to
+  A managed `init` flow, where `seamless init` connects a scaffolded app to your hosted managed
+  instance instead of hardwiring localhost.
+  Running `seamless init` when logged in will default to the managed path, adding `--local` will force the self-hosted stack.
+  at localhost.
+  Running `seamless init` while not logged in and in an non-empty directory will print 'log in first' and exit.
+  It hardwires the auth URL to
 `http://localhost:5312` and the API URL to `http://localhost:3000` and generates tokens locally. It
 does not read your logged-in profile or connect a scaffolded app to a hosted managed instance.
-
-A managed `init` flow that connects a scaffolded app to your managed instance is planned and tracked
-as `fells-code/seamless-cli#59`. Until it ships, use the [Managed Quickstart](/start/managed-quickstart)
-to connect an app to a hosted instance by hand.
 
 ---
 
@@ -340,9 +341,6 @@ The current `../seamless-cli` source does not include these commands:
 - `seamless deploy`
 - `seamless destroy`
 - `seamless contribute`
-
-A managed `init` flow (`seamless-cli#59`) is planned but not yet shipped. Do not document these as
-shipped unless they exist in source.
 
 ---
 

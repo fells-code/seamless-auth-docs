@@ -52,9 +52,10 @@ There is no `seamless deploy` or `seamless destroy` implementation in `../seamle
 
 <Aside type="note">
   A managed `init` flow, where `seamless init` connects a scaffolded app to your hosted managed
-  instance instead of hardwiring localhost, is planned but not shipped. It is tracked as
-  `fells-code/seamless-cli#59`. Today `seamless init` only scaffolds a self-hosted local stack pointed
+  instance instead of hardwiring localhost.
+  Running `seamless init` when logged in will default to the managed path, adding `--local` will force the self-hosted stack.
   at localhost.
+  Running `seamless init` while not logged in and in an non-empty directory will print 'log in first' and exit.
 </Aside>
 
 ---
@@ -101,7 +102,6 @@ The managed offering handles these for you.
 When documenting deployment work:
 
 - do not describe `deploy` or `destroy` as shipped unless those commands exist in `../seamless-cli`
-- do not describe managed `init` as shipped until `seamless-cli#59` lands
 - label future deployment flows as planned or in progress
 - tie infrastructure claims to current source code or generated files
 - keep operator-owned production hardening separate from CLI-generated local setup
