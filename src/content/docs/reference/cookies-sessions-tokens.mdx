@@ -181,6 +181,7 @@ Access tokens include:
 | `typ`    | `access`                              |
 | `roles`  | User roles                            |
 | `org_id` | Active organization ID, when selected |
+| `aud`    | Issuer / auth-server URL              |
 
 Refresh tokens are currently opaque random strings. The auth API refresh endpoint expects the raw
 opaque refresh token in the bearer header, not the access JWT.
