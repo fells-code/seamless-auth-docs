@@ -28,6 +28,8 @@ map of the auth server surface as it exists in the source repo today.
 | -------------- | ---------------------------------- | ---------------------------------------------------- |
 | Authentication | `/login`, `/logout`, `/refresh`    | Login entry, logout, access refresh                  |
 | Registration   | `/registration/register`           | New-user registration                                |
+| Registration   | `/registration/phone`              | New-user registration                                |
+| Registration   | `/registration/phone/verify`       | New-user registration                                |
 | OTP            | `/otp/*`                           | Email and phone OTP generation and verification      |
 | WebAuthn       | `/webauthn/*`                      | Passkey registration and login                       |
 | Magic Links    | `/magic-link*`                     | Magic link request, polling, verification            |
@@ -62,9 +64,11 @@ map of the auth server surface as it exists in the source repo today.
 
 ## Registration
 
-| Method | Path                     | Purpose             |
-| ------ | ------------------------ | ------------------- |
-| `POST` | `/registration/register` | Register a new user |
+| Method | Path                         | Purpose             |
+| ------ | ---------------------------- | ------------------- |
+| `POST` | `/registration/register`     | Register a new user |
+| `POST` | `/registration/phone`        | Register a new user |
+| `POST` | `/registration/phone/verify` | Register a new user |
 
 ---
 
