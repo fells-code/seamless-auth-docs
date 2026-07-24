@@ -80,7 +80,7 @@ The auth API logs system config reads, updates, and validation errors as auth ev
 | `delay_after`                    | `DELAY_AFTER`                    | number             | Slowdown threshold                                     |
 | `rpid`                           | `RPID`                           | string             | WebAuthn relying party ID                              |
 | `origins`                        | `ORIGINS`                        | URL array          | WebAuthn allowed browser origins                       |
-
+| `frontend_url`                   | `FRONTEND_URL`                   | URL                |                                                        |
 Built-in defaults exist for:
 
 | Key                              | Default                                                   |
@@ -111,7 +111,7 @@ Other keys must come from env or an existing database row.
 | `REFRESH_TOKEN_TTL`              | Duration string                           |
 | `RPID`                           | String                                    |
 | `APP_NAME`                       | String                                    |
-
+| `frontend_url`                   | String                            |
 Duration strings in system config use:
 
 ```txt
