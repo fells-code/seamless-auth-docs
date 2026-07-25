@@ -157,7 +157,8 @@ environment variable.
 ### login, whoami, logout
 
 ```bash
-seamless login              # email OTP against the active profile's instance
+seamless login              # email or phone OTP against the active profile's instance
+seamless login --local      # reads the OTP from the instance response for local delivery
 seamless whoami             # show the current identity, profile, and instance URL
 seamless logout             # end the session and clear local tokens
 seamless logout --all       # revoke every session first, then clear local tokens

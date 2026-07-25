@@ -141,9 +141,9 @@ This creates the first admin bootstrap invite.
 
 The CLI attempts to resolve the bootstrap secret automatically from:
 
-- `.env`
-- `auth/.env`
-- `docker-compose.yml`
+- `SEAMLESS_API_URL`
+- `instanceUrl`
+- `http://localhost:3000`
 
 If it cannot find the secret automatically, it prompts you for it.
 
