@@ -82,6 +82,7 @@ Provider config fields:
 | `allowSignup`           | Whether OAuth can create a new local user                           |
 | `accountLinking`        | `email` or `disabled`                                               |
 | `requireEmailVerified`  | Whether profile email must be verified                              |
+| `pkce`                  | Optional boolean                                                    |
 
 In production, set `OAUTH_STATE_SECRET`. Development can fall back, but production should not rely
 on derived local state secrets.
