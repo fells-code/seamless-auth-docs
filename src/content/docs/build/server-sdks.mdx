@@ -56,6 +56,7 @@ It provides:
 - `getSeamlessUser(...)`
 - `createEnsureCookiesMiddleware(...)`
 - scoped role helpers re-exported from `@seamless-auth/core`
+- public export createSeamlessConsoleProxy(SeamlessConsolePRoxyOptions)`
 
 ### Typical shape
 
@@ -76,7 +77,6 @@ const authOptions: SeamlessAuthServerOptions = {
   authServerUrl: process.env.AUTH_SERVER_URL!,
   cookieSecret: process.env.COOKIE_SIGNING_KEY!,
   serviceSecret: process.env.API_SERVICE_TOKEN!,
-  issuer: process.env.APP_ORIGIN!,
   audience: process.env.AUTH_SERVER_URL!,
   jwksKid: process.env.JWKS_KID,
 }
@@ -104,10 +104,9 @@ app.get(
 | `authServerUrl` | Base URL for the Seamless Auth instance                         |
 | `cookieSecret`  | Secret used to verify and sign adapter cookies                  |
 | `serviceSecret` | Shared service secret for machine-to-machine calls to the auth instance |
-| `issuer`        | Issuer/origin value for app-issued cookies                      |
 | `audience`      | Expected audience, usually the auth server URL                  |
 
-Optional values include `jwksKid`, `cookieDomain`, custom cookie names, and `messaging`.
+Optional values include `jwksKid`, `cookieDomain`, custom cookie names, and `messaging`, `cookieSecure`, `cookeSameSite`, `resolveClientIp`.
 
 ### Managed vs self-hosted configuration
 
@@ -207,8 +206,8 @@ createSeamlessAuthServer({
     email: emailTransport,
     sms: smsTransport,
     handlers: {
-      magicLinkEmail: async (message) => {
-        await deliver(message)
+      magicLinkEmail: async (input) => {
+        { /* return a DeliveryResult */ }
       },
     },
   },
