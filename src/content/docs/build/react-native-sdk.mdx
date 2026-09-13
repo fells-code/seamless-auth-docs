@@ -1,0 +1,250 @@
+---
+title: "React Native SDK"
+description: "@seamless-auth/react-native brings Seamless Auth to Expo and React Native apps over bearer transport, with native passkeys and the platform keystore."
+sidebar:
+  order: 5
+---
+
+# React Native SDK
+
+`@seamless-auth/react-native` is the official React Native integration for Seamless Auth. It
+gives an Expo or bare React Native app the same session state and headless client the
+[React SDK](/build/react-sdk) gives a web app, on top of the pieces a phone needs instead of a
+browser: the platform keystore for tokens, the native passkey APIs, and an in-app browser session
+for OAuth.
+
+It is headless. There are no prebuilt screens; you build sign-in the way
+[How To Build Your Own Auth UI](/build/custom-auth-ui) describes, with the hooks below.
+
+---
+
+## How It Differs From The Web
+
+A browser never sees the auth API's tokens: the server adapter keeps them in signed `httpOnly`
+cookies. A native app has no cookie jar, so the React Native SDK talks to the same adapter routes
+in **bearer transport**:
+
+```txt
+React Native app
+  -> your backend's /auth adapter routes, with x-seamless-auth-transport: bearer
+  -> Seamless Auth API
+```
+
+- The app holds the access and refresh tokens itself, in the keystore, through a
+  `TokenStoragePort`.
+- Each adapter route gets the token it needs in `Authorization: Bearer`: the ephemeral token
+  `/login` or `/registration/register` returned for the rest of a sign-in flow, the access token
+  once signed in.
+- A 401 on a signed-in call refreshes once through `POST /auth/refresh` and retries. Concurrent
+  callers share one refresh. A refresh the auth API refuses clears the stored session.
+- Your own API routes accept the same access token once `requireAuth` is configured with
+  `authServerUrl` and `audience`. See [Server SDKs](/build/server-sdks#bearer-transport-for-native-clients).
+
+The adapter you already run serves both contracts on the same routes. Nothing about the web app
+changes.
+
+---
+
+## Installation
+
+```bash
+npx expo install @seamless-auth/react-native expo-secure-store expo-web-browser react-native-passkeys
+```
+
+The three native modules are peers rather than dependencies, and they are passed into the SDK
+rather than imported by it, so Metro never has to resolve a module your app did not install.
+Native modules mean a development build (`npx expo run:ios`, `npx expo run:android`); Expo Go
+cannot load them.
+
+`seamless init --mobile=expo` scaffolds all of this alongside the web and API projects. See
+[CLI Commands](/reference/cli-commands).
+
+---
+
+## Basic Setup
+
+```tsx
+import * as Passkeys from 'react-native-passkeys'
+import * as SecureStore from 'expo-secure-store'
+import * as WebBrowser from 'expo-web-browser'
+import {
+  AuthProvider,
+  createNativePasskeyPort,
+  createSecureStoreTokenStorage,
+  createWebBrowserOAuthRedirect,
+  type NativeAuthPorts,
+} from '@seamless-auth/react-native'
+
+// Built once, at module scope. The provider keys its session on these
+// identities, so a fresh object per render would sign the user out.
+const ports: NativeAuthPorts = {
+  passkeys: createNativePasskeyPort(Passkeys),
+  tokenStorage: createSecureStoreTokenStorage(SecureStore, { key: 'myapp.session' }),
+  oauthRedirect: createWebBrowserOAuthRedirect(WebBrowser),
+}
+
+export default function App() {
+  return (
+    <AuthProvider apiHost={process.env.EXPO_PUBLIC_API_URL!} ports={ports}>
+      <Navigation />
+    </AuthProvider>
+  )
+}
+```
+
+`apiHost` is your backend's origin, the one that mounts the `/auth` adapter routes, exactly as on
+the web. `basePath` changes the mount (default `/auth`). The provider is always in bearer
+transport; there is no cookie mode on native.
+
+### The ports
+
+| Port           | Default                                  | What it wraps                                                               |
+| -------------- | ---------------------------------------- | --------------------------------------------------------------------------- |
+| `passkeys`     | none, required                           | `react-native-passkeys`: ASAuthorization on iOS, Credential Manager on Android |
+| `tokenStorage` | memory, which signs out on every restart | `expo-secure-store`: the keychain on iOS, the keystore on Android            |
+| `oauthRedirect`| none, OAuth disabled                     | `expo-web-browser`'s `openAuthSessionAsync`                                  |
+
+Each `create*` helper takes the module as a parameter and returns the port, so a different
+library with the same surface can be wrapped the same way.
+
+---
+
+## Reading Auth State
+
+`useAuth()` returns the same session state and actions as the web SDK:
+
+```tsx
+import { useAuth } from '@seamless-auth/react-native'
+
+function Gate({ children }) {
+  const { loading, isAuthenticated, user } = useAuth()
+
+  if (loading) return <Splash />
+  if (!isAuthenticated) return <SignIn />
+  return children
+}
+```
+
+On launch the provider reads the stored tokens and calls `/users/me`, so `loading` stays true
+until the session has been restored or refused. Show nothing routable until it settles, or a
+signed-in user sees the sign-in screen flash.
+
+`useAuthClient()` returns the headless client for the multi-step flows (`login`, OTP requests and
+verification, `requestMagicLink`, `checkMagicLink`, `verifyMagicLink`, `registerPasskey`, step-up,
+organizations). It is the same instance the provider drives; in bearer transport the client holds
+the sign-in in flight, so never construct a second one.
+
+`useLoginMethods()` and `usePasskeySupport()` read what the instance enables and whether this
+device can use passkeys, through the passkey port.
+
+---
+
+## Calling Your Own API
+
+`useAuthorizedFetch()` returns a fetch that carries the access token and refreshes it once on a
+401. A path resolves on `apiHost`:
+
+```tsx
+const authorizedFetch = useAuthorizedFetch()
+const plan = await authorizedFetch('/api/plan/mine').then(r => r.json())
+```
+
+The transport header is not sent to your own routes; they only need the bearer token, which
+`requireAuth` reads. A URL under the adapter's mount (`/auth/sessions`, for example) is sent as
+an adapter call with the header, so the one fetch reaches every route.
+
+A 401 that survives the refresh means the session has ended. Treat it as a reason to re-check
+the session (`refreshSession()`), not to retry the request.
+
+---
+
+## Sign-In Flows
+
+The flows are the web's, with the client holding the tokens instead of a cookie:
+
+```ts
+const client = useAuthClient()
+const { login, handlePasskeyLogin, markSignedIn, refreshSession } = useAuth()
+
+// 1. Identifier first. The answer lists what the account can use and hands the
+//    client the ephemeral token for the rest of the flow.
+const { data } = await login(identifier, passkeySupported)
+
+// 2a. Passkey, when offered and the device supports one.
+const passkey = await handlePasskeyLogin()
+
+// 2b. Or a code.
+await client.requestLoginEmailOtp()
+await client.verifyLoginEmailOtp(code)
+
+// 3. The provider loaded its state before the tokens existed.
+markSignedIn()
+await refreshSession()
+```
+
+Passkey errors reach you through `getWebAuthnErrorDetail(error)?.name` with the WebAuthn names
+(`NotAllowedError` for a dismissed prompt, `InvalidStateError` for a device that already holds
+one), whatever the native library threw.
+
+### Magic links
+
+A magic link completes wherever it is opened. Poll `client.checkMagicLink()` every few seconds
+after `requestMagicLink()`: a `204` (an empty success) means unopened, a body means the session
+was issued. Re-check when the app returns to the foreground, since the mail app is where the
+link was tapped.
+
+To open the link in the app rather than the browser, associate your web domain with the app
+(universal links on iOS, app links on Android) and route `/verify-magiclink` to a screen that
+calls `client.verifyMagicLink(token)` and then `client.checkMagicLink()`. The second call
+succeeds only in the app that asked for the link, since that is where the ephemeral token lives;
+a cold-started app confirms the link for whichever device is waiting and should say so.
+[Mobile Passkeys](/build/mobile-passkeys) covers the association files, which the two features
+share.
+
+### OAuth
+
+`startOAuthLogin({ providerId, redirectUri })`, then `ports.oauthRedirect.open(authorizationUrl,
+redirectUri)`. The in-app browser session closes on `redirectUri` and hands back `{ type:
+'callback', code, state }`, which you pass to `finishOAuthLogin`. `redirectUri` must be
+registered with the provider and allowed by the auth API: the app's scheme
+(`myapp://oauth/callback`) or a universal link.
+
+---
+
+## Passkeys
+
+`registerPasskey(describeDevice(Platform, 'My iPhone'))` enrols a passkey with a readable name.
+`describeDevice` builds the `PasskeyMetadata` from React Native's `Platform` rather than a user
+agent string, which a native app does not have.
+
+Native passkeys work only against a domain the app is associated with. There is no `localhost`
+exemption on either platform, so passkeys cannot be tried against a local stack; codes and magic
+links can. [Mobile Passkeys](/build/mobile-passkeys) walks through the setup.
+
+---
+
+## Keychain After Reinstall
+
+iOS keeps keychain items across an uninstall. Without care, a reinstalled app finds the previous
+session and signs straight back in, on a phone that may have changed hands. Clear the stored
+session on the first launch after install, using a flag in a store that is deleted with the app
+(`Settings` on iOS is enough); Android clears its keystore with the app.
+
+---
+
+## Important Boundary
+
+The React Native SDK is not a backend and does not replace authorization enforcement. Your
+backend's `requireAuth` and `requireRole` decide what a token may do; the app only carries it.
+Tokens live in the platform keystore and are never logged by the SDK.
+
+---
+
+## Related Docs
+
+- [Mobile Passkeys](/build/mobile-passkeys)
+- [React SDK](/build/react-sdk)
+- [Server SDKs](/build/server-sdks)
+- [How To Secure Routes](/build/secure-routes)
+- [How To Build Your Own Auth UI](/build/custom-auth-ui)
+- [Cookie, Session, And Token Reference](/reference/cookies-sessions-tokens)
