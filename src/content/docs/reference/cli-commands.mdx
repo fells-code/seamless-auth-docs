@@ -64,11 +64,17 @@ existing project was detected and exits; a full existing-project integration flo
 ### What it does
 
 - prompts for frontend and backend choices
+- prompts for an optional mobile app (Expo), or takes `--mobile=expo` to skip the prompt
 - prompts for auth mode
 - optionally includes the admin dashboard
 - generates a working local stack
 - writes `seamless.config.json`
 - creates `docker-compose.yml`
+
+The mobile app lands in `mobile/` next to the web and API projects, wired to the same API with
+`@seamless-auth/react-native`. It is not part of the Docker stack: run it with
+`cd mobile && npm install && npx expo run:ios` (or `run:android`). See
+[React Native SDK](/build/react-native-sdk).
 
 ### Current generated stack
 

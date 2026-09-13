@@ -273,6 +273,11 @@ Production example:
 `APP_ORIGINS` is separate. It controls CORS for who may call the auth API. `origins` controls
 WebAuthn verification.
 
+Native apps add their own entries. iOS reports the relying party as `https://<rpid>`; Android
+reports `android:apk-key-hash:<base64url SHA-256 of the signing certificate>`, one per
+certificate. Keep the web origin first: `origins[0]` is the fallback for a request that gives no
+origin of its own. See [Mobile Passkeys](/build/mobile-passkeys).
+
 ---
 
 ## Runtime Cache

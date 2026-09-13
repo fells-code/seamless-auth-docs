@@ -2,7 +2,7 @@
 title: "How To Secure Routes"
 description: "Use this guide when you need to protect application pages, API endpoints, or admin-style actions with Seamless Auth."
 sidebar:
-  order: 7
+  order: 9
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -241,6 +241,27 @@ if (response.status === 403) {
 Also confirm the auth API and backend CORS/cookie settings allow the browser origin you are using.
 For auth API CORS, check `APP_ORIGINS`. For WebAuthn origin checks, check `ORIGINS`.
 
+A native app has no cookies. It carries the auth API's access token instead, and the guard from
+Step 2 accepts it once `requireAuth` has `authServerUrl` and `audience`:
+
+```ts
+// backend
+app.get(
+  '/api/admin/report',
+  requireAuth({ cookieSecret, authServerUrl, audience: authServerUrl }),
+  requireRole('admin:read'),
+  handler,
+)
+
+// React Native app
+const authorizedFetch = useAuthorizedFetch()
+const response = await authorizedFetch('/api/admin/report')
+```
+
+`authorizedFetch` attaches the token and refreshes it once on a 401. A 401 that survives the
+refresh is a session that has ended, not a request to retry. See
+[React Native SDK](/build/react-native-sdk).
+
 ---
 
 ## Step 7: Use Step-Up For Sensitive Auth Actions
@@ -330,6 +351,7 @@ Do not rely on a hidden organization selector in the UI as the only tenant bound
 - [How To Use TOTP And Step-Up](/build/totp-step-up)
 - [How To Add OAuth Login](/build/oauth-login)
 - [Server SDKs](/build/server-sdks)
+- [React Native SDK](/build/react-native-sdk)
 - [React SDK](/build/react-sdk)
 - [How To Build Your Own Auth UI](/build/custom-auth-ui)
 - [Users & Roles](/understand/users)

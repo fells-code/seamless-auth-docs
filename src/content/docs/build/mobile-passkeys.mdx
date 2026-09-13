@@ -1,0 +1,180 @@
+---
+title: "Mobile Passkeys"
+description: "What a native app needs before passkeys and universal links work: an associated domain, the two association files, and the auth server's origins."
+sidebar:
+  order: 6
+---
+
+# Mobile Passkeys
+
+On the web a passkey is bound to the page's origin and the browser checks it. On a phone there is
+no page, so the platform checks that the app is allowed to speak for the relying party's domain.
+That check is what most of this page sets up. Get it wrong and every ceremony fails with a
+generic error, on a real device and in the simulator alike.
+
+---
+
+## The Pieces
+
+```txt
+Relying party domain      RPID on the auth server, e.g. app.example.com
+  |
+  +-- https://app.example.com/.well-known/apple-app-site-association
+  +-- https://app.example.com/.well-known/assetlinks.json
+  |
+  +-- iOS app entitlement   associatedDomains: webcredentials:app.example.com
+  +-- Android app           the signing certificate named in assetlinks.json
+  |
+  +-- auth server ORIGINS   https://app.example.com and android:apk-key-hash:<hash>
+```
+
+The same association also gives you universal links, so a magic link emailed as
+`https://app.example.com/verify-magiclink?token=...` opens the app.
+
+---
+
+## 1. Pick The Domain
+
+The relying party is the auth server's `RPID`. Use the domain your web app is served from, so web
+and native passkeys are the same credentials. The domain must be reachable over HTTPS with a
+publicly trusted certificate; both platforms fetch the association files from it, and neither
+accepts `localhost`, a private address, or a self-signed certificate.
+
+For development, use a staging subdomain that hosts the files. Email codes and magic links still
+work against a local stack; passkeys do not.
+
+---
+
+## 2. Host The Association Files
+
+Both files live under `/.well-known/` on the domain, served as `application/json` with no
+redirect.
+
+`apple-app-site-association` (no extension):
+
+```json
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["TEAMID.com.example.app"],
+        "components": [{ "/": "/verify-magiclink*" }, { "/": "/oauth/callback*" }]
+      }
+    ]
+  },
+  "webcredentials": { "apps": ["TEAMID.com.example.app"] }
+}
+```
+
+`webcredentials` is what passkeys need; `applinks` is what universal links need. The Team ID is
+the one on the signing certificate (its `OU`), which is not always the team shown in App Store
+Connect for an enterprise or a transferred app.
+
+`assetlinks.json`:
+
+```json
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls",
+      "delegate_permission/common.get_login_creds"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.example.app",
+      "sha256_cert_fingerprints": ["AB:CD:..."]
+    }
+  }
+]
+```
+
+`get_login_creds` is what passkeys need; `handle_all_urls` is what app links need. The
+fingerprint is the SHA-256 of the signing certificate: your debug keystore's for a development
+build, the upload or Play signing key's for a store build. List each one that will sign the app.
+
+The Expo template ships `tools/associations/generate.mjs`, which writes both files from the team
+ID, bundle ID, package name and fingerprint, and prints the Android origin for the next step.
+
+---
+
+## 3. Extend The Auth Server's Origins
+
+Every passkey ceremony reports the origin it ran in, and the auth server refuses one it does not
+know. Add the native origins to `ORIGINS` (or the `origins` system config key), keeping the web
+origin first:
+
+```txt
+ORIGINS=https://app.example.com,android:apk-key-hash:q1w2e3...
+```
+
+- iOS reports the relying party as `https://<rpid>`, which is usually your web origin already.
+- Android reports `android:apk-key-hash:<hash>`, where the hash is the base64url encoding of the
+  same SHA-256 certificate fingerprint, with the colons removed and the bytes decoded. One entry
+  per signing certificate.
+- The web origin stays first. `origins[0]` is the fallback the auth server uses when a request
+  gives no origin of its own, and an `android:` entry there would break web ceremonies.
+
+See [System Config Reference](/reference/system-config) for `origins` and `rpid`.
+
+---
+
+## 4. Declare The Association In The App
+
+Expo (`app.json`):
+
+```json
+{
+  "expo": {
+    "ios": {
+      "bundleIdentifier": "com.example.app",
+      "associatedDomains": ["webcredentials:app.example.com", "applinks:app.example.com"]
+    },
+    "android": {
+      "package": "com.example.app",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [{ "scheme": "https", "host": "app.example.com", "pathPrefix": "/verify-magiclink" }],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
+    }
+  }
+}
+```
+
+Rebuild the development client after changing either; the entitlement is baked in at build time.
+
+---
+
+## 5. Check It
+
+- `curl -sI https://app.example.com/.well-known/apple-app-site-association` answers `200` with a
+  JSON content type and no redirect. Apple fetches through its CDN, so a change can take a while
+  to reach a device; the simulator fetches directly.
+- On a simulator build, the entitlement is in the binary's `__TEXT,__entitlements` section rather
+  than a provisioning profile. `otool -s __TEXT __entitlements MyApp.app/MyApp` shows it, and is
+  the quickest way to confirm a rebuild picked it up.
+- On Android, `adb shell pm get-app-links com.example.app` shows whether the domain verified.
+- A ceremony that fails immediately with a dismissal-shaped error on a device that never showed a
+  prompt is almost always the association: a stale file, the wrong Team ID, or the wrong
+  fingerprint for the build you are running.
+
+---
+
+## Rate Limits Behind Carrier NAT
+
+Phones on mobile networks share a small pool of public addresses. The auth API's per-IP limits on
+OTP, magic link and OAuth starts are configurable through the `flow_rate_limits` system config
+key, and a mobile audience usually needs them wider than the defaults, which were chosen for
+browsers. Per-identity limits stay as they are.
+
+---
+
+## Related Docs
+
+- [React Native SDK](/build/react-native-sdk)
+- [Server SDKs](/build/server-sdks)
+- [System Config Reference](/reference/system-config)
+- [Environment Variables](/reference/environment-variables)

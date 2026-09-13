@@ -170,6 +170,23 @@ app.get('/api/profile', requireAuth({ cookieSecret }), (req, res) => {
 This middleware verifies an already-issued access cookie. Session refresh is handled by the
 adapter's cookie middleware.
 
+With `authServerUrl` and `audience` it also accepts the auth API's own access token in
+`Authorization: Bearer`, verified against the auth API's JWKS (issuer, audience, expiry and
+`typ: "access"`). This is how a native client authenticates; see
+[Bearer Transport For Native Clients](#bearer-transport-for-native-clients). A cookie wins when
+both are present, and the two options must be given together.
+
+```ts
+const guard = requireAuth({
+  cookieSecret,
+  authServerUrl: process.env.AUTH_SERVER_URL,
+  audience: process.env.AUTH_SERVER_URL,
+})
+```
+
+On the bearer path `req.user.email` and `req.user.phone` are not set, because the access token
+does not carry them. `getSeamlessUser(req, options)` loads the profile for either credential.
+
 `requireRole(required)` performs authorization only. It expects `requireAuth` to have populated
 `req.user`.
 
@@ -189,6 +206,39 @@ Scoped role compatibility:
 | `admin`       | `admin`, `admin:read`, `admin:write` |
 | `admin:write` | `admin:write`, `admin:read`          |
 | `admin:read`  | `admin:read` only                    |
+
+---
+
+## Bearer Transport For Native Clients
+
+Browsers get the cookie contract: the adapter holds the auth API's tokens in signed `httpOnly`
+cookies and the page never sees them. A native app has no cookie jar, so the same routes serve a
+second contract when a request carries the header `x-seamless-auth-transport: bearer`:
+
+- The client presents the token a route needs in `Authorization: Bearer`. Pre-auth routes (OTP,
+  passkey login, magic link) take the ephemeral token `/login` or `/registration/register`
+  returned; signed-in routes take the access token.
+- Session-issuing responses come back whole, `token` and `refreshToken` included, and no cookie
+  is set. The adapter still verifies the auth API's signature on the access token first.
+- `POST /auth/refresh` rotates the session: `Authorization: Bearer <refreshToken>` in, a new
+  pair out. The auth API treats a replayed refresh token as theft and revokes the chain
+  (`401 { "error": "refresh_token_reused" }`), so a client refreshes once at a time.
+- Delivery mode, forwarded client IP and user agent, and the service token behave exactly as in
+  cookie transport.
+
+The header selects the transport rather than the presence of `Authorization`, because the first
+request of a flow carries no token in either. Requests without the header are unchanged.
+
+```txt
+POST /auth/login                          -> { token: <ephemeral>, loginMethods, ... }
+POST /auth/otp/verify-login-email-otp     -> { token: <access>, refreshToken, ... }
+GET  /auth/users/me      Authorization: Bearer <access>
+POST /auth/refresh       Authorization: Bearer <refreshToken>
+```
+
+[`@seamless-auth/react-native`](/build/react-native-sdk) speaks this contract for you; the
+[React Native SDK](/build/react-native-sdk) page covers the client side. Your own routes accept
+the same access token through `requireAuth` with `authServerUrl` and `audience`, above.
 
 ---
 
@@ -281,7 +331,7 @@ Today, the strongest supported server-side path is Express.
 The best-supported current combination is:
 
 ```txt
-@seamless-auth/react
+@seamless-auth/react or @seamless-auth/react-native
   -> your frontend
 
 @seamless-auth/express
@@ -291,7 +341,8 @@ seamless-auth-api
   -> your auth engine
 ```
 
-Use `@seamless-auth/core` when Express is not your runtime or you are building an adapter.
+Use `@seamless-auth/core` when Express is not your runtime or you are building an adapter. The
+Fastify adapter, `@seamless-auth/fastify`, mirrors the Express one, bearer transport included.
 
 ---
 
@@ -303,6 +354,7 @@ Use `@seamless-auth/core` when Express is not your runtime or you are building a
 - [How To Use Organizations And Memberships](/build/organizations-memberships)
 - [How To Use TOTP And Step-Up](/build/totp-step-up)
 - [React SDK](/build/react-sdk)
+- [React Native SDK](/build/react-native-sdk)
 - [Auth API Server](/build/auth-api)
 - [Auth API Routes](/reference/auth-api-routes)
 - [Cookie, Session, And Token Reference](/reference/cookies-sessions-tokens)
