@@ -131,8 +131,9 @@ That separation matters because:
 `seamless-cli` is the fastest way to get a working stack. It currently scaffolds a React
 frontend, an Express API, the auth server in Docker or local mode, and an optional admin dashboard.
 
-It also includes `check` and `bootstrap-admin`. The current `../seamless-cli` source does not ship
-`deploy`, `destroy`, or contributor workspace commands.
+It also includes `check`, `verify`, and admin commands against a running instance. The first admin
+is the account registered with the owner email `init` asks for. The current `../seamless-cli` source
+does not ship `deploy`, `destroy`, or contributor workspace commands.
 
 It is the easiest starting point if you want to learn the ecosystem through a working project
 rather than by assembling every piece manually.

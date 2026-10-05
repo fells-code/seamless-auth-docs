@@ -81,11 +81,13 @@ of the service token.
 
 | Value                          | Managed                                             | Self-hosted                                          |
 | ------------------------------ | --------------------------------------------------- | ---------------------------------------------------- |
-| React `apiHost`                | Your application's Auth Server URL from the portal  | Your backend API, usually `http://localhost:3000`    |
+| React `apiHost`                | Your backend API, which runs the adapter            | Your backend API, usually `http://localhost:3000`    |
 | Express `authServerUrl`        | Your application's Auth Server URL from the portal  | The auth API, usually `http://localhost:5312`        |
 | Service token (`serviceSecret`) | Generated in the portal, shown once                 | Generated locally by the CLI into your project files |
 
-Everything else (the provider component, hooks, middleware, and route protection) is the same.
+On both paths the React SDK points at your own backend, never at the auth server: the adapter on your
+backend is what sets the browser's session cookies. Everything else (the provider component, hooks,
+middleware, and route protection) is the same.
 
 ---
 
