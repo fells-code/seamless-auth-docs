@@ -77,7 +77,7 @@ Provider config fields:
 | `redirectUris`          | Optional allowlist of exact redirect URIs                           |
 | `subjectJsonPath`       | Profile field used as provider subject, default `sub`               |
 | `emailJsonPath`         | Profile field used as email, default `email`                        |
-| `emailVerifiedJsonPath` | Profile field used for email verification, default `email_verified` |
+| `emailVerifiedJsonPath` | Profile field used for email verification, default `email_verified`. See [Choosing A Provider](#choosing-a-provider) |
 | `nameJsonPath`          | Optional profile field used as display name metadata                |
 | `allowSignup`           | Whether OAuth can create a new local user                           |
 | `accountLinking`        | `email` or `disabled`                                               |
@@ -86,6 +86,34 @@ Provider config fields:
 
 In production, set `OAUTH_STATE_SECRET`. Development can fall back, but production should not rely
 on derived local state secrets.
+
+---
+
+## Choosing A Provider
+
+A provider's email decides which local account an OAuth sign-in belongs to, so only enable a
+provider whose verified email you are willing to treat as proof of ownership.
+
+- **Use providers that verify the address themselves** and say so in the profile, such as Google's
+  `email_verified`.
+- **Point `emailVerifiedJsonPath` only at a claim the provider sets after verifying the address.**
+  Never point it at a field the user, or an administrator of another tenant, can set, and never at a
+  value that is always true. That turns every profile into a verified one.
+- **Keep `accountLinking` at `disabled`** for a provider you do not trust to verify addresses, so it
+  can only sign in identities it created.
+
+### Microsoft Entra ID
+
+Register a **single-tenant** application and use your tenant's endpoints:
+
+```txt
+https://login.microsoftonline.com/<tenant-id>/oauth2/v2.0/authorize
+https://login.microsoftonline.com/<tenant-id>/oauth2/v2.0/token
+```
+
+Do not use `common`, `organizations`, or `consumers`. They accept a sign-in from any Entra tenant,
+and the administrator of each tenant controls the email address its users present. `seamless init
+--oauth` asks for your directory (tenant) id and refuses those three values.
 
 ---
 
@@ -245,6 +273,8 @@ report a verified email.
 ## Security Notes
 
 - Keep provider client secrets in environment variables.
+- Enable only providers that verify email addresses, and scope Microsoft to your tenant. See
+  [Choosing A Provider](#choosing-a-provider).
 - Use exact redirect URI allowlists for production providers.
 - Set a stable `OAUTH_STATE_SECRET` in production.
 - Treat OAuth as authentication only; app authorization still belongs in your backend.
