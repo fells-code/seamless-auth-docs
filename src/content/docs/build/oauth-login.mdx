@@ -83,6 +83,10 @@ Provider config fields:
 | `accountLinking`        | `email` or `disabled`                                               |
 | `requireEmailVerified`  | Whether profile email must be verified                              |
 | `pkce`                  | Optional boolean                                                    |
+| `issuer` | OpenID Connect issuer. With `jwksUri`, the ID token is verified and used as the profile |
+| `jwksUri` | The provider's signing keys, used to verify the ID token |
+| `externalIdSource` | Import source whose users a first sign-in can link to |
+| `externalIdJsonPath` | ID token claim holding the imported user's external id, such as `oid` |
 
 In production, set `OAUTH_STATE_SECRET`. Development can fall back, but production should not rely
 on derived local state secrets.
@@ -110,6 +114,32 @@ Register a **single-tenant** application and use your tenant's endpoints:
 https://login.microsoftonline.com/<tenant-id>/oauth2/v2.0/authorize
 https://login.microsoftonline.com/<tenant-id>/oauth2/v2.0/token
 ```
+
+Then configure the provider as OpenID Connect, so the profile comes from a verified ID token:
+
+```json
+{
+  "id": "microsoft",
+  "authorizationUrl": "https://login.microsoftonline.com/<tenant-id>/oauth2/v2.0/authorize",
+  "tokenUrl": "https://login.microsoftonline.com/<tenant-id>/oauth2/v2.0/token",
+  "userInfoUrl": "https://graph.microsoft.com/oidc/userinfo",
+  "issuer": "https://login.microsoftonline.com/<tenant-id>/v2.0",
+  "jwksUri": "https://login.microsoftonline.com/<tenant-id>/discovery/v2.0/keys",
+  "scopes": ["openid", "email", "profile"],
+  "emailVerifiedJsonPath": "xms_edov",
+  "externalIdSource": "entra-id",
+  "externalIdJsonPath": "oid"
+}
+```
+
+- `<tenant-id>` is the directory (tenant) id, a GUID. ID tokens name the tenant that way, so a domain
+  will not match the issuer.
+- Add the `xms_edov` optional claim under **Token configuration** in the app registration. It says
+  the tenant has verified the email's domain, which is what lets a Microsoft sign-in link to or
+  create an account by email.
+- `externalIdSource` and `externalIdJsonPath` link users you imported from Entra ID (with
+  `seamless migrate` and source `entra-id`) by their object id, so they sign in to the right account
+  without relying on email.
 
 Do not use `common`, `organizations`, or `consumers`. They accept a sign-in from any Entra tenant,
 and the administrator of each tenant controls the email address its users present. `seamless init
@@ -278,6 +308,7 @@ removed.
 | Provider rejects redirect                          | Provider console does not include the same redirect URI                                           |
 | Callback returns `Invalid OAuth state`             | State expired, wrong provider ID, or `OAUTH_STATE_SECRET` changed mid-flow                        |
 | Callback returns `OAuth signup is disabled`        | No matching local user and `allowSignup` is false                                                 |
+| Callback returns `oauth_invalid_id_token` | The ID token failed verification: wrong `issuer` or `jwksUri`, a clock far out of sync, or a reused sign-in |
 | Callback returns `oauth_email_not_verified`        | The provider did not assert the email is verified, and this identity is not linked yet             |
 | Callback succeeds but React still looks signed out | Callback did not hit the backend adapter, cookies were blocked, or `refreshSession()` did not run |
 
