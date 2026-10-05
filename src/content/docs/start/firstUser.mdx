@@ -63,9 +63,16 @@ moves into email verification. (A phone number is optional and can be added and 
 
 ## Step 3: Complete Verification
 
-Registration sends a one-time code to the email address. In local development:
+Registration sends a one-time code to the email address. In local development no email is sent.
+The starter API runs with `NODE_ENV=development`, which makes it log the code instead:
 
-- OTP values are returned in the dev delivery payload (visible in logs or dev-oriented messaging)
+```bash
+docker compose logs -f api
+```
+
+Look for a line like `Dev OTP for you@example.com: 123456`. If you ran the API outside Docker with
+`npm run dev`, the same line appears in that terminal.
+
 - enter the code to verify the email
 - on a device that supports passkeys, you are then prompted to register one
 

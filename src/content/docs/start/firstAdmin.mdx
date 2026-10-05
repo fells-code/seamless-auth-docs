@@ -1,6 +1,6 @@
 ---
 title: "Create Your First Admin"
-description: "This guide walks through the first-admin bootstrap flow in a local Seamless Auth stack."
+description: "How the owner email you give seamless init becomes the first admin of a local Seamless Auth stack."
 sidebar:
   order: 6
 ---
@@ -10,10 +10,8 @@ import Image from '../../../components/Image.astro';
 
 ## Create Your First Admin
 
-This guide walks through the first-admin bootstrap flow in a local Seamless Auth stack.
-
-The goal is simple: create an initial admin invite, complete the registration flow with that email,
-and verify access to the admin dashboard.
+The first admin of a local stack is whoever registers with the owner email you gave `seamless init`.
+There is no invite to create and no admin command to run.
 
 ---
 
@@ -21,70 +19,59 @@ and verify access to the admin dashboard.
 
 Make sure:
 
-- your local stack is running
-- you have already gone through the first-user flow once
+- your local stack is running (`docker compose up`)
 - you can access the web app at `http://localhost:5173`
+- you know the email you entered for the owner during `init`
 
 ---
 
-## Why Bootstrap Exists
+## How The Owner Grant Works
 
-The first admin flow is intentionally separate from normal role management.
+`init` writes your email to the auth server as `OWNER_EMAIL`. When an account is created with an
+address on that list, the auth server grants it the `admin:write` and `admin` roles.
 
-That bootstrap path exists so you can create the initial operator account without manually editing
-the database.
-
-<Aside type="note">
-  After the first admin exists, normal administration should happen through your application and
-  admin tooling, not by repeatedly relying on bootstrap.
-</Aside>
-
----
-
-## Step 1: Create The Invite
-
-Run:
-
-```bash
-npx seamless-cli bootstrap-admin admin001@test.com
-```
-
-The CLI will:
-
-- resolve the bootstrap secret from local project files when possible
-- call the auth API bootstrap route
-- print a registration URL when available
-
-The invited email should match the account you want to become the first admin.
-
----
-
-## Step 2: Complete Registration
-
-Open the generated registration URL and finish the same kind of registration flow you used for your
-first user.
-
-Use the same email address you passed to `bootstrap-admin`.
-
-Once registration completes:
-
-- the user is granted the `admin` role
-- future sessions for that user include admin access
+The grant is safe because both signup paths prove control of the address before the account
+exists: email OTP verification, or a verified profile from an OAuth provider.
 
 <Aside type="caution">
-  The bootstrap invite is not the user account. It is a one-time authorization path that lets that
-  email become the initial admin during registration.
+  The grant happens only at account creation. Changing `OWNER_EMAIL` after that account exists
+  promotes nobody. To make someone else the owner, set their address in `auth/.env` (or the compose
+  file) before they register. `OWNER_EMAIL` also accepts a comma separated list.
 </Aside>
+
+After the first admin exists, grant admin to other people from the admin console or with
+`seamless users`, not through `OWNER_EMAIL`.
+
+---
+
+## Step 1: Register With The Owner Email
+
+Open `http://localhost:5173` and register with the same email you gave `init`.
+
+---
+
+## Step 2: Enter The Code
+
+In local development the starter API logs one-time codes instead of sending email. Read the code
+from its logs:
+
+```bash
+docker compose logs -f api
+```
+
+Look for a line like `Dev OTP for admin@example.com: 123456`, enter the code, and enroll a passkey
+when prompted.
 
 ---
 
 ## Step 3: Verify The Role
 
-After successful registration, the session should include the `admin` role.
+After registration, the session's roles include `admin:write` and `admin` alongside the instance's
+default roles (set by `DEFAULT_ROLES`):
 
 ```json
 {
-  "roles": ["admin"]
+  "roles": ["<default roles>", "admin:write", "admin"]
 }
 ```
 
@@ -98,13 +85,14 @@ After successful registration, the session should include the `admin` role.
 
 ## Step 4: Open The Dashboard
 
-Navigate to:
+Navigate to the admin console. By default your API serves it at:
 
 ```txt
-http://localhost:5174
+http://localhost:3000/console
 ```
 
-You should be able to reach the admin dashboard.
+If you chose a separate dashboard container during `init`, it is at `http://localhost:5174`
+instead.
 
 <Image src="/adminOverview.png" alt="Seamless Admin portal" caption="Admin dashboard overview" />
 
@@ -112,10 +100,10 @@ You should be able to reach the admin dashboard.
 
 ## What Just Happened
 
-- you created the first admin bootstrap invite
-- registration completed with the invited email
-- the resulting user received the `admin` role
-- the dashboard became accessible through normal auth state
+- `init` recorded your email as the owner
+- registration with that email verified you controlled it
+- the new account received the admin roles at creation
+- the admin console became accessible through normal auth state
 
 ---
 

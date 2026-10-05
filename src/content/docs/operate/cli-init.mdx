@@ -10,11 +10,11 @@ sidebar:
 This guide explains exactly what happens when you run:
 
 ```bash
-npx seamless-cli my-app
+npx seamless-cli init my-app
 ```
 
-That project-name shorthand runs the same init path as `npx seamless-cli init my-app`. Running the
-CLI with no command prints help.
+Scaffolding always goes through `init`; a bare project name is rejected as an unknown command.
+Running the CLI with no command prints help.
 
 This guide focuses on local project generation, auth wiring, Docker setup, and admin dashboard
 inclusion.
@@ -34,7 +34,7 @@ init → prompts → generators → config → ready-to-run app
 If you pass a project name:
 
 ```bash
-npx seamless-cli my-app
+npx seamless-cli init my-app
 ```
 
 The CLI will:
@@ -44,8 +44,10 @@ The CLI will:
 - Use it as the project root
 
 If you run `npx seamless-cli init` with no project name, it uses the current directory. If that
-directory is not empty and you are not logged in, the current CLI prints that an existing project was detected and exits; the
-existing-project integration flow is still future work.
+directory is not empty, `init` asks what to do, because starter files overwrite anything with the
+same name: scaffold in place, or (when you are signed in to the portal) connect the existing project
+to a managed application. Under `--yes` it refuses unless you also pass `--force`. A full integration
+flow for an existing self-hosted app is still future work.
 
 ---
 
@@ -226,9 +228,8 @@ This file stores:
 
 The CLI prints next steps. In the Docker-backed path, those are:
 
-- `docker compose up`
-- `seamless bootstrap-admin`
-- complete registration in the browser
+1. `docker compose up`
+2. register in the browser with the owner email you gave `init`, which makes that account an admin
 
 It also prints the expected local service URLs for auth, API, web, and admin.
 
@@ -299,14 +300,6 @@ Even in local mode, Docker is used to ensure consistency.
 - Running in a non-empty directory
 - Skipping Docker setup
 - Misunderstanding auth mode differences
-
----
-
-## Prompt for AI Help
-
-Copy this into ChatGPT:
-
-"Explain what happens internally when I run seamless-cli init and how the project is generated."
 
 ---
 
