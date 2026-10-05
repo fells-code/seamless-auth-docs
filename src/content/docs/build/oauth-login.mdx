@@ -244,16 +244,25 @@ OAuth identity rows link a provider subject to a local user.
 
 The current auth API behavior is:
 
-| Case                                                           | Behavior                                        |
-| -------------------------------------------------------------- | ----------------------------------------------- |
-| Existing `oauth_identities` row                                | Reuse the linked local user                     |
-| No identity, matching user email, `accountLinking: "email"`    | Link provider identity to that user             |
-| No identity, matching user email, `accountLinking: "disabled"` | Reject login                                    |
-| No matching user, `allowSignup: true`                          | Create a verified local user with default roles |
-| No matching user, `allowSignup: false`                         | Reject login                                    |
+| Case                                                                       | Behavior                                        |
+| -------------------------------------------------------------------------- | ----------------------------------------------- |
+| Existing `oauth_identities` row                                            | Reuse the linked local user                     |
+| No identity, matching user email, `accountLinking: "email"`, email verified | Link provider identity to that user             |
+| No identity, matching user email, `accountLinking: "disabled"`             | Reject login                                    |
+| No matching user, `allowSignup: true`, email verified                      | Create a verified local user with default roles |
+| No matching user, `allowSignup: false`                                     | Reject login                                    |
+| No identity yet and the provider does not assert the email is verified     | Reject with `oauth_email_not_verified`          |
 
-The profile email must exist. If `requireEmailVerified` is true, the provider profile must also
-report a verified email.
+The profile email must exist. Linking to an existing account and creating a new one both require
+the provider to assert the email is verified (`email_verified: true`, read from
+`emailVerifiedJsonPath`), whatever `requireEmailVerified` is set to. An identity that is already
+linked keeps signing in. A provider whose profile has no verification claim, such as Microsoft
+Graph's userinfo or GitHub's `/user`, can sign in identities it already linked but cannot link or
+create new ones.
+
+When a verified provider email links to an account that had not yet proven its address (one an
+admin created or imported), the account is marked verified, and a phone verified before then is
+removed.
 
 ---
 
@@ -266,6 +275,7 @@ report a verified email.
 | Provider rejects redirect                          | Provider console does not include the same redirect URI                                           |
 | Callback returns `Invalid OAuth state`             | State expired, wrong provider ID, or `OAUTH_STATE_SECRET` changed mid-flow                        |
 | Callback returns `OAuth signup is disabled`        | No matching local user and `allowSignup` is false                                                 |
+| Callback returns `oauth_email_not_verified`        | The provider did not assert the email is verified, and this identity is not linked yet             |
 | Callback succeeds but React still looks signed out | Callback did not hit the backend adapter, cookies were blocked, or `refreshSession()` did not run |
 
 ---
