@@ -257,8 +257,11 @@ The profile email must exist. Linking to an existing account and creating a new 
 the provider to assert the email is verified (`email_verified: true`, read from
 `emailVerifiedJsonPath`), whatever `requireEmailVerified` is set to. An identity that is already
 linked keeps signing in. A provider whose profile has no verification claim, such as Microsoft
-Graph's userinfo or GitHub's `/user`, can sign in identities it already linked but cannot link or
-create new ones.
+Graph's userinfo, can sign in identities it already linked but cannot link or create new ones.
+
+GitHub's `/user` has no verification claim either, so a GitHub provider (a `userInfoUrl` of
+`https://api.github.com/user`, or GitHub Enterprise Server's `/api/v3/user`) also reads
+`/user/emails` and uses the address GitHub lists as verified. Request the `user:email` scope.
 
 When a verified provider email links to an account that had not yet proven its address (one an
 admin created or imported), the account is marked verified, and a phone verified before then is
