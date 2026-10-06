@@ -23,7 +23,7 @@ seamless-cli
 seamless-auth-api
   -> runs the auth engine
 
-@seamless-auth/express or @seamless-auth/core
+@seamless-auth/express, @seamless-auth/fastify, @seamless-auth/nextjs, or @seamless-auth/core
   -> connects your backend to the auth engine
 
 @seamless-auth/react or @seamless-auth/react-native
@@ -43,6 +43,8 @@ seamless-auth-admin-dashboard
 | `seamless-auth-api`             | Self-hostable auth server                      | You need the passwordless auth engine itself                          |
 | `@seamless-auth/core`           | Framework-agnostic server auth primitives      | You are building your own backend adapter                             |
 | `@seamless-auth/express`        | Official Express adapter                       | Your backend is Express and you want the supported integration path   |
+| `@seamless-auth/fastify`        | Official Fastify adapter                       | Your backend is Fastify                                               |
+| `@seamless-auth/nextjs`         | Next.js App Router adapter and session helpers | Your Next.js app is its own backend ([Next.js](/build/nextjs))        |
 | `@seamless-auth/react`          | React SDK and built-in auth screens            | Your frontend is React and you want a ready-to-use auth integration   |
 | `@seamless-auth/react-native`   | React Native SDK: provider, hooks, native ports | Your frontend is an Expo or React Native app                          |
 | `@seamless-auth/client`         | The framework-free client the two SDKs share   | You are building a binding for another framework                      |
@@ -85,7 +87,8 @@ That backend layer:
 - enforces authorization
 - talks to the auth server using service-to-service credentials
 
-If you use Express, start with `@seamless-auth/express`. If you need a different runtime, start
+If you use Express, start with `@seamless-auth/express`; Fastify, `@seamless-auth/fastify`; a
+Next.js App Router application, `@seamless-auth/nextjs`. If you need a different runtime, start
 with `@seamless-auth/core`.
 
 ---
