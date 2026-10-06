@@ -210,10 +210,10 @@ function AppRoutes() {
   backend and sets no browser cookies, so a browser pointed at it cannot sign in.
 </Aside>
 
-`AuthProvider` takes only `apiHost` (required) and an optional `autoDetectPreviousSignin`. There is no
-frontend token or client id: the browser SDK carries no secret and relies on the cookies your backend
-sets. For built-in sign-in screens, mount `AuthRoutes`; for custom UI, use the headless client. See the
-[React SDK](/build/react-sdk) reference for the full API.
+`AuthProvider` needs only `apiHost`; its other props are optional. There is no frontend token or
+client id: the browser SDK carries no secret and relies on the cookies your backend sets. For
+built-in sign-in screens, mount `AuthRoutes` from `@seamless-auth/react/routes`; for custom UI, use
+the headless client. See the [React SDK](/build/react-sdk) reference for the full API.
 
 <Aside type="tip">
   Put the backend origin in a frontend environment variable (for example `VITE_API_URL` in a Vite

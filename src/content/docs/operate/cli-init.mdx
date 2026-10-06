@@ -57,8 +57,13 @@ The CLI asks a series of questions to shape your stack.
 
 ### Web Framework
 
-- React (Vite)
-- Next.js is listed as coming soon, not currently generated
+- React (Vite), basic example
+- React (Vite), OAuth example
+
+A Next.js App Router starter exists in `seamless-templates` (`templates/fullstack/nextjs`), but
+`seamless init` does not offer it yet: it is a full-stack template that serves `/auth` itself, which
+the CLI does not support yet. Copy that directory and follow its README, or see
+[Next.js](/build/nextjs).
 
 This determines your frontend scaffold.
 
@@ -67,7 +72,7 @@ This determines your frontend scaffold.
 ### Backend Framework
 
 - Express
-- Fastify, FastAPI, and Axum are listed as coming soon, not currently generated
+- Fastify (beta)
 
 This determines your API server.
 

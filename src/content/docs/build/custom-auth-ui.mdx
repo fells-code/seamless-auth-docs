@@ -57,8 +57,12 @@ export function App() {
 You only need `AuthRoutes` if you want the packaged screens:
 
 ```tsx
-import { AuthProvider, AuthRoutes } from '@seamless-auth/react'
+import { AuthProvider } from '@seamless-auth/react'
+import { AuthRoutes } from '@seamless-auth/react/routes'
 ```
+
+`AuthRoutes` ships from the `/routes` subpath (since 0.14.0) and is the only part of the SDK that
+needs `react-router-dom`. A fully custom UI does not install react-router at all.
 
 For fully custom UI, keep `AuthProvider` and route to your own components instead.
 
