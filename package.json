@@ -10,7 +10,7 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "lint": "eslint .",
+    "lint": "eslint . && node scripts/check-no-h1.mjs",
     "format": "prettier -w .",
     "typecheck": "astro check",
     "prepare": "husky"
