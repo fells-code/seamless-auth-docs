@@ -101,17 +101,19 @@ cookies. `apiHost` may be given with or without a trailing slash; the SDK sends 
 
 ### What `apiHost` points at
 
-The value of `apiHost` depends on which path you are on:
+`apiHost` is always **your backend's origin**, the server where you mounted a Seamless Auth adapter
+(`@seamless-auth/express`, `@seamless-auth/fastify`, or `@seamless-auth/nextjs`) at `/auth`. It is
+never the auth API itself, on either path:
 
-| Path            | Set `apiHost` to                                                                          |
-| --------------- | ----------------------------------------------------------------------------------------- |
-| **Managed**     | Your application's Auth Server URL, copied from the portal (not built by hand)                   |
-| **Self-hosted** | Your backend API that mounts `@seamless-auth/express` at `/auth`, for example `http://localhost:3000` |
+| Path            | Set `apiHost` to                                    | Your backend forwards to                                    |
+| --------------- | --------------------------------------------------- | ----------------------------------------------------------- |
+| **Managed**     | Your backend, for example `https://api.example.com` | The Auth Server URL copied from the portal                  |
+| **Self-hosted** | Your backend, for example `http://localhost:3000`   | Your private `seamless-auth-api`                            |
 
-On the managed path, use the Auth Server URL from your application's **Auth API Configuration** card.
-See the [Managed Quickstart](/start/managed-quickstart). On the self-hosted path, `apiHost` points at
-your own backend, which proxies to the private auth API. The `localhost` example below is a
-self-hosted local setup.
+The Auth Server URL from the portal's **Auth API Configuration** card goes in your backend's
+`AUTH_SERVER_URL`, not in `apiHost`. The adapter holds the auth API's tokens in signed cookies on
+your domain, so the browser never talks to the auth server directly. See the
+[Managed Quickstart](/start/managed-quickstart). The `localhost` example below is a local setup.
 
 ---
 
