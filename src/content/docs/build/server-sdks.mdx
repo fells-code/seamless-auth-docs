@@ -21,7 +21,7 @@ the private auth server.
 
 | Package                  | Use it when                                        | What it gives you                                                                                                     |
 | ------------------------ | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `@seamless-auth/express` | Your backend is Express                            | Official adapter, mounted auth routes, middleware, role guards                                                        |
+| `@seamless-auth/express` | Your backend is Express                            | Mounted auth routes, middleware, role guards; the most mature adapter                                                 |
 | `@seamless-auth/fastify` | Your backend is Fastify                            | The Express adapter's routes and cookies as a Fastify plugin                                                          |
 | `@seamless-auth/nextjs`  | Your Next.js App Router app is its own backend     | Serves `/auth` from a route handler, reads the session in server components and `proxy.ts` ([Next.js](/build/nextjs)) |
 | `@seamless-auth/core`    | You need a custom adapter or framework integration | Framework-agnostic auth, cookie, OAuth, and role primitives                                                           |
@@ -347,9 +347,22 @@ environment variables, or own framework-specific behavior.
 
 ## Current Official Coverage
 
-Today, the strongest supported server-side path is Express.
+All three adapters are official packages of `seamless-auth-server`, published to npm and, like
+`@seamless-auth/core`, still pre-1.0. The `beta` label you see in `seamless init` belongs to the
+starter templates in `seamless-templates`, not to the adapter packages:
 
-The best-supported current combination is:
+| Adapter                  | Version on `main` | Package status | CLI starter template (status)          |
+| ------------------------ | ----------------- | -------------- | -------------------------------------- |
+| `@seamless-auth/express` | 0.18.0            | Official       | `express` (stable)                     |
+| `@seamless-auth/fastify` | 0.9.0             | Official       | `fastify` (beta)                       |
+| `@seamless-auth/nextjs`  | 0.2.0             | Official       | `nextjs`, a full-stack template (beta) |
+
+Express is the most mature path. It is the reference adapter: the Fastify and Next.js adapters'
+tests hold them to the Express adapter's responses. It is also the only adapter released in lockstep
+with `@seamless-auth/core` (their linked Changesets group), and its starter template is the only
+stable backend template.
+
+The most mature combination is:
 
 ```txt
 @seamless-auth/react or @seamless-auth/react-native
@@ -362,8 +375,11 @@ seamless-auth-api
   -> your auth engine
 ```
 
-Use `@seamless-auth/core` when Express is not your runtime or you are building an adapter. The
-Fastify adapter, `@seamless-auth/fastify`, mirrors the Express one, bearer transport included.
+The Fastify adapter, `@seamless-auth/fastify`, mirrors the Express one as a Fastify plugin, bearer
+transport included. A Next.js App Router application uses `@seamless-auth/nextjs` instead of a
+separate backend: it serves `/auth` from a route handler and reads the session in server components
+and `proxy.ts` ([Next.js](/build/nextjs)). Use `@seamless-auth/core` when none of the three fits
+your runtime or you are building an adapter.
 
 ---
 
