@@ -275,11 +275,23 @@ sessions or all sessions for a user.
 
 `seamless-auth-api` signs access and ephemeral JWTs with RS256.
 
-In development:
+In development (any `NODE_ENV` other than `production`):
 
-- the API generates local keys under `./keys/dev`
-- the active key ID is `dev-main`
-- `/.well-known/jwks.json` serves the generated dev public key
+- the API creates an RSA key pair at startup, before it starts listening, so
+  `/.well-known/jwks.json` serves the dev public key from the first request
+- keys live in `SEAMLESS_DEV_KEYS_DIR`, default `./keys/dev` relative to the working directory
+  (`/app/keys/dev` in the image)
+- the key ID is `dev-` followed by the first 16 characters of the key's RFC 7638 JWK thumbprint
+  (base64url), for example `dev-xXoIGRrgENKN6lCF`
+- a regenerated key gets a new key ID, so adapters that cache the JWKS refetch it instead of
+  verifying against a stale key
+- only `private.pem` has to survive a restart; the public key is derived from it. The API's bundled
+  `docker-compose.yml` keeps `/app/keys` on a `dev-keys` volume so a recreated container keeps its key
+- if no key can be read, the endpoint answers `200 { "keys": [] }` and logs why
+
+The adapters' `jwksKid` option (default `dev-main`) is a different value: it sets the `kid` header on
+the HS256 service tokens an adapter sends to the API, and it does not need to match the API's dev
+signing key ID.
 
 In production:
 

@@ -158,6 +158,15 @@ Production access-token signing uses configured JWKS material.
 
 Keep retired public keys available until all tokens signed with them have expired.
 
+Outside production the API generates its own signing key at startup instead:
+
+| Variable                | Default      | Purpose                                                                                     |
+| ----------------------- | ------------ | ------------------------------------------------------------------------------------------- |
+| `SEAMLESS_DEV_KEYS_DIR` | `./keys/dev` | Directory for the dev key pair (`/app/keys/dev` in the image). Ignored in production. |
+
+The dev key ID is derived from the key's JWK thumbprint (`dev-` plus 16 characters). See
+[JWKS And Signing Keys](/reference/cookies-sessions-tokens#jwks-and-signing-keys).
+
 ---
 
 ## Express Adapter Environment
