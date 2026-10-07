@@ -90,7 +90,7 @@ responses from the Express adapter.
 | `audience`               | required                       | Audience your user tokens are issued for                  |
 | `cookieSecret`           | required                       | Signs the session cookies, 32 characters minimum          |
 | `serviceSecret`          | required                       | Shared secret for machine-to-machine calls                |
-| `jwksKid`                | `dev-main`                     | Active JWKS key id; set it explicitly before deploying    |
+| `jwksKid`                | `dev-main`                     | `kid` header on the HS256 service tokens the adapter signs for the auth API; not the API's signing key ID. Warns while unset or `dev-main` |
 | `basePath`               | `/auth`                        | Where the catch-all route is mounted                      |
 | `cookieDomain`           | none                           | Domain attribute for the auth cookies                     |
 | `cookieSecure`           | `true`                         | Set `false` only for local HTTP development               |
