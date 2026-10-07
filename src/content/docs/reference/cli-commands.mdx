@@ -66,7 +66,7 @@ same name. A full integration flow for an existing app is not shipped yet.
 
 ### What it does
 
-- prompts for frontend and backend choices
+- prompts for web and backend templates read from the template registry, or takes a template flag
 - prompts for an optional mobile app (Expo), or takes `--mobile=expo` to skip the prompt
 - prompts for auth mode
 - optionally includes the admin dashboard
@@ -81,12 +81,38 @@ The mobile app lands in `mobile/` next to the web and API projects, wired to the
 
 ### Current generated stack
 
-Today the supported generated path is centered on:
+The starters come from the [`fells-code/seamless-templates`](https://github.com/fells-code/seamless-templates)
+registry at the tag the CLI pins (currently `v0.16.0`). As of that tag the generated path covers:
 
-- React for the frontend
-- Express for the backend
+- React (Vite) or Next.js (full-stack, beta) for the web app
+- Express or Fastify (beta) for the backend
+- an optional Expo (beta) mobile app
 - Seamless Auth API in Docker or local source mode
-- optional admin dashboard in image or source mode
+- an admin console served by the API at `/console`, as a separate image or source container, or
+  none
+
+### Template flags
+
+```bash
+seamless init my-app --oauth
+seamless init my-app --web=nextjs
+seamless templates list
+```
+
+Each template answers to `--<id>`, and some also declare a shorter `--<alias>` (for example
+`--oauth` and `--react-oauth` select the same starter). A template flag answers that layer's prompt.
+`--web=`, `--api=`, and `--mobile=` take the same ids and aliases and name the layer explicitly. The
+flags come from the registry, so `seamless templates list` is the authoritative list.
+
+`--oauth` selects the React OAuth example and then prompts for OAuth providers (Google, GitHub,
+Microsoft, GitLab), wires the ones you configure into the auth server, and prints the redirect URI
+to register: `http://localhost:5173/oauth/callback`. See
+[CLI Init Flow](/operate/cli-init#the---oauth-starter) for the full behavior and the template table.
+
+| Environment variable     | Effect on `init` and `templates list`                                          |
+| ------------------------ | ------------------------------------------------------------------------------ |
+| `SEAMLESS_TEMPLATES_REF` | Read the published templates repository at this ref instead of the pinned tag   |
+| `SEAMLESS_TEMPLATES_DIR` | Read templates from a local checkout instead; takes precedence over the ref     |
 
 ### No shortcut
 
@@ -167,10 +193,19 @@ seamless verify --local      # build the SDKs from local source (pre-publish con
 | `--filter <grep>` | Run only tests matching the grep                                  |
 | `--keep-up`       | Leave the Docker stack running after the run                      |
 
-Requires Docker. The sibling repos are resolved relative to the CLI checkout and can be overridden
-with `SEAMLESS_API_DIR`, `SEAMLESS_SERVER_DIR`, `SEAMLESS_REACT_SDK_DIR` (the React SDK), and
-`SEAMLESS_REACT_DIR` (the starter app). A reusable GitHub workflow runs `seamless verify --local` on
-ecosystem PRs so a change in one repo is tested against the others.
+Requires Docker. The sibling repos are resolved relative to the CLI checkout and can be overridden:
+
+| Environment variable     | Overrides                                                                                         |
+| ------------------------ | ------------------------------------------------------------------------------------------------- |
+| `SEAMLESS_API_DIR`       | The `seamless-auth-api` checkout the auth server is built from                                    |
+| `SEAMLESS_SERVER_DIR`    | The `seamless-auth-server` checkout (needed for `--local`)                                        |
+| `SEAMLESS_REACT_SDK_DIR` | The `seamless-auth-react` checkout (needed for `--local` browser runs)                            |
+| `SEAMLESS_TEMPLATES_DIR` | The `seamless-templates` checkout; every runnable web template in its `registry.json` is driven   |
+| `SEAMLESS_REACT_DIR`     | A single template directory to drive instead of the whole registry                                |
+
+`verify` always reads templates from a local checkout, so `SEAMLESS_TEMPLATES_REF` (which selects a
+ref of the published repository for `init`) has no effect here. A reusable GitHub workflow runs
+`seamless verify --local` on ecosystem PRs so a change in one repo is tested against the others.
 
 ---
 
