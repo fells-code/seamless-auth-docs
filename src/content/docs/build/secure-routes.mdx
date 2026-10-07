@@ -276,7 +276,7 @@ function SensitiveActionButton() {
 
   async function run() {
     const status = await refreshStepUpStatus()
-    const fresh = status?.fresh ? true : (await verifyStepUpWithPasskey()).success
+    const fresh = status.data?.fresh || !(await verifyStepUpWithPasskey()).error
 
     if (!fresh) return
 

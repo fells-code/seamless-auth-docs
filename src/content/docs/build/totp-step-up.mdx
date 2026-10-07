@@ -60,7 +60,7 @@ export function SensitiveActionButton() {
 
   async function run() {
     const status = await refreshStepUpStatus()
-    const fresh = status?.fresh ? true : (await verifyStepUpWithPasskey()).success
+    const fresh = status.data?.fresh || !(await verifyStepUpWithPasskey()).error
 
     if (!fresh) {
       return
@@ -82,6 +82,7 @@ The React SDK currently exposes:
 - `refreshStepUpStatus()`
 - `verifyStepUpWithPasskey()`
 - `verifyStepUpWithPasskeyPrf(input)`
+- `verifyStepUpWithTotp(code)`
 
 ---
 
@@ -115,7 +116,7 @@ current freshness status.
 Through the React SDK:
 
 ```tsx
-const status = await refreshStepUpStatus()
+const { data: status } = await refreshStepUpStatus()
 
 if (status?.fresh) {
   console.log(status.method, status.expiresAt)

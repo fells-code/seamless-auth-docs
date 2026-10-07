@@ -25,4 +25,6 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
+      - name: SDK examples read { data, error } results
+        run: npm run check:sdk-results
       - run: npm run build

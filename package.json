@@ -10,7 +10,8 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "lint": "eslint . && node scripts/check-no-h1.mjs",
+    "lint": "eslint . && node scripts/check-no-h1.mjs && npm run check:sdk-results",
+    "check:sdk-results": "node scripts/check-sdk-result-shapes.mjs",
     "format": "prettier -w .",
     "typecheck": "astro check",
     "prepare": "husky"

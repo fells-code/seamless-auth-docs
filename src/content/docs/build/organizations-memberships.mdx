@@ -109,7 +109,7 @@ Use the headless client for create/update/member operations.
 
 ```tsx
 import { useState } from 'react'
-import { useAuth, useAuthClient, type OrganizationResult } from '@seamless-auth/react'
+import { useAuth, useAuthClient } from '@seamless-auth/react'
 
 export function CreateOrganizationForm() {
   const authClient = useAuthClient()
@@ -119,18 +119,16 @@ export function CreateOrganizationForm() {
   async function submit(event: React.FormEvent) {
     event.preventDefault()
 
-    const response = await authClient.createOrganization({
+    const { data, error } = await authClient.createOrganization({
       name,
       metadata: { source: 'self-service' },
     })
 
-    if (!response.ok) {
-      throw new Error('Could not create organization')
+    if (error) {
+      throw new Error(error.message)
     }
 
-    const result = (await response.json()) as OrganizationResult
-
-    await authClient.switchOrganization(result.organization.id)
+    await authClient.switchOrganization(data.organization.id)
     await refreshSession()
   }
 
@@ -185,35 +183,22 @@ access cookie.
 
 ```tsx
 import { useEffect, useState } from 'react'
-import {
-  useAuth,
-  useAuthClient,
-  type OrganizationMembership,
-  type OrganizationMembersResult,
-} from '@seamless-auth/react'
+import { useAuth, useAuthClient, type OrganizationMembership } from '@seamless-auth/react'
 
 export function MemberList() {
   const { activeOrganization } = useAuth()
   const authClient = useAuthClient()
   const [members, setMembers] = useState<OrganizationMembership[]>([])
 
+  const organizationId = activeOrganization?.id
+
   useEffect(() => {
-    if (!activeOrganization) return
+    if (!organizationId) return
 
-    async function load() {
-      const response = await authClient.listOrganizationMembers(activeOrganization.id)
-
-      if (!response.ok) {
-        setMembers([])
-        return
-      }
-
-      const result = (await response.json()) as OrganizationMembersResult
-      setMembers(result.members)
-    }
-
-    void load()
-  }, [activeOrganization, authClient])
+    void authClient.listOrganizationMembers(organizationId).then(({ data, error }) => {
+      setMembers(error ? [] : data.members)
+    })
+  }, [organizationId, authClient])
 
   return (
     <ul>

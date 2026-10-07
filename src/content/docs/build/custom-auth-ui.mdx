@@ -105,12 +105,7 @@ The built-in login screen follows this shape:
 
 ```tsx
 import { useState } from 'react'
-import {
-  useAuth,
-  usePasskeySupport,
-  type LoginMethod,
-  type LoginStartResult,
-} from '@seamless-auth/react'
+import { useAuth, usePasskeySupport, type LoginMethod } from '@seamless-auth/react'
 
 const fallbackMethods: LoginMethod[] = ['magic_link', 'email_otp', 'phone_otp']
 
@@ -125,21 +120,20 @@ export function CustomLogin() {
     event.preventDefault()
     setMessage('')
 
-    const response = await login(identifier, passkeySupported)
+    const { data, error } = await login(identifier, passkeySupported)
 
-    if (!response?.ok) {
+    if (error) {
       setMessage('Could not start sign-in.')
       return
     }
 
-    const result = (await response.json()) as LoginStartResult
-    const allowedMethods = result.loginMethods?.length ? result.loginMethods : methods
+    const allowedMethods = data.loginMethods?.length ? data.loginMethods : methods
     setMethods(allowedMethods)
 
     if (passkeySupported && allowedMethods.includes('passkey')) {
-      const signedIn = await handlePasskeyLogin()
+      const passkey = await handlePasskeyLogin()
 
-      if (signedIn) {
+      if (!passkey.error) {
         return
       }
     }
@@ -184,18 +178,18 @@ function FallbackButtons() {
   const authClient = useAuthClient()
 
   async function sendMagicLink() {
-    const response = await authClient.requestMagicLink()
-    if (!response.ok) throw new Error('Could not send magic link')
+    const { error } = await authClient.requestMagicLink()
+    if (error) throw new Error(`Could not send magic link: ${error.message}`)
   }
 
   async function sendEmailOtp() {
-    const response = await authClient.requestLoginEmailOtp()
-    if (!response.ok) throw new Error('Could not send email code')
+    const { error } = await authClient.requestLoginEmailOtp()
+    if (error) throw new Error(`Could not send email code: ${error.message}`)
   }
 
   async function sendPhoneOtp() {
-    const response = await authClient.requestLoginPhoneOtp()
-    if (!response.ok) throw new Error('Could not send phone code')
+    const { error } = await authClient.requestLoginPhoneOtp()
+    if (error) throw new Error(`Could not send phone code: ${error.message}`)
   }
 
   return (
@@ -224,10 +218,10 @@ function VerifyEmailCode({ code }: { code: string }) {
   const authClient = useAuthClient()
 
   async function verify() {
-    const response = await authClient.verifyLoginEmailOtp(code)
+    const { error } = await authClient.verifyLoginEmailOtp(code)
 
-    if (!response.ok) {
-      throw new Error('Verification failed')
+    if (error) {
+      throw new Error(error.message)
     }
 
     await refreshSession()
@@ -262,10 +256,10 @@ function RegisterPasskeyButton() {
       deviceInfo: navigator.userAgent,
     }
 
-    const result = await authClient.registerPasskey(metadata)
+    const { error } = await authClient.registerPasskey(metadata)
 
-    if (!result.success) {
-      throw new Error(result.message)
+    if (error) {
+      throw new Error(error.message)
     }
 
     await refreshSession()
@@ -302,20 +296,22 @@ function OAuthButtons() {
   const [providers, setProviders] = useState<OAuthProvider[]>([])
 
   useEffect(() => {
-    void listOAuthProviders().then((result) => setProviders(result.providers))
+    void listOAuthProviders().then(({ data, error }) => {
+      if (!error) setProviders(data.providers)
+    })
   }, [listOAuthProviders])
 
   async function start(providerId: string) {
     // Stash the provider so the callback route can finish the right flow.
     sessionStorage.setItem('seamless:oauth:provider', providerId)
 
-    const result = await startOAuthLogin({
+    const { data, error } = await startOAuthLogin({
       providerId,
       redirectUri: `${window.location.origin}/oauth/callback`,
       returnTo: window.location.href,
     })
 
-    window.location.assign(result.authorizationUrl)
+    if (!error) window.location.assign(data.authorizationUrl)
   }
 
   return providers.map((provider) => (

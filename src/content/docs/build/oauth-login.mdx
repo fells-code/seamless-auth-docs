@@ -178,20 +178,22 @@ export function OAuthButtons() {
   const [providers, setProviders] = useState<OAuthProvider[]>([])
 
   useEffect(() => {
-    void listOAuthProviders().then((result) => setProviders(result.providers))
+    void listOAuthProviders().then(({ data, error }) => {
+      if (!error) setProviders(data.providers)
+    })
   }, [listOAuthProviders])
 
   async function start(provider: OAuthProvider) {
     // Remember which provider so the callback can finish the right flow.
     sessionStorage.setItem('seamless:oauth:provider', provider.id)
 
-    const result = await startOAuthLogin({
+    const { data, error } = await startOAuthLogin({
       providerId: provider.id,
       redirectUri: `${window.location.origin}/oauth/callback`,
       returnTo: `${window.location.origin}/dashboard`,
     })
 
-    window.location.assign(result.authorizationUrl)
+    if (!error) window.location.assign(data.authorizationUrl)
   }
 
   return (
@@ -244,13 +246,15 @@ export function OAuthCallback() {
         return
       }
 
-      try {
-        await finishOAuthLogin({ providerId, code, state })
-        sessionStorage.removeItem('seamless:oauth:provider')
-        navigate('/dashboard', { replace: true })
-      } catch {
-        setError('OAuth login failed.')
+      const result = await finishOAuthLogin({ providerId, code, state })
+      sessionStorage.removeItem('seamless:oauth:provider')
+
+      if (result.error) {
+        setError(result.error.message)
+        return
       }
+
+      navigate('/dashboard', { replace: true })
     }
 
     void finish()
