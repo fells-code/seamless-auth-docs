@@ -5,17 +5,26 @@ sidebar:
   order: 12
 ---
 
+import { Aside } from '@astrojs/starlight/components'
+
 Use this guide when you need authenticator-app MFA or fresh verification before sensitive actions.
 
-There are two related surfaces:
+There are three related surfaces:
 
-| Surface                          | Current high-level support                                                |
-| -------------------------------- | ------------------------------------------------------------------------- |
-| WebAuthn step-up                 | `@seamless-auth/react`, `@seamless-auth/express`, and `seamless-auth-api` |
-| TOTP enrollment and verification | `seamless-auth-api` raw routes                                            |
+| Surface                                       | Current high-level support                                           |
+| --------------------------------------------- | -------------------------------------------------------------------- |
+| WebAuthn step-up                              | `@seamless-auth/react`, the server adapters, and `seamless-auth-api` |
+| TOTP enrollment, status, disable, and step-up | `@seamless-auth/react`, the server adapters, and `seamless-auth-api` |
+| TOTP login MFA                                | `seamless-auth-api` raw route only                                   |
 
-The current React and Express packages expose passkey step-up helpers. TOTP routes exist in the
-auth API, but they are not yet wrapped by the React SDK or mounted by the Express adapter.
+The React SDK wraps TOTP. The headless client (`useAuthClient()` or `createSeamlessAuthClient()`)
+exposes `getTotpStatus()`, `startTotpEnrollment()`, `verifyTotpEnrollment(code)`,
+`disableTotp(code)`, and `verifyStepUpWithTotp(code)`, and `useAuth()` exposes
+`verifyStepUpWithTotp(code)`. The Express, Fastify, and Next.js adapters mount the matching
+`/auth/totp/*` routes, so no backend code is needed. Only TOTP login MFA is still unwrapped.
+
+Every one of these methods resolves to `{ data, error }`. See
+[Reading Results](/build/react-sdk#reading-results) if that pattern is new to you.
 
 ---
 
@@ -59,8 +68,13 @@ export function SensitiveActionButton() {
   const { refreshStepUpStatus, verifyStepUpWithPasskey } = useAuth()
 
   async function run() {
-    const status = await refreshStepUpStatus()
-    const fresh = status?.fresh ? true : (await verifyStepUpWithPasskey()).success
+    const { data } = await refreshStepUpStatus()
+    let fresh = data?.fresh === true
+
+    if (!fresh) {
+      const { error } = await verifyStepUpWithPasskey()
+      fresh = !error
+    }
 
     if (!fresh) {
       return
@@ -76,12 +90,16 @@ export function SensitiveActionButton() {
 }
 ```
 
-The React SDK currently exposes:
+`data` is `null` when the status request fails, hence `data?.fresh`. A passkey prompt the user
+dismisses comes back as `error`, so `fresh` stays `false` and the action does not run.
+
+`useAuth()` exposes:
 
 - `stepUpStatus`
 - `refreshStepUpStatus()`
 - `verifyStepUpWithPasskey()`
 - `verifyStepUpWithPasskeyPrf(input)`
+- `verifyStepUpWithTotp(code)`
 
 ---
 
@@ -115,14 +133,14 @@ current freshness status.
 Through the React SDK:
 
 ```tsx
-const status = await refreshStepUpStatus()
+const { data, error } = await refreshStepUpStatus()
 
-if (status?.fresh) {
-  console.log(status.method, status.expiresAt)
+if (!error && data.fresh) {
+  console.log(data.method, data.expiresAt)
 }
 ```
 
-Raw response shape:
+`data` has this shape, which is also the raw response body:
 
 ```json
 {
@@ -150,6 +168,10 @@ The raw auth API exposes:
 | `POST` | `/totp/disable`       | access bearer    | Disable TOTP                   |
 | `POST` | `/totp/verify-login`  | ephemeral bearer | Verify TOTP during login       |
 | `POST` | `/totp/verify-mfa`    | access bearer    | Verify TOTP for MFA or step-up |
+
+The Express, Fastify, and Next.js adapters mount every route except `/totp/verify-login` under
+`/auth/totp/*`, authenticated by the access cookie, and the SDK methods call those adapter routes.
+This table is reference for what travels on the wire.
 
 Verification requests use:
 
@@ -179,13 +201,151 @@ store either value in frontend analytics.
 
 ---
 
-## Step 5: Add A Backend Bridge For TOTP
+## Step 5: Build TOTP Enrollment UI
 
-Because the current Express adapter does not mount `/auth/totp/*`, an app using the adapter needs a
-small backend bridge before browser UI can use TOTP.
+Enrollment needs a signed-in session. Start it, show the secret, then confirm it with a code from
+the authenticator app.
 
-One option is to verify the signed access cookie, extract the upstream bearer token stored inside
-that cookie, and forward the request to `seamless-auth-api`.
+```tsx
+import { useState } from 'react'
+import { useAuthClient, type TotpEnrollmentStartResult } from '@seamless-auth/react'
+
+export function TotpEnrollment() {
+  const authClient = useAuthClient()
+  const [enrollment, setEnrollment] = useState<TotpEnrollmentStartResult | null>(null)
+  const [code, setCode] = useState('')
+  const [message, setMessage] = useState('')
+
+  async function start() {
+    const { data, error } = await authClient.startTotpEnrollment()
+
+    if (error) {
+      setMessage(error.message)
+      return
+    }
+
+    setEnrollment(data)
+  }
+
+  async function verify() {
+    const { error } = await authClient.verifyTotpEnrollment(code)
+
+    if (error) {
+      setMessage(error.message)
+      return
+    }
+
+    setEnrollment(null)
+    setMessage('Authenticator app enabled.')
+  }
+
+  return (
+    <section>
+      <button onClick={() => void start()}>Set up authenticator app</button>
+
+      {enrollment && (
+        <>
+          <p>{enrollment.accountName}</p>
+          <code>{enrollment.secret}</code>
+          <input value={code} onChange={(event) => setCode(event.target.value)} />
+          <button onClick={() => void verify()}>Verify</button>
+        </>
+      )}
+
+      {message && <p>{message}</p>}
+    </section>
+  )
+}
+```
+
+`data` from `startTotpEnrollment()` is the enrollment start body shown in Step 4. For production UI,
+render `otpauthUrl` as a QR code and keep the manual secret behind a secondary action.
+
+Read the current status with the same client. `data` is `{ enabled, verifiedAt, lastUsedAt }`:
+
+```ts
+const { data, error } = await authClient.getTotpStatus()
+
+if (!error && data.enabled) {
+  console.log(data.verifiedAt, data.lastUsedAt)
+}
+```
+
+Disabling needs a current code from the authenticator app:
+
+```ts
+const { error } = await authClient.disableTotp(code)
+
+if (error) {
+  setMessage(error.message)
+}
+```
+
+---
+
+## Step 6: Use TOTP For Step-Up
+
+After a user has enabled TOTP, `verifyStepUpWithTotp(code)` marks the current session fresh.
+
+```tsx
+import { useState } from 'react'
+import { useAuth } from '@seamless-auth/react'
+
+export function TotpStepUp({ onVerified }: { onVerified: () => void }) {
+  const { verifyStepUpWithTotp } = useAuth()
+  const [code, setCode] = useState('')
+  const [message, setMessage] = useState('')
+
+  async function verify() {
+    const { error } = await verifyStepUpWithTotp(code)
+
+    if (error) {
+      setMessage(error.message)
+      return
+    }
+
+    onVerified()
+  }
+
+  return (
+    <>
+      <input value={code} onChange={(event) => setCode(event.target.value)} />
+      <button onClick={() => void verify()}>Verify</button>
+      {message && <p>{message}</p>}
+    </>
+  )
+}
+```
+
+On success, `data` is the step-up status from Step 3 with `method: "totp"`, and `stepUpStatus` on
+`useAuth()` updates to match. A response that does not report a fresh TOTP verification comes back
+as `error`, so checking `error` is enough.
+
+---
+
+## Step 7: Handle Login MFA
+
+`/totp/verify-login` uses an ephemeral bearer token from the login pre-auth flow. It is the one TOTP
+route that the SDK does not wrap and the adapters do not mount, and there is no packaged TOTP login
+UI. If you add one today, keep it behind a backend bridge that forwards the pre-auth bearer token
+the same way the adapter forwards OTP and WebAuthn login routes.
+
+Until the adapter exposes this route directly, prefer documenting TOTP login MFA as an advanced
+integration point rather than assuming it is available in the packaged React screens.
+
+---
+
+## Fallback: A Backend Bridge Without An Adapter
+
+<Aside type="caution" title="Fallback only">
+  You do not need this section if your backend mounts `@seamless-auth/express`,
+  `@seamless-auth/fastify`, or `@seamless-auth/nextjs`. Those adapters already serve
+  `/auth/totp/*`. Use it only for a backend that proxies to `seamless-auth-api` without one of them.
+</Aside>
+
+A backend without an adapter has to forward TOTP requests itself. One option is to verify the
+signed access cookie, extract the upstream bearer token stored inside that cookie, and forward the
+request to `seamless-auth-api`.
 
 ```ts
 import express from 'express'
@@ -253,129 +413,21 @@ totpRouter.post('/verify-mfa', async (req, res) => {
 app.use('/auth/totp', totpRouter)
 ```
 
-Keep this bridge server-side. Do not expose the upstream bearer token to browser JavaScript.
-
----
-
-## Step 6: Build TOTP Enrollment UI
-
-After adding a backend bridge, the browser can call your backend route.
-
-```tsx
-import { useState } from 'react'
-
-type Enrollment = {
-  secret: string
-  otpauthUrl: string
-  issuer: string
-  accountName: string
-}
-
-export function TotpEnrollment() {
-  const [enrollment, setEnrollment] = useState<Enrollment | null>(null)
-  const [code, setCode] = useState('')
-
-  async function start() {
-    const response = await fetch('/auth/totp/enroll/start', {
-      method: 'POST',
-      credentials: 'include',
-    })
-
-    if (!response.ok) {
-      throw new Error('Could not start TOTP enrollment')
-    }
-
-    setEnrollment(await response.json())
-  }
-
-  async function verify() {
-    const response = await fetch('/auth/totp/enroll/verify', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code }),
-    })
-
-    if (!response.ok) {
-      throw new Error('Could not verify TOTP code')
-    }
-  }
-
-  return (
-    <section>
-      <button onClick={() => void start()}>Set up authenticator app</button>
-
-      {enrollment && (
-        <>
-          <p>{enrollment.accountName}</p>
-          <code>{enrollment.secret}</code>
-          <input value={code} onChange={(event) => setCode(event.target.value)} />
-          <button onClick={() => void verify()}>Verify</button>
-        </>
-      )}
-    </section>
-  )
-}
-```
-
-For production UI, render `otpauthUrl` as a QR code and keep the manual secret behind a secondary
-action.
-
----
-
-## Step 7: Use TOTP For Step-Up
-
-After a user has enabled TOTP, `/totp/verify-mfa` marks the current session fresh.
-
-```tsx
-async function verifyTotpStepUp(code: string) {
-  const response = await fetch('/auth/totp/verify-mfa', {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code }),
-  })
-
-  if (!response.ok) {
-    throw new Error('TOTP step-up failed')
-  }
-
-  return response.json() as Promise<{
-    message: string
-    fresh: boolean
-    method: 'totp'
-    verifiedAt: string
-    expiresAt: string
-    maxAgeSeconds: number
-  }>
-}
-```
-
-The response has the same freshness shape as WebAuthn step-up, with `method: "totp"`.
-
----
-
-## Step 8: Handle Login MFA
-
-`/totp/verify-login` uses an ephemeral bearer token from the login pre-auth flow. The current
-React/Express adapter stack does not expose a packaged TOTP login UI. If you add one today, keep it
-behind a backend bridge that forwards the pre-auth bearer token the same way the adapter forwards
-OTP and WebAuthn login routes.
-
-Until the adapter exposes this route directly, prefer documenting TOTP login MFA as an advanced
-integration point rather than assuming it is available in the packaged React screens.
+Keep this bridge server-side. Do not expose the upstream bearer token to browser JavaScript. Mount
+it at `/auth/totp` so the SDK methods above reach it unchanged.
 
 ---
 
 ## Common Mistakes
 
-| Mistake                                                           | Fix                                                                 |
-| ----------------------------------------------------------------- | ------------------------------------------------------------------- |
-| Assuming TOTP is in `useAuth()`                                   | Use raw auth API routes or a backend bridge until SDK helpers exist |
-| Calling raw TOTP routes from browser code without bearer handling | Forward through your backend; keep bearer tokens server-side        |
-| Logging `secret` or `otpauthUrl`                                  | Treat enrollment values as sensitive                                |
-| Using TOTP step-up without an enabled credential                  | Check `/totp/status` first                                          |
-| Treating UI freshness as authorization                            | Let the auth API or your backend enforce sensitive actions          |
+| Mistake                                                           | Fix                                                                          |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Writing a TOTP backend bridge next to an adapter                  | The adapters already mount `/auth/totp/*`; call the SDK methods              |
+| Looking for TOTP enrollment on `useAuth()`                        | Enrollment, status, and disable are on `useAuthClient()`; step-up is on both |
+| Calling raw TOTP routes from browser code without bearer handling | Use the SDK through your adapter; keep bearer tokens server-side             |
+| Logging `secret` or `otpauthUrl`                                  | Treat enrollment values as sensitive                                         |
+| Using TOTP step-up without an enabled credential                  | Check `getTotpStatus()` first and read `data.enabled`                        |
+| Treating UI freshness as authorization                            | Let the auth API or your backend enforce sensitive actions                   |
 
 ---
 
