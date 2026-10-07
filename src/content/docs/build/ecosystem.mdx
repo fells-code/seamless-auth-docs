@@ -35,19 +35,19 @@ seamless-auth-admin-dashboard
 
 ## The Main Pieces
 
-| Project                         | What it is                                     | Use it when                                                           |
-| ------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------- |
-| `seamless-cli`                  | CLI for scaffolding and checking a local stack | You want a working React + Express project with generated auth wiring |
-| `seamless-auth-api`             | Self-hostable auth server                      | You need the passwordless auth engine itself                          |
-| `@seamless-auth/core`           | Framework-agnostic server auth primitives      | You are building your own backend adapter                             |
-| `@seamless-auth/express`        | Official Express adapter                       | Your backend is Express and you want the supported integration path   |
-| `@seamless-auth/fastify`        | Official Fastify adapter                       | Your backend is Fastify                                               |
-| `@seamless-auth/nextjs`         | Next.js App Router adapter and session helpers | Your Next.js app is its own backend ([Next.js](/build/nextjs))        |
-| `@seamless-auth/react`          | React SDK and built-in auth screens            | Your frontend is React and you want a ready-to-use auth integration   |
-| `@seamless-auth/react-native`   | React Native SDK: provider, hooks, native ports | Your frontend is an Expo or React Native app                          |
-| `@seamless-auth/client`         | The framework-free client the two SDKs share   | You are building a binding for another framework                      |
-| `seamless-auth-admin-dashboard` | Operator dashboard app                         | You want a UI for admins and support teams                            |
-| `@seamless-auth/types`          | Shared request/response and domain types       | You want consistent types across apps and tooling                     |
+| Project                         | What it is                                      | Use it when                                                                                                   |
+| ------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `seamless-cli`                  | CLI for scaffolding and checking a local stack  | You want a working React + Express project with generated auth wiring                                         |
+| `seamless-auth-api`             | Self-hostable auth server                       | You need the passwordless auth engine itself                                                                  |
+| `@seamless-auth/core`           | Framework-agnostic server auth primitives       | You are building your own backend adapter                                                                     |
+| `@seamless-auth/express`        | Official Express adapter                        | Your backend is Express and you want the supported integration path                                           |
+| `@seamless-auth/fastify`        | Official Fastify adapter                        | Your backend is Fastify ([Server SDKs](/build/server-sdks#current-official-coverage))                         |
+| `@seamless-auth/nextjs`         | Next.js App Router adapter and session helpers  | Your Next.js app is its own backend ([Next.js](/build/nextjs))                                                |
+| `@seamless-auth/react`          | React SDK and built-in auth screens             | Your frontend is React and you want a ready-to-use auth integration                                           |
+| `@seamless-auth/react-native`   | React Native SDK: provider, hooks, native ports | Your frontend is an Expo or React Native app ([React Native SDK](/build/react-native-sdk))                    |
+| `@seamless-auth/client`         | The framework-free client the two SDKs share    | You are building a binding for another framework ([React SDK](/build/react-sdk#platform-ports-and-transport)) |
+| `seamless-auth-admin-dashboard` | Operator dashboard app                          | You want a UI for admins and support teams                                                                    |
+| `@seamless-auth/types`          | Shared request/response and domain types        | You want consistent types across apps and tooling                                                             |
 
 ---
 
@@ -138,6 +138,75 @@ does not ship `deploy`, `destroy`, or contributor workspace commands.
 
 It is the easiest starting point if you want to learn the ecosystem through a working project
 rather than by assembling every piece manually.
+
+---
+
+## Compatibility Matrix
+
+Versions and declared ranges as of **2026-10-06**, read from the `package.json` on each repository's
+`main` branch. The npm `latest` tag matched every package version below on that date. Every package
+and the auth API require Node.js 22 or later (`engines.node` is `>=22` throughout).
+
+| Package                         | Version on `main` | Declares on other Seamless packages                            | Other peer ranges                                                             |
+| ------------------------------- | ----------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `seamless-auth-api`             | 0.16.0            | `@seamless-auth/types` ^0.27.0                                 | None                                                                          |
+| `@seamless-auth/core`           | 0.18.0            | `@seamless-auth/types` ^0.27.0                                 | None                                                                          |
+| `@seamless-auth/express`        | 0.18.0            | `@seamless-auth/core` ^0.18.0                                  | `express` >=5.0.0                                                             |
+| `@seamless-auth/fastify`        | 0.9.0             | `@seamless-auth/core` ^0.18.0                                  | `fastify` >=5.0.0                                                             |
+| `@seamless-auth/nextjs`         | 0.2.0             | `@seamless-auth/core` ^0.18.0, `@seamless-auth/types` ^0.27.0  | None                                                                          |
+| `@seamless-auth/client`         | 0.3.0             | `@seamless-auth/types` ^0.26.0                                 | None                                                                          |
+| `@seamless-auth/react`          | 0.15.0            | `@seamless-auth/client` ^0.3.0, `@seamless-auth/types` ^0.26.0 | `react` and `react-dom` 18 or 19, optional `react-router-dom` 6.4+ or 7.15.1+ |
+| `@seamless-auth/react-native`   | 0.2.0             | `@seamless-auth/client` ^0.3.0, `@seamless-auth/types` ^0.26.0 | `react` 18 or 19                                                              |
+| `@seamless-auth/types`          | 0.27.0            | None                                                           | None                                                                          |
+| `seamless-cli`                  | 0.18.0            | `@seamless-auth/types` ^0.26.0                                 | None                                                                          |
+| `seamless-auth-admin-dashboard` | 0.8.0             | `@seamless-auth/react` ^0.13.0, `@seamless-auth/types` ^0.27.0 | None                                                                          |
+
+How to read it:
+
+- Everything is still 0.x, and a caret range on a 0.x version pins the minor: `^0.18.0` accepts
+  0.18.x but not 0.19.0. A package moves to a new minor of a dependency only when its own range is
+  bumped and released.
+- `@seamless-auth/express`, `fastify`, and `nextjs` declare `@seamless-auth/core` as
+  `workspace:^`, which pnpm rewrites at publish to a caret on the core version in the same release
+  (`^0.18.0` today).
+- On `main`, `@seamless-auth/core` and `@seamless-auth/nextjs` already declare
+  `@seamless-auth/types` ^0.27.0. Their published releases (core 0.18.0, nextjs 0.2.0) still declare
+  ^0.26.0 until their next release.
+- The admin dashboard depends on `@seamless-auth/react` ^0.13.0, two minors behind the current React
+  SDK.
+- The auth API exposes an HTTP contract, not a package range. No package declares a range on
+  `seamless-auth-api`, so pair the API and the server SDK from the same release window.
+
+### What The CLI Scaffolds
+
+`seamless-cli` 0.18.0 does not install the newest of everything. It pins the images and the
+template tag it scaffolds, so a given CLI version always produces the same project:
+
+| What `seamless init` uses | Pinned to                                                      | Where it is set                                         |
+| ------------------------- | -------------------------------------------------------------- | ------------------------------------------------------- |
+| Auth API image            | `ghcr.io/fells-code/seamless-auth-api:v0.13.1`                 | `seamless-cli` `src/core/images.ts`                     |
+| Admin dashboard image     | `ghcr.io/fells-code/seamless-auth-admin-dashboard:v0.7.0`      | `seamless-cli` `src/core/images.ts`                     |
+| Starter templates         | `fells-code/seamless-templates` at `v0.16.0`                   | `seamless-cli` `src/core/images.ts`                     |
+| Express API template      | `@seamless-auth/express` ^0.16.0                               | `templates/api/express/package.json`                    |
+| Fastify API template      | `@seamless-auth/fastify` ^0.7.0                                | `templates/api/fastify/package.json`                    |
+| Next.js template          | `@seamless-auth/nextjs` ^0.2.0, `@seamless-auth/react` ^0.15.0 | `templates/fullstack/nextjs/package.json`               |
+| React web templates       | `@seamless-auth/react` ^0.14.0                                 | `templates/web/react-vite`, `templates/web/react-oauth` |
+| Expo template             | `@seamless-auth/react-native` ^0.1.0                           | `templates/mobile/expo/package.json`                    |
+
+Template paths are inside `fells-code/seamless-templates` at `v0.16.0`. A scaffolded project can
+move to newer SDKs by bumping the ranges in its own `package.json`.
+
+### Keeping This Matrix Current
+
+Update this section in the same change that documents a release:
+
+1. For each package published, set its version from its `package.json` on `main` and update every
+   range that points at it (`dependencies` and `peerDependencies`).
+2. When `seamless-cli` changes `SEAMLESS_AUTH_API_VERSION`, `SEAMLESS_AUTH_ADMIN_DASHBOARD_VERSION`,
+   or `SEAMLESS_TEMPLATES_REF` in `src/core/images.ts`, update the scaffold table and re-read the
+   template ranges at the new tag.
+3. Change the date at the top of the section, and check each version against
+   `npm view <package> version`.
 
 ---
 

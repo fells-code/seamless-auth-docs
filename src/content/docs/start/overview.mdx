@@ -6,6 +6,7 @@ sidebar:
 ---
 
 import { Aside } from '@astrojs/starlight/components';
+import TopologyDiagram from '../../../components/TopologyDiagram.astro';
 
 ## Seamless Auth
 
@@ -38,6 +39,34 @@ hosts the auth instance for you or you keep the auth engine and data inside your
 
 ---
 
+## How The Pieces Connect
+
+<TopologyDiagram />
+
+Every client talks to your backend, never straight to the auth API. Your backend mounts the
+`/auth` adapter routes from `@seamless-auth/express`, `@seamless-auth/fastify`, or
+`@seamless-auth/nextjs` and forwards each call to `seamless-auth-api` with the user's token in
+`Authorization: Bearer` and a service token alongside it.
+
+- **The auth API owns the session.** It creates, rotates, and revokes sessions, stores them in
+  Postgres, signs the access tokens, and publishes the keys at `/.well-known/jwks.json`.
+- **Browser (cookie transport).** `@seamless-auth/react` never sees a token. The adapter keeps the
+  auth API's tokens inside signed `httpOnly` cookies on your domain and unwraps them when it
+  forwards a request.
+- **Native app (bearer transport).** `@seamless-auth/react-native` has no cookie jar, so it keeps the
+  tokens in the platform keystore and sends them to the same adapter routes in
+  `Authorization: Bearer`, with `x-seamless-auth-transport: bearer`. The adapter writes no cookies
+  for these requests.
+- **Your backend verifies, the auth API decides.** `requireAuth` checks the signed cookie, or a
+  bearer token against the auth API's JWKS, so a protected route does not need a round trip. Your
+  own code still enforces roles and authorization.
+
+[Cookie, Session, And Token Reference](/reference/cookies-sessions-tokens) and
+[Bearer Transport For Native Clients](/build/server-sdks#bearer-transport-for-native-clients) have
+the exact cookie names, token types, and headers.
+
+---
+
 ## Key Characteristics
 
 ### Exclusively Passwordless
@@ -58,7 +87,8 @@ hosts the auth instance for you or you keep the auth engine and data inside your
 
 ### Server-Side Session Validation
 
-- Sessions are issued and validated using secure, HTTP-only cookies.
+- The auth API issues and tracks sessions; your backend validates them on every request.
+- Browsers carry the session in secure, HTTP-only cookies; native apps carry it as bearer tokens.
 - Defense-in-depth approach to authentication.
 - Sessions are tracked per device and per browser.
 
@@ -93,6 +123,8 @@ Seamless Auth is made up of a few focused projects.
 | `@seamless-auth/fastify`        | Official Fastify backend integration                          |
 | `@seamless-auth/nextjs`         | Next.js App Router integration: `/auth` routes and session reads |
 | `@seamless-auth/react`          | React auth provider and built-in auth routes                  |
+| `@seamless-auth/react-native`   | React Native and Expo SDK over bearer transport               |
+| `@seamless-auth/client`         | Framework-free client shared by the React and native SDKs     |
 | `seamless-auth-admin-dashboard` | Operator UI for users, sessions, events, security, and config |
 | `@seamless-auth/types`          | Shared domain and API types                                   |
 
@@ -123,6 +155,34 @@ By the end of this guide, you will have:
 - A clearer mental model of the ecosystem
 - Enough context to choose the right package for your next step
 - A path to customize auth UI and protect app routes when you leave the starter
+
+---
+
+## When Seamless Auth Is Not The Right Choice
+
+Seamless Auth makes deliberate tradeoffs. It is likely the wrong fit if any of these are hard
+requirements for you:
+
+- **You need password login.** There is no password flow. Users sign in with passkeys, magic links,
+  email or phone OTP, or OAuth, with TOTP as a second factor. `seamless migrate` imports identities,
+  not password hashes, so imported users sign in passwordlessly from their first login.
+- **You need SAML, or an identity provider for other apps.** The auth API signs users in to your
+  application and can use OAuth and OIDC providers as a login source. It does not speak SAML and it
+  is not an OAuth or OIDC authorization server for third-party clients.
+- **Your backend is not Node.js.** The official server SDKs (`core`, `express`, `fastify`,
+  `nextjs`) are TypeScript packages for Node.js 22 or later. A backend in another language has to
+  implement the adapter contract against the auth API itself.
+- **Your frontend has no backend.** Both the browser and the native SDK call `/auth` adapter routes
+  on your own server, which hold the service token and, for browsers, the cookies. A static site with
+  no server of its own needs one added (a Next.js app can be its own).
+- **Your frontend is not React or React Native.** `@seamless-auth/client` is framework-free, but
+  there are no shipped bindings for Vue, Svelte, Angular, or others yet.
+- **You want to self-host without operating anything.** Self-hosting means you run the auth API,
+  Postgres, signing keys, migrations, and backups, and the CLI does not deploy them for you. The
+  managed path exists for exactly this.
+- **You need a 1.0 stability guarantee.** Every package is still 0.x. Minor releases can change
+  behavior, so pin versions and read the release notes; see the
+  [Compatibility Matrix](/build/ecosystem#compatibility-matrix).
 
 ---
 

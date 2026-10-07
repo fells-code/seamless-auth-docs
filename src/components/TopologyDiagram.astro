@@ -1,0 +1,166 @@
+---
+// Request topology for a Seamless Auth deployment. Colors come from Starlight's
+// theme variables so the diagram follows the light and dark themes.
+---
+
+<figure class="topology">
+  <svg
+    viewBox="0 0 800 400"
+    role="img"
+    aria-labelledby="topology-title topology-desc"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <title id="topology-title">Seamless Auth request topology</title>
+    <desc id="topology-desc">
+      A browser running a React app with @seamless-auth/react sends signed httpOnly cookies to your
+      backend. A native app running @seamless-auth/react-native keeps its tokens in the platform
+      keystore and sends them to the same backend in an Authorization Bearer header with the
+      x-seamless-auth-transport bearer header. Your backend runs @seamless-auth/express, fastify or
+      nextjs, and forwards each request to seamless-auth-api with a bearer token and a service
+      token. The auth API owns the session, stores it in Postgres, and publishes a JWKS the backend
+      uses to verify the tokens the API signs.
+    </desc>
+
+    <defs>
+      <marker
+        id="topology-arrow"
+        viewBox="0 0 10 10"
+        refX="9"
+        refY="5"
+        markerWidth="7"
+        markerHeight="7"
+        orient="auto-start-reverse"
+      >
+        <path d="M0 0 L10 5 L0 10 z" fill="currentColor"></path>
+      </marker>
+    </defs>
+
+    <g class="box">
+      <rect x="10" y="30" width="190" height="120" rx="10"></rect>
+      <text x="105" y="60" class="title">Browser</text>
+      <text x="105" y="86">React app</text>
+      <text x="105" y="106" class="mono">@seamless-auth/react</text>
+      <text x="105" y="132" class="muted">holds no tokens</text>
+    </g>
+
+    <g class="box">
+      <rect x="10" y="240" width="190" height="120" rx="10"></rect>
+      <text x="105" y="270" class="title">Native app</text>
+      <text x="105" y="296" class="mono">@seamless-auth/react-native</text>
+      <text x="105" y="318" class="muted">tokens in the</text>
+      <text x="105" y="336" class="muted">platform keystore</text>
+    </g>
+
+    <g class="box">
+      <rect x="310" y="110" width="190" height="180" rx="10"></rect>
+      <text x="405" y="140" class="title">Your backend</text>
+      <text x="405" y="166" class="mono">@seamless-auth/express</text>
+      <text x="405" y="186" class="mono">fastify, nextjs</text>
+      <text x="405" y="216">/auth adapter routes</text>
+      <text x="405" y="236">requireAuth</text>
+      <text x="405" y="266" class="muted">keeps browser tokens</text>
+      <text x="405" y="282" class="muted">in signed cookies</text>
+    </g>
+
+    <g class="box owner">
+      <rect x="620" y="80" width="170" height="160" rx="10"></rect>
+      <text x="705" y="110" class="title">seamless-auth-api</text>
+      <text x="705" y="138" class="accent">owns the session</text>
+      <text x="705" y="166">issues and</text>
+      <text x="705" y="184">rotates tokens</text>
+      <text x="705" y="212" class="mono">/.well-known/</text>
+      <text x="705" y="228" class="mono">jwks.json</text>
+    </g>
+
+    <g class="box">
+      <rect x="645" y="300" width="120" height="60" rx="10"></rect>
+      <text x="705" y="336" class="title">Postgres</text>
+    </g>
+
+    <g class="edge">
+      <path d="M200 90 L310 160" marker-end="url(#topology-arrow)"></path>
+      <path d="M200 300 L310 240" marker-end="url(#topology-arrow)"></path>
+      <path d="M500 150 L620 150" marker-end="url(#topology-arrow)"></path>
+      <path d="M620 220 L500 220" class="dashed" marker-end="url(#topology-arrow)"></path>
+      <path d="M705 240 L705 300" marker-start="url(#topology-arrow)" marker-end="url(#topology-arrow)"></path>
+    </g>
+
+    <g class="label">
+      <text x="255" y="82">signed httpOnly</text>
+      <text x="255" y="98">cookies</text>
+      <text x="255" y="300">Bearer tokens</text>
+      <text x="255" y="316">+ transport</text>
+      <text x="255" y="332">header</text>
+      <text x="560" y="120">Bearer token</text>
+      <text x="560" y="136">+ service token</text>
+      <text x="560" y="240">JWKS verifies</text>
+      <text x="560" y="256">API-signed tokens</text>
+    </g>
+  </svg>
+  <figcaption>
+    Both clients reach the auth API through your backend. The auth API owns the session; the
+    browser and native clients differ only in where the tokens are kept.
+  </figcaption>
+</figure>
+
+<style>
+  .topology {
+    margin: 1.5rem 0;
+  }
+  .topology svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    color: var(--sl-color-gray-3);
+    font-family: var(--sl-font);
+  }
+  .topology .box rect {
+    fill: var(--sl-color-gray-6);
+    stroke: var(--sl-color-gray-4);
+    stroke-width: 1.5;
+  }
+  .topology .owner rect {
+    stroke: var(--sl-color-accent);
+    stroke-width: 2.5;
+  }
+  .topology text {
+    fill: var(--sl-color-gray-2);
+    font-size: 13px;
+    text-anchor: middle;
+  }
+  .topology .title {
+    fill: var(--sl-color-white);
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .topology .mono {
+    font-family: var(--sl-font-mono);
+    font-size: 12px;
+  }
+  .topology .muted {
+    fill: var(--sl-color-gray-3);
+    font-size: 12px;
+  }
+  .topology .accent {
+    fill: var(--sl-color-accent-high);
+    font-weight: 600;
+  }
+  .topology .edge path {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+  }
+  .topology .edge .dashed {
+    stroke-dasharray: 5 4;
+  }
+  .topology .label text {
+    fill: var(--sl-color-gray-3);
+    font-size: 12px;
+  }
+  .topology figcaption {
+    margin-top: 0.5rem;
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-3);
+    text-align: center;
+  }
+</style>
