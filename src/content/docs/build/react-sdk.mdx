@@ -292,32 +292,59 @@ const plan = await authorizedFetch('/api/plan/mine').then(r => r.json())
 
 For custom React screens, combine `useAuth()`, `useAuthClient()`, and `usePasskeySupport()`.
 
+Signing in takes two steps. `login()` only starts sign-in: it returns the `loginMethods` the
+account can use, and no session exists yet. The chosen method then completes sign-in, and only
+after it succeeds is there a session to refresh.
+
 ```tsx
+import { useState } from 'react'
 import { useAuth, useAuthClient, usePasskeySupport } from '@seamless-auth/react'
 
-function CustomLogin() {
+function CustomLogin({ identifier }: { identifier: string }) {
   const { refreshSession } = useAuth()
   const authClient = useAuthClient()
   const { passkeySupported, loading } = usePasskeySupport()
+  const [message, setMessage] = useState('')
 
-  async function startLogin() {
-    const { error } = await authClient.login({
-      identifier: 'user@example.com',
+  async function signIn() {
+    const { data, error } = await authClient.login({
+      identifier,
       passkeyAvailable: passkeySupported,
     })
 
-    if (!error) {
-      await refreshSession()
+    if (error) {
+      setMessage(error.message)
+      return
     }
+
+    if (passkeySupported && data.loginMethods?.includes('passkey')) {
+      const { error: passkeyError } = await authClient.loginWithPasskey()
+
+      if (!passkeyError) {
+        await refreshSession()
+        return
+      }
+    }
+
+    const { error: otpError } = await authClient.requestLoginEmailOtp()
+    setMessage(otpError ? otpError.message : 'Check your email for a sign-in code.')
   }
 
   return (
-    <button disabled={loading} onClick={() => void startLogin()}>
-      Sign in
-    </button>
+    <>
+      <button disabled={loading} onClick={() => void signIn()}>
+        Sign in
+      </button>
+      {message && <p>{message}</p>}
+    </>
   )
 }
 ```
+
+The code screen finishes the fallback with `verifyLoginEmailOtp(code)` and calls `refreshSession()`
+once that call returns no `error`. `useAuth().handlePasskeyLogin()` runs `loginWithPasskey()` and
+refreshes the session for you. See [How To Build Your Own Auth UI](/build/custom-auth-ui) for the
+full screen, including magic-link and phone fallbacks.
 
 Use `refreshSession()` after completing any custom flow that should update provider state.
 
