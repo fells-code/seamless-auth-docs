@@ -37,7 +37,7 @@ map of the auth server surface as it exists in the source repo today.
 | Sessions       | `/sessions*`                       | Session listing and revocation                       |
 | Admin          | `/admin/*`                         | Admin-only users, orgs, events, sessions, recovery   |
 | Internal       | `/internal/*`                      | Metrics, grouped events, login stats, anomalies      |
-| System Config  | `/system-config/*`                 | Available roles and runtime config                   |
+| System Config  | `/system-config/*`                 | Roles, runtime config, and OAuth providers           |
 | Bootstrap      | `/internal/bootstrap/admin-invite` | First-admin bootstrap invite creation                |
 | JWKS           | `/.well-known/jwks.json`           | Public JWKS endpoint                                 |
 | Health         | `/health/*`                        | Status and version probes                            |
@@ -294,11 +294,19 @@ These endpoints are especially important for the admin dashboard.
 
 ## System Config
 
-| Method  | Path                   | Purpose                           |
-| ------- | ---------------------- | --------------------------------- |
-| `GET`   | `/system-config/roles` | Get available roles               |
-| `GET`   | `/system-config/admin` | Read current system configuration |
-| `PATCH` | `/system-config/admin` | Update system configuration       |
+| Method   | Path                                 | Purpose                                      |
+| -------- | ------------------------------------ | -------------------------------------------- |
+| `GET`    | `/system-config/public`              | Read enabled login methods (unauthenticated) |
+| `GET`    | `/system-config/roles`               | Get available roles                          |
+| `GET`    | `/system-config/admin`               | Read current system configuration            |
+| `PATCH`  | `/system-config/admin`               | Update system configuration                  |
+| `GET`    | `/system-config/oauth-providers`     | List configured OAuth providers              |
+| `POST`   | `/system-config/oauth-providers`     | Add an OAuth provider                        |
+| `PATCH`  | `/system-config/oauth-providers/:id` | Update an OAuth provider                     |
+| `DELETE` | `/system-config/oauth-providers/:id` | Remove an OAuth provider                     |
+
+`GET /system-config/public` needs no session. The other routes require an access token with
+`admin:read` (reads) or `admin:write` (writes).
 
 System config includes roles, token TTLs, login methods, OAuth providers, lockout policy, passkey
 fallback policy, WebAuthn relying party ID, and allowed origins.

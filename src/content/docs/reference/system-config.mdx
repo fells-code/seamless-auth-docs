@@ -66,8 +66,10 @@ admin-managed.
 | Hand an admin-managed key back to env  | No API does this: run `UPDATE system_config SET "updatedBy" = NULL WHERE key = '<key>';` (or delete the row) and restart                          |
 | Stop env from touching a non-admin row | Unset the env var; the stored value is kept and the built-in default is not restored                                                              |
 
-An empty env var counts as unset, so `MAX_CONCURRENT_SESSIONS=` leaves an existing row alone. To
-remove a stored cap from env, set `none`. `frontend_url` is not accepted by
+An empty env var counts as unset, so `MAX_CONCURRENT_SESSIONS=` leaves an existing row alone and,
+with no row, falls back to the built-in default of no cap. To remove a stored cap from env, set
+`none`, `null`, or `unlimited`; like any env value, that applies only while the row is not
+admin-managed. `frontend_url` is not accepted by
 `PATCH /system-config/admin`, so it cannot become admin-managed through the API and follows
 `FRONTEND_URL` whenever that is set.
 
@@ -85,20 +87,45 @@ remove a stored cap from env, set `none`. `frontend_url` is not accepted by
 
 Raw auth API routes:
 
-| Method  | Route                  | Required access |
-| ------- | ---------------------- | --------------- |
-| `GET`   | `/system-config/roles` | `admin:read`    |
-| `GET`   | `/system-config/admin` | `admin:read`    |
-| `PATCH` | `/system-config/admin` | `admin:write`   |
+| Method   | Route                                | Required access |
+| -------- | ------------------------------------ | --------------- |
+| `GET`    | `/system-config/public`              | None (public)   |
+| `GET`    | `/system-config/roles`               | `admin:read`    |
+| `GET`    | `/system-config/admin`               | `admin:read`    |
+| `PATCH`  | `/system-config/admin`               | `admin:write`   |
+| `GET`    | `/system-config/oauth-providers`     | `admin:read`    |
+| `POST`   | `/system-config/oauth-providers`     | `admin:write`   |
+| `PATCH`  | `/system-config/oauth-providers/:id` | `admin:write`   |
+| `DELETE` | `/system-config/oauth-providers/:id` | `admin:write`   |
+
+Every route except `/system-config/public` requires an access token, and the role check runs after
+it. None of these routes require step-up authentication.
+
+`GET /system-config/public` needs no session. It returns only the enabled login methods, so sign-in
+screens can offer the methods the instance allows before anyone is signed in:
+
+```json
+{
+  "loginMethods": ["passkey", "magic_link"]
+}
+```
+
+The `/system-config/oauth-providers` routes list, add, update, and remove entries in
+`oauth_providers`. A list returns `{ "providers": [...] }`, a create returns `201` with
+`{ "provider": ... }` (or `409` when the `id` already exists), an update returns
+`{ "provider": ... }`, and a delete returns `{ "success": true, "id": "<id>" }`.
 
 Through the Express adapter, use:
 
 ```txt
+/auth/system-config/public
 /auth/system-config/roles
 /auth/system-config/admin
+/auth/system-config/oauth-providers
+/auth/system-config/oauth-providers/:id
 ```
 
-Successful updates return:
+Successful `PATCH /system-config/admin` updates return:
 
 ```json
 {
@@ -172,7 +199,7 @@ Other keys must come from env or an existing database row.
 | `FLOW_RATE_LIMITS` | JSON object |
 | `RATE_LIMIT`                     | Number                                    |
 | `DELAY_AFTER`                    | Number                                    |
-| `MAX_CONCURRENT_SESSIONS` | Number; empty, `null`, `none`, or `unlimited` (any case) means no cap |
+| `MAX_CONCURRENT_SESSIONS` | Number; `null`, `none`, or `unlimited` (any case) means no cap; empty counts as unset |
 | `PASSKEY_LOGIN_FALLBACK_ENABLED` | `true` means true; anything else is false |
 | `PROMPT_PASSKEY_ENROLLMENT` | `true` means true; anything else is false |
 | `PHISHING_RESISTANT_ONLY` | `true` means true; anything else is false |
