@@ -128,13 +128,15 @@ client. It targets whichever instance is set in the active profile.
 ### profile
 
 ```bash
-seamless profile add work --instance-url https://<your-app-id>.seamlessauth.com
+seamless profile add work --instance-url <your-auth-server-url>
 seamless profile list
 seamless profile use work
 seamless profile remove work
 ```
 
-Profiles are named pointers to Seamless Auth instances, stored in `~/.config/seamless/config.json`
+On the managed path, `--instance-url` is your application's Auth Server URL, copied from
+**Credentials** → **Auth API Configuration** in the portal. Profiles are named pointers to Seamless
+Auth instances, stored in `~/.config/seamless/config.json`
 (respects `XDG_CONFIG_HOME`). The config file holds only non-secret instance and identity metadata,
 not tokens. Set the active profile per command with `--profile <name>` or the `SEAMLESS_PROFILE`
 environment variable.
