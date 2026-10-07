@@ -20,16 +20,64 @@ manager.
 
 ## How System Config Is Loaded
 
-At startup, `seamless-auth-api` bootstraps each known config key.
+At startup, `seamless-auth-api` bootstraps each known config key. This runs once per process
+start, before the server accepts requests, so an env change takes effect on the next restart.
+
+Each row's `updatedBy` column decides whether the env var or the stored row wins. Bootstrap and
+migrations write rows with `updatedBy` set to `NULL`. A write through the admin API sets
+`updatedBy` to the caller's user id (or the service client id), which marks the row as
+admin-managed. The admin API writes are `PATCH /system-config/admin` and the
+`/system-config/oauth-providers` create, update, and delete routes; the admin dashboard uses
+them.
 
 For each key:
 
-1. if a `system_config` row already exists, the API uses that row
-2. if no row exists and a mapped env var exists, the API parses the env var and creates the row
-3. if no row exists and the key has a built-in default, the API creates the row with that default
-4. if no row exists, no env var exists, and no default exists, startup fails
+1. if a row exists and `updatedBy` is set, the API uses the row and ignores the env var
+2. if a row exists, `updatedBy` is `NULL`, and the mapped env var is set, the API parses the env
+   var; when the result differs from the stored value it logs a warning and overwrites the row
+   with the env value
+3. if a row exists and the mapped env var is unset or empty, the API uses the row
+4. if no row exists and the mapped env var is set, the API parses the env var and creates the row
+5. if no row exists and the key has a built-in default, the API creates the row with that default
+6. if no row exists, no env var is set, and no default exists, startup fails with
+   `Missing required system config "<key>". Provide ENV <ENV_VAR> or seed system_config.`
 
-That means env vars seed missing config rows. They do not overwrite rows that already exist.
+The resolved config is then validated, and startup fails with `Invalid system configuration:` and
+the validation errors if it does not match the schema.
+
+So env vars stay authoritative on every boot for any key nobody has changed through the admin API,
+and an admin edit stays authoritative over the env var from then on. A value that parses to `null`
+(`MAX_CONCURRENT_SESSIONS=none`) is stored as no row, so step 2 deletes the row instead of
+updating it.
+
+The overwrite in step 2 logs at `warn` from the `bootstrapSystemConfig` logger:
+
+```txt
+Overwriting system_config "login_methods" from env LOGIN_METHODS: the stored value differs and the row is not marked admin-managed (updatedBy IS NULL). If this value was changed through the admin console, that change is being reverted here.
+```
+
+No warning is logged when the env value matches the stored value, or when the row is
+admin-managed.
+
+| Goal                                   | What to do                                                                                                                                        |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Keep a key driven by env               | Set the env var and change the key only through env                                                                                               |
+| Keep an admin edit                     | Change the key through the admin API or dashboard; direct SQL that leaves `updatedBy` `NULL` is reverted on the next boot when the env var is set |
+| Hand an admin-managed key back to env  | No API does this: run `UPDATE system_config SET "updatedBy" = NULL WHERE key = '<key>';` (or delete the row) and restart                          |
+| Stop env from touching a non-admin row | Unset the env var; the stored value is kept and the built-in default is not restored                                                              |
+
+An empty env var counts as unset, so `MAX_CONCURRENT_SESSIONS=` leaves an existing row alone. To
+remove a stored cap from env, set `none`. `frontend_url` is not accepted by
+`PATCH /system-config/admin`, so it cannot become admin-managed through the API and follows
+`FRONTEND_URL` whenever that is set.
+
+<Aside type="note" title="Edits made before admin writes were attributed">
+  Admin dashboard writes did not record `updatedBy` before `seamless-auth-api` 0.4.0, only
+  service-token writes did. A key edited in the dashboard on an older release still has
+  `updatedBy` set to `NULL`, so a boot with its env var set reverts it and logs the warning above.
+  Send the key through `PATCH /system-config/admin` again to mark it admin-managed. Every key in
+  the request body is marked, even when its value is unchanged.
+</Aside>
 
 ---
 
