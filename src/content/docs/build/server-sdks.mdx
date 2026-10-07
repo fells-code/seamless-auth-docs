@@ -1,14 +1,16 @@
 ---
 title: "Server SDKs and Adapters"
-description: "Seamless Auth currently ships two official server-side packages:"
+description: "The official Seamless Auth server packages: the Express, Fastify, and Next.js adapters and the framework-agnostic core, with Express options, mounted routes, and middleware."
 sidebar:
   order: 3
 ---
 
-Seamless Auth currently ships two official server-side packages:
+Seamless Auth currently ships four official server-side packages:
 
 - `@seamless-auth/core`
 - `@seamless-auth/express`
+- `@seamless-auth/fastify`
+- `@seamless-auth/nextjs`
 
 These packages help your backend become the browser-facing security boundary between your app and
 the private auth server.
@@ -17,12 +19,15 @@ the private auth server.
 
 ## Which One Should You Use?
 
-| Package                  | Use it when                                        | What it gives you                                              |
-| ------------------------ | -------------------------------------------------- | -------------------------------------------------------------- |
-| `@seamless-auth/express` | Your backend is Express                            | Official adapter, mounted auth routes, middleware, role guards |
-| `@seamless-auth/core`    | You need a custom adapter or framework integration | Framework-agnostic auth, cookie, OAuth, and role primitives    |
+| Package                  | Use it when                                        | What it gives you                                                                                                     |
+| ------------------------ | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `@seamless-auth/express` | Your backend is Express                            | Official adapter, mounted auth routes, middleware, role guards                                                        |
+| `@seamless-auth/fastify` | Your backend is Fastify                            | The Express adapter's routes and cookies as a Fastify plugin                                                          |
+| `@seamless-auth/nextjs`  | Your Next.js App Router app is its own backend     | Serves `/auth` from a route handler, reads the session in server components and `proxy.ts` ([Next.js](/build/nextjs)) |
+| `@seamless-auth/core`    | You need a custom adapter or framework integration | Framework-agnostic auth, cookie, OAuth, and role primitives                                                           |
 
-If you already run Express, start with `@seamless-auth/express`.
+If you already run Express, start with `@seamless-auth/express`. For Next.js, follow the
+[Next.js](/build/nextjs) guide.
 
 ---
 
@@ -106,14 +111,21 @@ app.get(
 
 Optional values:
 
-| Option            | Default                            | Purpose                                             |
-| ----------------- | ---------------------------------- | --------------------------------------------------- |
-| `jwksKid`         | `dev-main`, with a startup warning | Active JWKS key ID; set it explicitly in production |
-| `cookieDomain`    | unset                              | Domain attribute for adapter cookies                |
-| `cookieSecure`    | `true`                             | Secure attribute; set `false` only for local HTTP   |
-| `cookieSameSite`  | `none` if secure, else `lax`       | SameSite attribute for adapter cookies              |
-| `resolveClientIp` | Express `trust proxy` hops         | End-user IP forwarded to the auth API               |
-| `messaging`       | unset                              | Deliver auth email and SMS from the adapter         |
+| Option            | Default                            | Purpose                                                |
+| ----------------- | ---------------------------------- | ------------------------------------------------------ |
+| `jwksKid`         | `dev-main`, with a startup warning | Active JWKS key ID; set it explicitly in production    |
+| `cookieDomain`    | unset                              | Domain attribute for adapter cookies                   |
+| `cookieSecure`    | `true`                             | Secure attribute; set `false` only for local HTTP      |
+| `cookieSameSite`  | `none` if secure, else `lax`       | SameSite attribute for adapter cookies                 |
+| `allowedOrigins`  | unset                              | Origin allowlist for browsers without `Sec-Fetch-Site` |
+| `resolveClientIp` | Express `trust proxy` hops         | End-user IP forwarded to the auth API                  |
+| `messaging`       | unset                              | Deliver auth email and SMS from the adapter            |
+
+`allowedOrigins` feeds the adapter's cross-site request guard, which only runs when cookies are
+`SameSite=None` and only for state-changing methods (not `GET`, `HEAD`, or `OPTIONS`). The guard
+rejects `Sec-Fetch-Site: cross-site` with `403 { "error": "cross_site_request_blocked" }`; when a
+browser omits that header, the `Origin` must match an entry (case-insensitive), and with
+`allowedOrigins` unset those requests are allowed.
 
 Custom cookie names are also accepted (`accessCookieName`, `registrationCookieName`,
 `refreshCookieName`, `preAuthCookieName`).
