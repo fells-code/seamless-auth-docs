@@ -287,6 +287,9 @@ In development (any `NODE_ENV` other than `production`):
   verifying against a stale key
 - only `private.pem` has to survive a restart; the public key is derived from it. The API's bundled
   `docker-compose.yml` keeps `/app/keys` on a `dev-keys` volume so a recreated container keeps its key
+- the Docker stack from `seamless init` mounts a named `auth-keys` volume at `/app/keys` on the auth
+  service once the CLI release with fells-code/seamless-cli#228 ships. With `--auth=local` the auth
+  source directory is bind-mounted over `/app`, so the keys already live on the host
 - if no key can be read, the endpoint answers `200 { "keys": [] }` and logs why
 
 The adapters' `jwksKid` option (default `dev-main`) is a different value: it sets the `kid` header on
