@@ -5,8 +5,15 @@ sidebar:
   order: 8
 ---
 
-import { Card } from '@astrojs/starlight/components';
+import { Aside, Card } from '@astrojs/starlight/components';
 import Image from '../../../components/Image.astro';
+
+<Aside type="note" title="Self-hosted path">
+  This page uses the local stack from the [Self-Hosted Quickstart](/start/quickstart). If Seamless
+  hosts your auth instance, start from the [Managed Quickstart](/start/managed-quickstart). The code
+  steps are the same, but grant the role in your instance's admin console, opened with **Open admin
+  console** on your application's dashboard in the portal.
+</Aside>
 
 ## Protect a Page and Route
 
