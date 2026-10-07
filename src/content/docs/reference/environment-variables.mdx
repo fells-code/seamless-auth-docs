@@ -5,8 +5,6 @@ sidebar:
   order: 3
 ---
 
-# Environment Variables
-
 This page summarizes the important environment variables currently visible in the Seamless Auth
 auth server, server adapter, local starters, and CLI-generated stack.
 
@@ -87,8 +85,6 @@ one.
 | `REFRESH_TOKEN_LOOKUP_SECRET` | Secret for indexed refresh-token lookup fingerprints  |
 | `TOTP_SECRET_ENCRYPTION_KEY`  | Encryption key for TOTP secrets at rest               |
 | `OAUTH_STATE_SECRET`          | Signing secret for OAuth state                        |
-| `SEAMLESS_BOOTSTRAP_ENABLED`  | Enables the first-admin bootstrap flow                |
-| `SEAMLESS_BOOTSTRAP_SECRET`   | Secret used to authorize bootstrap invite creation    |
 
 Production should define stable dedicated values for `REFRESH_TOKEN_LOOKUP_SECRET`,
 `TOTP_SECRET_ENCRYPTION_KEY`, and `OAUTH_STATE_SECRET`. Development fallbacks exist, but they are not

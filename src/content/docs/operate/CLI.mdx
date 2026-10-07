@@ -1,13 +1,11 @@
 ---
-title: "CLI"
+title: "Seamless Auth CLI"
 description: "The Seamless Auth CLI is published as seamless-cli and exposes the seamless binary. It is the entry point for scaffolding a local Seamless Auth project,…"
 sidebar:
   order: 1
 ---
 
 import { Aside } from '@astrojs/starlight/components';
-
-# Seamless Auth CLI
 
 The Seamless Auth CLI is published as `seamless-cli` and exposes the `seamless` binary. It scaffolds
 a self-hosted local project, checks the generated stack, verifies auth conformance, and also acts as
@@ -20,7 +18,7 @@ Current commands cover:
 - configure the auth server in Docker or local-source mode
 - optionally include the admin dashboard
 - validate generated config, Docker Compose, containers, and local health endpoints
-- bootstrap the first admin user
+- make the owner email you give `init` the first admin
 - verify the full auth surface with the `seamless verify` conformance harness
 - log in to an instance and manage the active profile, session, and account
 - run admin `config`, `users`, and `org` operations against an instance
@@ -28,11 +26,10 @@ Current commands cover:
 The current `../seamless-cli` source does not ship `deploy`, `destroy`, or `contribute` commands.
 
 <Aside type="note">
-  The CLI does have a managed `init` flow. When a profile is logged in, init defaults to the managed path,
-  When not logged in it will integrate the existing project. `seamless init` scaffolds a self-hosted local
-  stack pointed at localhost; it does not read your logged-in profile or connect a scaffolded app to a
-  hosted managed instance. For the managed path, follow the
-  [Managed Quickstart](/start/managed-quickstart).
+  `init` has a managed path. When you are signed in to the portal (`seamless login`) and have a
+  provisioned application, `init` offers to connect the project to it; `--app <id>` picks one and
+  `--local` forces the self-hosted stack. An instance profile login does not count, since it says
+  nothing about having a managed account. See the [Managed Quickstart](/start/managed-quickstart).
 </Aside>
 
 ---
@@ -44,7 +41,7 @@ seamless-cli package
   -> seamless binary
   -> init local project
   -> check local runtime
-  -> bootstrap first admin
+  -> register as the owner, who becomes the first admin
 ```
 
 ---
@@ -75,15 +72,10 @@ The package is named `seamless-cli`; the executable command is `seamless`.
 npx seamless-cli init my-app
 ```
 
-Or use the shortcut:
-
-```bash
-npx seamless-cli my-app
-```
-
 Creates a new Seamless Auth project. The generated project includes a React frontend, an Express
 API, Docker Compose wiring, `seamless.config.json`, and either a Docker-based auth server or local
-auth server source depending on your prompt choices.
+auth server source depending on your prompt choices. It also asks for your email, which becomes the
+owner: registering with that address makes you the first admin.
 
 ---
 
@@ -104,19 +96,6 @@ Validates the generated project shape and local runtime:
 
 This command checks the local generated stack. It does not currently check Terraform, AWS CLI, or
 deployment state.
-
----
-
-### bootstrap-admin
-
-```bash
-npx seamless-cli bootstrap-admin admin@example.com
-```
-
-Creates a bootstrap admin invite for the first admin user.
-
-The CLI resolves the bootstrap secret from local project files before prompting manually. It sends
-the request through the backend adapter at `/auth/internal/bootstrap/admin-invite`.
 
 ---
 
@@ -185,19 +164,8 @@ operations. See the [CLI command reference](/reference/cli-commands) for the ful
 
 ## CLI Behavior
 
-If no command is provided, the CLI prints help.
-
-This is valid:
-
-```bash
-npx seamless-cli my-app
-```
-
-It is treated as:
-
-```bash
-npx seamless-cli init my-app
-```
+If no command is provided, the CLI prints help. Scaffolding always goes through `init`: a bare
+project name such as `npx seamless-cli my-app` is rejected as an unknown command.
 
 The same behavior applies to the binary:
 

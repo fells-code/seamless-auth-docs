@@ -5,8 +5,6 @@ sidebar:
   order: 1
 ---
 
-# Seamless Auth Ecosystem
-
 Seamless Auth is not a single package. It is a small ecosystem of projects that work together to
 deliver passwordless authentication, self-hosted infrastructure, and operator tooling.
 
@@ -23,11 +21,11 @@ seamless-cli
 seamless-auth-api
   -> runs the auth engine
 
-@seamless-auth/express or @seamless-auth/core
+@seamless-auth/express, @seamless-auth/fastify, @seamless-auth/nextjs, or @seamless-auth/core
   -> connects your backend to the auth engine
 
-@seamless-auth/react
-  -> connects your frontend to the auth flow
+@seamless-auth/react or @seamless-auth/react-native
+  -> connects your web or mobile frontend to the auth flow
 
 seamless-auth-admin-dashboard
   -> gives operators a UI for users, organizations, sessions, events, security, and config
@@ -43,7 +41,11 @@ seamless-auth-admin-dashboard
 | `seamless-auth-api`             | Self-hostable auth server                      | You need the passwordless auth engine itself                          |
 | `@seamless-auth/core`           | Framework-agnostic server auth primitives      | You are building your own backend adapter                             |
 | `@seamless-auth/express`        | Official Express adapter                       | Your backend is Express and you want the supported integration path   |
+| `@seamless-auth/fastify`        | Official Fastify adapter                       | Your backend is Fastify                                               |
+| `@seamless-auth/nextjs`         | Next.js App Router adapter and session helpers | Your Next.js app is its own backend ([Next.js](/build/nextjs))        |
 | `@seamless-auth/react`          | React SDK and built-in auth screens            | Your frontend is React and you want a ready-to-use auth integration   |
+| `@seamless-auth/react-native`   | React Native SDK: provider, hooks, native ports | Your frontend is an Expo or React Native app                          |
+| `@seamless-auth/client`         | The framework-free client the two SDKs share   | You are building a binding for another framework                      |
 | `seamless-auth-admin-dashboard` | Operator dashboard app                         | You want a UI for admins and support teams                            |
 | `@seamless-auth/types`          | Shared request/response and domain types       | You want consistent types across apps and tooling                     |
 
@@ -83,7 +85,8 @@ That backend layer:
 - enforces authorization
 - talks to the auth server using service-to-service credentials
 
-If you use Express, start with `@seamless-auth/express`. If you need a different runtime, start
+If you use Express, start with `@seamless-auth/express`; Fastify, `@seamless-auth/fastify`; a
+Next.js App Router application, `@seamless-auth/nextjs`. If you need a different runtime, start
 with `@seamless-auth/core`.
 
 ---
@@ -105,6 +108,10 @@ with `@seamless-auth/core`.
 The SDK gives you auth state and flow helpers, but your app still owns routing, authorization, and
 product-specific UI decisions.
 
+`@seamless-auth/react-native` gives an Expo or React Native app the same state and headless client
+over bearer transport, with native passkeys and the platform keystore behind ports. It ships no
+screens. See [React Native SDK](/build/react-native-sdk).
+
 ---
 
 ### 4. The Admin Dashboard Is A Separate App
@@ -125,8 +132,9 @@ That separation matters because:
 `seamless-cli` is the fastest way to get a working stack. It currently scaffolds a React
 frontend, an Express API, the auth server in Docker or local mode, and an optional admin dashboard.
 
-It also includes `check` and `bootstrap-admin`. The current `../seamless-cli` source does not ship
-`deploy`, `destroy`, or contributor workspace commands.
+It also includes `check`, `verify`, and admin commands against a running instance. The first admin
+is the account registered with the owner email `init` asks for. The current `../seamless-cli` source
+does not ship `deploy`, `destroy`, or contributor workspace commands.
 
 It is the easiest starting point if you want to learn the ecosystem through a working project
 rather than by assembling every piece manually.
@@ -157,6 +165,13 @@ Read [Server SDKs](/build/server-sdks) and [How To Secure Routes](/build/secure-
 
 Read [React SDK](/build/react-sdk) and
 [How To Build Your Own Auth UI](/build/custom-auth-ui).
+
+---
+
+### I need to integrate a mobile app
+
+Read [React Native SDK](/build/react-native-sdk) and [Mobile Passkeys](/build/mobile-passkeys).
+`seamless init --mobile=expo` scaffolds an Expo app next to the web and API projects.
 
 ---
 

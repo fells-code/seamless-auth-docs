@@ -2,10 +2,8 @@
 title: "How To Use Organizations And Memberships"
 description: "Use this guide when your app needs team, workspace, tenant, or customer-account boundaries."
 sidebar:
-  order: 9
+  order: 11
 ---
-
-# How To Use Organizations And Memberships
 
 Use this guide when your app needs team, workspace, tenant, or customer-account boundaries.
 
@@ -76,6 +74,10 @@ Through the Express adapter, browser apps call these routes at `/auth/organizati
 
 Admin routes are also exposed under `/auth/admin/organizations/*` and require scoped admin access
 in the auth API.
+
+There is no route here for deleting an organization. An owner can create one and rename it, but
+only an admin can delete it, through `DELETE /auth/admin/organizations/:organizationId`. Deleting
+an organization removes every membership in it and leaves the member accounts untouched.
 
 ---
 

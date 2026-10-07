@@ -1,0 +1,299 @@
+---
+title: "Next.js"
+description: "Add Seamless Auth to a Next.js App Router application: serve the /auth routes from a route handler, read the session in server components, and protect pages in proxy.ts."
+sidebar:
+  order: 4.5
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+A Next.js App Router application can be its own Seamless Auth backend. Two packages do the work:
+
+| Package                 | Runs in                                | Gives you                                                                                   |
+| ----------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `@seamless-auth/nextjs` | Route handlers, server components, `proxy.ts` | The `/auth` routes, server-side session reads, and route protection                 |
+| `@seamless-auth/react`  | Client components                      | `AuthProvider`, `useAuth()`, and the headless client, exactly as in any React app           |
+
+With both, there is no separate API server for auth. The browser calls `/auth` on the
+application's own origin, the session cookies stay first-party, and the server can render the
+signed-in user on the first paint.
+
+Requires `@seamless-auth/nextjs` 0.2.0 or later and `@seamless-auth/react` 0.14.0 or later
+(0.14.0 is the release that made the React SDK safe to render from the App Router).
+
+```txt
+browser
+  -> your Next.js app: app/auth/[...seamless]/route.ts   (@seamless-auth/nextjs)
+  -> Seamless Auth API
+```
+
+<Aside type="tip">
+  A complete starter with everything on this page wired up lives in
+  [`seamless-templates`](https://github.com/fells-code/seamless-templates/tree/main/templates/fullstack/nextjs)
+  under `templates/fullstack/nextjs`. `seamless init` does not offer it yet, so copy that directory
+  and follow its README.
+</Aside>
+
+---
+
+## Install
+
+```bash
+npm install @seamless-auth/nextjs @seamless-auth/react
+```
+
+`react-router-dom` is not needed. It is an optional peer of `@seamless-auth/react`, used only by
+the built-in screens, which a Next.js app does not use (see
+[Sign-In Screens](#sign-in-screens)).
+
+---
+
+## Step 1: Serve The Auth Routes
+
+Mount a catch-all route handler at `app/auth/[...seamless]/route.ts`:
+
+```ts
+import { createSeamlessAuthHandler } from '@seamless-auth/nextjs'
+
+export const { GET, POST, PATCH, DELETE } = createSeamlessAuthHandler({
+  authServerUrl: process.env.AUTH_SERVER_URL!,
+  audience: process.env.AUTH_SERVER_URL!,
+  cookieSecret: process.env.COOKIE_SIGNING_KEY!,
+  serviceSecret: process.env.API_SERVICE_TOKEN!,
+  jwksKid: process.env.JWKS_KID,
+})
+```
+
+This serves the same routes and issues the same cookies as `@seamless-auth/express` and
+`@seamless-auth/fastify`, for both cookie and bearer transport. Its tests hold it to identical
+responses from the Express adapter.
+
+- `cookieSecret` and `serviceSecret` must be at least 32 characters, and `serviceSecret` must
+  match the auth API's `API_SERVICE_TOKEN`. Both are checked when the handler is created.
+- The handler signs cookies with `jsonwebtoken`, so it needs the Node.js runtime, which is the
+  default. Do not set `export const runtime = 'edge'`.
+
+<Aside type="caution">
+  `next build` imports route modules with no request and often no secrets. If your build
+  environment has no `.env`, create the handler on the first request instead of at module scope,
+  or the secret check fails the build. The starter does this with a small lazy wrapper.
+</Aside>
+
+### Options
+
+`createSeamlessAuthHandler` takes the same options as the Express and Fastify adapters, plus
+`basePath`:
+
+| Option                   | Default                        | Purpose                                                   |
+| ------------------------ | ------------------------------ | --------------------------------------------------------- |
+| `authServerUrl`          | required                       | Base URL of your Seamless Auth instance                   |
+| `audience`               | required                       | Audience your user tokens are issued for                  |
+| `cookieSecret`           | required                       | Signs the session cookies, 32 characters minimum          |
+| `serviceSecret`          | required                       | Shared secret for machine-to-machine calls                |
+| `jwksKid`                | `dev-main`                     | Active JWKS key id; set it explicitly before deploying    |
+| `basePath`               | `/auth`                        | Where the catch-all route is mounted                      |
+| `cookieDomain`           | none                           | Domain attribute for the auth cookies                     |
+| `cookieSecure`           | `true`                         | Set `false` only for local HTTP development               |
+| `cookieSameSite`         | `none` when secure, else `lax` | SameSite policy                                           |
+| `allowedOrigins`         | none                           | Origin allowlist for browsers without `Sec-Fetch-Site`    |
+| `accessCookieName`       | `seamless-access`              | Session cookie name                                       |
+| `registrationCookieName` | `seamless-ephemeral`           | Registration cookie name                                  |
+| `refreshCookieName`      | `seamless-refresh`             | Refresh cookie name                                       |
+| `preAuthCookieName`      | `seamless-ephemeral`           | Login-initiation cookie name                              |
+| `messaging`              | none                           | Your own email and SMS delivery for codes and magic links |
+| `resolveClientIp`        | none                           | Picks the end user's IP to forward to the auth API        |
+
+**Client IP.** A route handler has no trustworthy source for the client address, because any
+caller can set `X-Forwarded-For`. Nothing is forwarded unless you pass `resolveClientIp` and read
+the header your platform sets and a client cannot, for example `x-real-ip` on Vercel. A value that
+is not an IP address is dropped. The browser's `User-Agent` is always forwarded, capped at 512
+characters.
+
+Two behaviors differ from Express because a route handler has no framework underneath: request
+bodies are parsed here, exactly as Express's `json()` does (only `application/json`, strict,
+100kb maximum), and an unknown route answers `404 { "error": "not_found" }` as JSON.
+
+---
+
+## Step 2: Add The Provider
+
+Every module in `@seamless-auth/react` is a client component, so `AuthProvider` can be rendered
+straight from the root layout. Pass the session the server resolved as `initialSession`:
+
+```tsx
+// app/layout.tsx
+import { cookies, headers } from 'next/headers'
+import { getSeamlessSession } from '@seamless-auth/nextjs'
+import { AuthProvider } from '@seamless-auth/react'
+
+export const dynamic = 'force-dynamic'
+
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const session = await getSeamlessSession(await cookies(), {
+    authServerUrl: process.env.AUTH_SERVER_URL!,
+    cookieSecret: process.env.COOKIE_SIGNING_KEY!,
+    serviceSecret: process.env.API_SERVICE_TOKEN!,
+    jwksKid: process.env.JWKS_KID,
+    userAgent: (await headers()).get('user-agent') ?? undefined,
+  })
+
+  return (
+    <html lang="en">
+      <body>
+        <AuthProvider apiHost="" initialSession={session}>
+          {children}
+        </AuthProvider>
+      </body>
+    </html>
+  )
+}
+```
+
+- **`apiHost=""`** sends every auth request to `/auth` on the page's own origin, which is the
+  route handler from step 1.
+- **`initialSession`** makes the first paint render the signed-in user instead of a loading state.
+  The provider then revalidates in the background, without reporting `loading`, which fills in
+  anything the server did not have and signs out a session that was revoked. It is read once,
+  when the provider creates its session.
+- **Hydration is safe.** The first client render matches the server's: `hasSignedInBefore` is
+  `false` on both and turns `true` straight after hydration when the browser remembers a sign-in.
+- **Props from a server component must be serializable.** `apiHost`, `magicLinkRedirectUri`, and
+  `initialSession` are. `transport` and `ports` take functions, so set those from a client
+  component that wraps the provider.
+
+### How `getSeamlessSession` reads the session
+
+It verifies the access cookie locally, then asks the auth API for `/users/me` with the token
+inside it. The result is the `/users/me` wire type, the same one `initialSession` takes, so it
+passes straight through.
+
+It **never refreshes**. When the access cookie has expired it returns `null`, even if the refresh
+cookie is still valid. A refresh from the server would rotate the refresh token in a response the
+browser never receives, and the browser's own next refresh would then be refused as a replay,
+which revokes the session. Returning `null` costs nothing: the provider's background revalidation
+renews the session through `/auth` straight after the page loads.
+
+<Aside type="danger">
+  For the same reason, never call your own `/auth/users/me` from server code with the browser's
+  cookies forwarded. When the access cookie has expired, the adapter refreshes inside that request
+  and the browser loses the session.
+</Aside>
+
+Server code that needs helpers or types (`hasScopedRole`, `roleGrantsAccess`, `User`) imports them
+from `@seamless-auth/nextjs` or `@seamless-auth/client`, never from `@seamless-auth/react`.
+Everything exported from `@seamless-auth/react` is a client reference inside a server component,
+including the pure helpers.
+
+---
+
+## Step 3: Protect Pages In `proxy.ts`
+
+```ts
+// proxy.ts
+import { NextResponse, type NextRequest } from 'next/server'
+import { hasSeamlessSession } from '@seamless-auth/nextjs'
+
+export function proxy(request: NextRequest) {
+  if (hasSeamlessSession(request.cookies, { cookieSecret: process.env.COOKIE_SIGNING_KEY! })) {
+    return NextResponse.next()
+  }
+
+  const login = new URL('/login', request.url)
+  login.searchParams.set('next', `${request.nextUrl.pathname}${request.nextUrl.search}`)
+  return NextResponse.redirect(login)
+}
+
+export const config = { matcher: ['/dashboard/:path*'] }
+```
+
+`hasSeamlessSession` checks the cookies locally, with no network call. A valid refresh cookie
+counts as a session, because its access cookie may only have expired and the next call to `/auth`
+renews it. Treating that as signed out would send a returning user to the sign-in page once every
+access-token lifetime.
+
+`proxy.ts` is the Next.js 16 name and runs on the Node.js runtime. On Next.js 15.5 or later, use
+`middleware.ts` with `export const config = { runtime: 'nodejs' }`. The Edge runtime cannot verify
+the cookies.
+
+For a role check, `getSeamlessClaims` returns what the access cookie says about the user, also
+locally:
+
+```ts
+import { getSeamlessClaims, hasScopedRole } from '@seamless-auth/nextjs'
+
+const claims = getSeamlessClaims(request.cookies, { cookieSecret })
+
+if (!claims || !hasScopedRole(claims.roles, 'admin:read')) {
+  return NextResponse.redirect(new URL('/', request.url))
+}
+```
+
+The claims leave out the upstream access token, so they are safe to pass to a client component.
+Treat them as a routing hint; enforce authorization again in the route handlers that serve data.
+
+### Your own API routes
+
+An application route handler checks the session the same way:
+
+```ts
+// app/api/reports/route.ts
+import { cookies } from 'next/headers'
+import { getSeamlessClaims, hasScopedRole } from '@seamless-auth/nextjs'
+
+export async function GET() {
+  const claims = getSeamlessClaims(await cookies(), { cookieSecret: process.env.COOKIE_SIGNING_KEY! })
+
+  if (!claims) return Response.json({ error: 'unauthenticated' }, { status: 401 })
+  if (!hasScopedRole(claims.roles, 'reports:read')) {
+    return Response.json({ error: 'forbidden' }, { status: 403 })
+  }
+
+  return Response.json(await loadReports(claims.id))
+}
+```
+
+From a client component, call it with `useAuthorizedFetch()`, which sends the session cookies.
+
+---
+
+## Sign-In Screens
+
+`AuthRoutes`, the React SDK's built-in screens, routes with react-router, which a Next.js app does
+not have. Build the screens with the hooks instead: `useAuth()`, `useAuthClient()`, and
+`usePasskeySupport()`. [How To Build Your Own Auth UI](/build/custom-auth-ui) covers the flows.
+Points that matter in practice:
+
+- **Email codes are six letters, SMS codes are six digits.** A code field that keeps only digits
+  rejects every emailed code. Match the input to the channel.
+- **Magic links land on `/verify-magiclink`.** The auth API builds the emailed link to that path,
+  so serve a page there that calls `verifyMagicLink(token)`. Verifying does not sign in the tab
+  that opened the link: the session belongs to the browser that asked for it, which collects it
+  from `checkMagicLink()`. When the link is opened in that same browser, calling
+  `checkMagicLink()` and then `refreshSession({ background: true })` signs this tab in too.
+  Otherwise, tell the reader to return to the device that asked.
+- **A magic link is single use, and Strict Mode runs effects twice in development.** Keep the
+  verification request in a ref so a remount reuses it instead of sending the token again.
+- **A `429` means slow down.** The auth server rate-limits code sends and checks. Read
+  `error.status` on the result and say so, instead of reporting a wrong code.
+
+The starter's `src/components/SignIn.tsx` and `src/components/VerifyMagicLink.tsx` implement all of
+this.
+
+---
+
+## Deploying
+
+- Run the app on the Node.js runtime with the environment variables above set at runtime.
+- `output: 'standalone'` in `next.config.ts` produces a self-contained server; the starter's
+  `Dockerfile` packages it on port 80 with a `/health` route.
+- Add the application's origin to the auth server's `ORIGINS` so passkey ceremonies verify.
+
+---
+
+## Related Docs
+
+- [React SDK](/build/react-sdk)
+- [How To Build Your Own Auth UI](/build/custom-auth-ui)
+- [How To Secure Routes](/build/secure-routes)
+- [Server SDKs](/build/server-sdks)
+- [Cookie, Session, And Token Reference](/reference/cookies-sessions-tokens)
