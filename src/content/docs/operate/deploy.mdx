@@ -19,8 +19,11 @@ in the current `../seamless-cli` source, so it is no longer described here as sh
 
 On the managed path, Seamless runs the auth instance for you. You create an application in the portal
 at [https://dashboard.seamlessauth.com](https://dashboard.seamlessauth.com), pick a plan, and Seamless
-provisions a dedicated hosted instance at `https://<your-app-id>.seamlessauth.com`. You point the SDKs
-at that URL and a portal-issued service token.
+provisions a dedicated hosted instance. Its Auth Server URL is
+`https://<infra-id>.trials.seamlessauth.com` on the Trial plan and
+`https://<infra-id>.seamlessauth.com` on paid plans; copy the exact value from **Credentials** →
+**Auth API Configuration**. You point the backend adapter at that URL with a portal-issued service
+token.
 
 On this path you do not provision Postgres, manage signing keys, or run the auth server. See the
 [Managed Quickstart](/start/managed-quickstart).
