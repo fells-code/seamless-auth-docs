@@ -14,7 +14,8 @@ admin operations).
 
 Current commands cover:
 
-- scaffold a React + Express Seamless Auth project
+- scaffold a Seamless Auth project from the starter template registry (React, Next.js, Express,
+  Fastify, Expo)
 - configure the auth server in Docker or local-source mode
 - optionally include the admin dashboard
 - validate generated config, Docker Compose, containers, and local health endpoints
@@ -72,10 +73,15 @@ The package is named `seamless-cli`; the executable command is `seamless`.
 npx seamless-cli init my-app
 ```
 
-Creates a new Seamless Auth project. The generated project includes a React frontend, an Express
-API, Docker Compose wiring, `seamless.config.json`, and either a Docker-based auth server or local
-auth server source depending on your prompt choices. It also asks for your email, which becomes the
-owner: registering with that address makes you the first admin.
+Creates a new Seamless Auth project. The web, backend, and optional mobile starters are chosen from
+the [`seamless-templates`](https://github.com/fells-code/seamless-templates) registry, and the
+project also gets Docker Compose wiring, `seamless.config.json`, and either a Docker-based auth
+server or local auth server source depending on your prompt choices. It also asks for your email,
+which becomes the owner: registering with that address makes you the first admin.
+
+Template flags such as `--oauth` (the OAuth example, which also prompts for Google, GitHub,
+Microsoft, and GitLab providers) skip a layer's prompt. Run `seamless templates list` to see them,
+and see the [CLI Init Flow](/operate/cli-init#template-flags) for what each step does.
 
 ---
 
@@ -179,12 +185,13 @@ seamless my-app
 
 The CLI will:
 
-1. Ask configuration questions
-2. Generate the React web starter
-3. Generate the Express API starter
-4. Configure the auth server in Docker or local-source mode
-5. Optionally include the admin dashboard
-6. Generate Docker Compose and local config
+1. Ask configuration questions, with framework options read from the template registry
+2. Copy the chosen web, API, and mobile templates into the project
+3. Configure the auth server in Docker or local-source mode
+4. Optionally include the admin console
+5. Generate Docker Compose, each starter's `.env`, and `seamless.config.json`
+
+See the [CLI Init Flow](/operate/cli-init) for the details of each step.
 
 ---
 
@@ -192,12 +199,12 @@ The CLI will:
 
 ```txt
 web/
-api/
+api/                   # absent for a full-stack template
+mobile/                # only when a mobile template is chosen
 auth/                  # only in local auth mode
 admin/                 # only in admin source mode
 docker-compose.yml
 seamless.config.json
-README.md
 ```
 
 ---
