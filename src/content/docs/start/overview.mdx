@@ -165,7 +165,8 @@ requirements for you:
 
 - **You need password login.** There is no password flow. Users sign in with passkeys, magic links,
   email or phone OTP, or OAuth, with TOTP as a second factor. `seamless migrate` imports identities,
-  not password hashes, so imported users sign in passwordlessly from their first login.
+  not password hashes, so imported users sign in passwordlessly from their first login (see
+  [Migrate Users](/operate/migrate-users)).
 - **You need SAML, or an identity provider for other apps.** The auth API signs users in to your
   application and can use OAuth and OIDC providers as a login source. It does not speak SAML and it
   is not an OAuth or OIDC authorization server for third-party clients.
