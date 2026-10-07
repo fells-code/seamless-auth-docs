@@ -87,7 +87,8 @@ responses from the Express adapter.
 | Option                   | Default                        | Purpose                                                   |
 | ------------------------ | ------------------------------ | --------------------------------------------------------- |
 | `authServerUrl`          | required                       | Base URL of your Seamless Auth instance                   |
-| `audience`               | required                       | Audience your user tokens are issued for                  |
+| `audience`               | required                       | Expected `aud` on the auth server's tokens. The auth API sets it to its `ISSUER`, so this is `authServerUrl`, or the same value as `authServerIssuer` when that is set |
+| `authServerIssuer`       | `authServerUrl`                | Expected `iss` on the auth server's tokens and signed responses, when the auth server advertises an issuer other than the URL you reach it at. Requests still go to `authServerUrl` |
 | `cookieSecret`           | required                       | Signs the session cookies, 32 characters minimum          |
 | `serviceSecret`          | required                       | Shared secret for machine-to-machine calls                |
 | `jwksKid`                | `dev-main`                     | `kid` header on the HS256 service tokens the adapter signs for the auth API; not the API's signing key ID. Warns while unset or `dev-main` |
@@ -108,6 +109,40 @@ caller can set `X-Forwarded-For`. Nothing is forwarded unless you pass `resolveC
 the header your platform sets and a client cannot, for example `x-real-ip` on Vercel. A value that
 is not an IP address is dropped. The browser's `User-Agent` is always forwarded, capped at 512
 characters.
+
+### Running on the host against the local Docker stack
+
+The adapter checks the `iss` of every token and signed response the auth server returns against
+`authServerIssuer`, which defaults to `authServerUrl`. Inside the `seamless init --local` Docker
+stack the auth server's `ISSUER` is `http://auth:5312`, its compose service name. An app run on the
+host with `npm run dev` reaches the same server at `http://localhost:5312`, so without help every
+sign-in fails with `Invalid signed response from Auth Server`. Tell the adapter the issuer
+separately:
+
+```ts
+export const { GET, POST, PATCH, DELETE } = createSeamlessAuthHandler({
+  authServerUrl: 'http://localhost:5312',
+  authServerIssuer: 'http://auth:5312',
+  audience: 'http://auth:5312',
+  // ...
+})
+```
+
+`audience` takes the same value because the auth API signs its `ISSUER` into `aud` as well, and
+`audience` has no default. The silent refresh on the `/auth` routes checks the refreshed token
+against `authServerIssuer` too (`@seamless-auth/nextjs` 0.3.1 or later). Leave `authServerIssuer`
+unset when the URL you call is the auth server's issuer, as it is on a managed instance.
+
+The Next.js starter reads this from `AUTH_SERVER_ISSUER` and passes it as both `authServerIssuer`
+and `audience`; unset or blank, both stay `AUTH_SERVER_URL`. seamless-cli 0.19.0 or later fills it
+in when it scaffolds the starter (see
+[Environment Variables](/reference/environment-variables#starter-environment)).
+
+`getSeamlessSession` also accepts `authServerIssuer`, so one options object can serve the handler
+and the session helpers. The helpers verify only the adapter's own cookies, so it has no effect
+there.
+
+### Other differences from Express
 
 Two behaviors differ from Express because a route handler has no framework underneath: request
 bodies are parsed here, exactly as Express's `json()` does (only `application/json`, strict,
@@ -281,6 +316,42 @@ this.
 
 ---
 
+## Admin Console
+
+`createSeamlessConsoleProxy` (`@seamless-auth/nextjs` 0.3.0 or later) serves the Seamless
+[admin dashboard](/build/admin-dashboard) from the Next.js app. The dashboard is built to load from
+`/console` on the same origin as `/auth`, so it calls the cookie-based admin routes without CORS.
+Mount the proxy at `app/console/[[...path]]/route.ts` and export its `GET` and `HEAD`:
+
+```ts
+// app/console/[[...path]]/route.ts
+import { createSeamlessConsoleProxy } from '@seamless-auth/nextjs'
+
+export const { GET, HEAD } = createSeamlessConsoleProxy({
+  authServerUrl: process.env.AUTH_SERVER_URL!,
+})
+```
+
+It requests the same path under `/console` on the auth server, which serves the dashboard build
+unless `SERVE_ADMIN_DASHBOARD=false`. Only the method and the path go upstream: no cookies and no
+`Authorization`. The response carries the body and the `content-type`, `cache-control`, `etag`,
+and `last-modified` headers. A path that leaves the console subtree, including an encoded `%2f` or
+`%5c`, answers `400` without an upstream request, and an unreachable auth server answers `502`.
+Next.js answers `405` for any other method, because the route exports only `GET` and `HEAD`.
+
+| Option          | Default    | Purpose                                                          |
+| --------------- | ---------- | ---------------------------------------------------------------- |
+| `authServerUrl` | required   | Base URL of the auth server serving the console                  |
+| `basePath`      | `/console` | Subtree requested upstream                                       |
+| `mountPath`     | `/console` | Where the route is mounted, including any Next.js `basePath`     |
+
+Set `mountPath` when the route lives somewhere other than `app/console`, or when `next.config.ts`
+sets a `basePath`: with `basePath: '/app'`, pass `mountPath: '/app/console'`. Only the same-origin
+shape is supported; a dashboard on another origin cannot call the route handler, which sends no
+CORS headers.
+
+---
+
 ## Deploying
 
 - Run the app on the Node.js runtime with the environment variables above set at runtime.
@@ -296,4 +367,5 @@ this.
 - [How To Build Your Own Auth UI](/build/custom-auth-ui)
 - [How To Secure Routes](/build/secure-routes)
 - [Server SDKs](/build/server-sdks)
+- [Admin Dashboard App](/build/admin-dashboard)
 - [Cookie, Session, And Token Reference](/reference/cookies-sessions-tokens)

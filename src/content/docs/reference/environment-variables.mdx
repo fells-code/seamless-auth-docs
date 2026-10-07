@@ -181,21 +181,34 @@ The dev key ID is derived from the key's JWK thumbprint (`dev-` plus 16 characte
 
 ---
 
-## Express Adapter Environment
+## Starter Environment
 
-The Express starter and `@seamless-auth/express` need their own backend environment.
+The backend starters (Express, Fastify, and the full-stack Next.js template) read these values and
+pass them to their adapter (`@seamless-auth/express`, `@seamless-auth/fastify`, or
+`@seamless-auth/nextjs`).
 
 | Variable             | Purpose                                             |
 | -------------------- | --------------------------------------------------- |
 | `AUTH_SERVER_URL`    | Base URL for the private Seamless Auth API          |
+| `AUTH_SERVER_ISSUER` | Optional. The issuer the auth server signs with, when it differs from `AUTH_SERVER_URL`. Passed to the adapter as both `authServerIssuer` and `audience`; unset or blank, both stay `AUTH_SERVER_URL` |
 | `COOKIE_SIGNING_KEY` | Secret for signed application auth cookies          |
 | `API_SERVICE_TOKEN`  | Shared service token for API-to-auth communication  |
 | `APP_ORIGIN`         | Issuer/origin value for the application API         |
-| `JWKS_KID`           | Key ID used by the adapter for cookie verification  |
+| `JWKS_KID`           | `kid` header on the service tokens the adapter signs for the auth API |
 | `UI_ORIGINS`         | Browser origins allowed by the Express starter CORS |
 
 The adapter is the browser-facing cookie boundary. Do not put browser cookie custody directly on
 the raw auth API.
+
+`AUTH_SERVER_ISSUER` matters when a starter runs on the host (`npm run dev`) against the
+`seamless init --local` Docker stack. The auth server there signs as `http://auth:5312`, its
+compose service name, while the host-run app calls `http://localhost:5312`. Without
+`AUTH_SERVER_ISSUER=http://auth:5312` every sign-in fails with
+`Invalid signed response from Auth Server`. seamless-cli 0.19.0 or later fills it from the
+`{{authServerIssuer}}` template placeholder: `http://auth:5312` on a local stack, and the instance
+URL on a managed instance. The generated `docker-compose.yml` also sets it on the `api` or `web`
+container, where `AUTH_SERVER_URL` and the issuer are both `http://auth:5312`. See
+[Server SDKs: Auth server issuer](/build/server-sdks#auth-server-issuer).
 
 ---
 

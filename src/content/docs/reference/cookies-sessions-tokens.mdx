@@ -47,9 +47,8 @@ your application needs distinct cookies.
 createSeamlessAuthServer({
   authServerUrl: process.env.AUTH_SERVER_URL!,
   cookieSecret: process.env.COOKIE_SIGNING_KEY!,
-  serviceSecret: process.env.SERVICE_SECRET!,
-  issuer: process.env.JWT_ISSUER!,
-  audience: process.env.JWT_AUDIENCE!,
+  serviceSecret: process.env.API_SERVICE_TOKEN!,
+  audience: process.env.AUTH_SERVER_URL!,
   accessCookieName: 'sa_access',
   refreshCookieName: 'sa_refresh',
   registrationCookieName: 'sa_registration',
@@ -179,7 +178,13 @@ Access tokens include:
 | `typ`    | `access`                              |
 | `roles`  | User roles                            |
 | `org_id` | Active organization ID, when selected |
-| `aud`    | Issuer / auth-server URL              |
+| `aud`    | Auth API issuer (its `ISSUER`)        |
+
+The adapters verify `iss` against `authServerIssuer`, which defaults to `authServerUrl`, and `aud`
+against `audience`. Both claims carry the auth API's `ISSUER`, so when the adapter reaches the auth
+server at another URL (a host-run app against the local Docker stack calls `http://localhost:5312`
+while the server signs as `http://auth:5312`), set `authServerIssuer` and `audience` to the issuer.
+See [Server SDKs: Auth server issuer](/build/server-sdks#auth-server-issuer).
 
 Refresh tokens are currently opaque random strings. The auth API refresh endpoint expects the raw
 opaque refresh token in the bearer header, not the access JWT.

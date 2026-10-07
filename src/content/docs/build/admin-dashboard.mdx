@@ -227,7 +227,9 @@ docker run -p 8080:8080 \
 dashboard runs under `/console` and calls its own origin. The auth API image bundles this build at
 a pinned dashboard tag and serves it at `/console` unless `SERVE_ADMIN_DASHBOARD=false`. The
 Seamless API templates reverse-proxy it from the auth server at `/console` when
-`SERVE_ADMIN_CONSOLE=true`, so the dashboard shares the origin and cookie scope of `/auth`.
+`SERVE_ADMIN_CONSOLE=true`, so the dashboard shares the origin and cookie scope of `/auth`. A
+Next.js App Router app does the same with `createSeamlessConsoleProxy` from `@seamless-auth/nextjs`
+([Next.js: Admin Console](/build/nextjs#admin-console)).
 
 ### From `seamless-cli`
 
@@ -241,7 +243,8 @@ Seamless API templates reverse-proxy it from the auth server at `/console` when
 | `none`   | No admin console                                                        |
 
 The `image` and `source` modes pin the same dashboard tag. Full-stack templates cannot host the
-console yet, so only `none` applies to them.
+console yet, so only `none` applies to them. To serve it from a Next.js app yourself, mount
+`createSeamlessConsoleProxy` ([Next.js: Admin Console](/build/nextjs#admin-console)).
 
 ---
 
