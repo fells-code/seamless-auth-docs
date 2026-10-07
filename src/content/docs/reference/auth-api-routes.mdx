@@ -25,9 +25,7 @@ map of the auth server surface as it exists in the source repo today.
 | Group          | Routes                             | Purpose                                              |
 | -------------- | ---------------------------------- | ---------------------------------------------------- |
 | Authentication | `/login`, `/logout`, `/refresh`    | Login entry, logout, access refresh                  |
-| Registration   | `/registration/register`           | New-user registration                                |
-| Registration   | `/registration/phone`              | New-user registration                                |
-| Registration   | `/registration/phone/verify`       | New-user registration                                |
+| Registration   | `/registration/*`                  | New-user registration and phone enrollment           |
 | OTP            | `/otp/*`                           | Email and phone OTP generation and verification      |
 | WebAuthn       | `/webauthn/*`                      | Passkey registration and login                       |
 | Magic Links    | `/magic-link*`                     | Magic link request, polling, verification            |
@@ -62,11 +60,14 @@ map of the auth server surface as it exists in the source repo today.
 
 ## Registration
 
-| Method | Path                         | Purpose             |
-| ------ | ---------------------------- | ------------------- |
-| `POST` | `/registration/register`     | Register a new user |
-| `POST` | `/registration/phone`        | Register a new user |
-| `POST` | `/registration/phone/verify` | Register a new user |
+| Method | Path                         | Purpose                                           |
+| ------ | ---------------------------- | ------------------------------------------------- |
+| `POST` | `/registration/register`     | Register a new user                               |
+| `POST` | `/registration/phone`        | Add a phone to the signed-in user and send an OTP |
+| `POST` | `/registration/phone/verify` | Verify that phone with the OTP                    |
+
+`/registration/phone` and `/registration/phone/verify` require an access token. The OTP is sent
+only when the phone is new or not yet verified.
 
 ---
 
