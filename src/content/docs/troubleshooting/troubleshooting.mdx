@@ -169,6 +169,40 @@ See [Auth API Routes](/reference/auth-api-routes).
 
 ---
 
+## 7. Sign-In Fails With `Invalid signed response from Auth Server`
+
+### Symptoms
+
+- every sign-in method fails at the step that issues the session (code check, passkey, magic link)
+- the API or Next.js server output shows `Invalid signed response from Auth Server`
+- it happens when the app runs on the host with `npm run dev`, but not inside the Docker stack
+
+### Common cause
+
+The adapter checks the `iss` of the auth server's signed responses against `authServerIssuer`,
+which defaults to `authServerUrl`. In the `seamless init --local` stack the auth server's `ISSUER`
+is `http://auth:5312`, while a host-run app reaches it at `http://localhost:5312`, so the issuer
+does not match.
+
+### Fix
+
+Set the issuer in the app's `.env`:
+
+```txt
+AUTH_SERVER_URL=http://localhost:5312
+AUTH_SERVER_ISSUER=http://auth:5312
+```
+
+The starters pass `AUTH_SERVER_ISSUER` to the adapter as both `authServerIssuer` and `audience`,
+because the auth API signs its `ISSUER` into `aud` too. In your own code, set both options to the
+issuer. Use `@seamless-auth/express` 0.19.1, `@seamless-auth/fastify` 0.10.1, or
+`@seamless-auth/nextjs` 0.3.1 or later, which also check the silently refreshed token against
+`authServerIssuer`. See [Server SDKs: Auth server issuer](/build/server-sdks#auth-server-issuer).
+
+Inside Docker no change is needed: containers call `http://auth:5312`, which is also the issuer.
+
+---
+
 ## Useful Local Inspection Commands
 
 View logs:

@@ -107,12 +107,13 @@ app.get(
 | `authServerUrl` | Base URL for the Seamless Auth instance                         |
 | `cookieSecret`  | Secret used to verify and sign adapter cookies                  |
 | `serviceSecret` | Shared service secret for machine-to-machine calls to the auth instance |
-| `audience`      | Expected audience, usually the auth server URL                  |
+| `audience`      | Expected `aud` on the auth server's tokens. The auth API sets it to its `ISSUER`, so this is `authServerUrl`, or the same value as `authServerIssuer` when that is set |
 
 Optional values:
 
 | Option            | Default                            | Purpose                                                |
 | ----------------- | ---------------------------------- | ------------------------------------------------------ |
+| `authServerIssuer` | `authServerUrl`                   | Expected `iss` on the auth server's tokens and signed responses; see [Auth server issuer](#auth-server-issuer) |
 | `jwksKid`         | `dev-main`, with a startup warning | Active JWKS key ID; set it explicitly in production    |
 | `cookieDomain`    | unset                              | Domain attribute for adapter cookies                   |
 | `cookieSecure`    | `true`                             | Secure attribute; set `false` only for local HTTP      |
@@ -130,6 +131,40 @@ browser omits that header, the `Origin` must match an entry (case-insensitive), 
 Custom cookie names are also accepted (`accessCookieName`, `registrationCookieName`,
 `refreshCookieName`, `preAuthCookieName`).
 
+The Fastify `seamlessAuth` plugin takes the same options, `authServerIssuer` included.
+
+### Auth server issuer
+
+The adapter checks the `iss` of every token and signed response the auth server returns against
+`authServerIssuer`, which defaults to `authServerUrl`. Requests and key set fetches always go to
+`authServerUrl`; only the `iss` check reads `authServerIssuer`. Set it when your server reaches
+the auth server at a different URL from the issuer it advertises (its `ISSUER` setting).
+
+The usual case is an API run on the host against the `seamless init --local` Docker stack. The auth
+server there signs as `http://auth:5312`, its compose service name, while the host-run API calls
+`http://localhost:5312`, and without the option every sign-in fails with
+`Invalid signed response from Auth Server`.
+
+```ts
+const authOptions: SeamlessAuthServerOptions = {
+  authServerUrl: 'http://localhost:5312',
+  authServerIssuer: 'http://auth:5312',
+  audience: 'http://auth:5312',
+  // ...
+}
+```
+
+The auth API signs its `ISSUER` into `aud` as well, and `audience` is required with no default, so
+with `authServerIssuer` set, set `audience` to the same value. The silent refresh on the `/auth`
+routes checks the refreshed token against `authServerIssuer` too.
+
+`authServerIssuer` is accepted by `createSeamlessAuthServer`, `requireAuth`, and `getSeamlessUser`
+in `@seamless-auth/express` (0.19.1 or later), by the `seamlessAuth` plugin, `requireAuth`, and
+`getSeamlessUser` in `@seamless-auth/fastify` (0.10.1 or later), and by the Next.js adapter
+([Next.js](/build/nextjs#running-on-the-host-against-the-local-docker-stack)). The Express and
+Fastify starters read it from `AUTH_SERVER_ISSUER` (see
+[Environment Variables](/reference/environment-variables#starter-environment)).
+
 ### Managed vs self-hosted configuration
 
 The options are the same on both paths. Only the values differ, and where the service secret comes
@@ -138,7 +173,8 @@ from.
 | Option          | Managed                                                          | Self-hosted                                          |
 | --------------- | --------------------------------------------------------------- | ---------------------------------------------------- |
 | `authServerUrl` | Your Auth Server URL, copied from the portal                     | The auth API, for example `http://localhost:5312`    |
-| `audience`      | The same Auth Server URL                                         | The same auth server URL                             |
+| `audience`      | The same Auth Server URL                                         | The same auth server URL, or `authServerIssuer` when set |
+| `authServerIssuer` | Leave unset                                                   | `http://auth:5312` when the API runs on the host against the Docker stack |
 | `serviceSecret` | A service token generated in the portal (shown once)            | The auth API's `API_SERVICE_TOKEN` from your local stack |
 
 On the managed path, generate the service token from your application's **Auth API Configuration**
@@ -204,6 +240,10 @@ const guard = requireAuth({
   audience: process.env.AUTH_SERVER_URL,
 })
 ```
+
+When the auth server signs under another issuer, also pass `authServerIssuer` and set `audience`
+to it, as in [Auth server issuer](#auth-server-issuer). It is only read when bearer tokens are
+enabled. Fastify's `requireAuth` takes the same options.
 
 On the bearer path `req.user.email` and `req.user.phone` are not set, because the access token
 does not carry them. `getSeamlessUser(req, options)` loads the profile for either credential.
@@ -353,9 +393,9 @@ starter templates in `seamless-templates`, not to the adapter packages:
 
 | Adapter                  | Version on `main` | Package status | CLI starter template (status)          |
 | ------------------------ | ----------------- | -------------- | -------------------------------------- |
-| `@seamless-auth/express` | 0.18.0            | Official       | `express` (stable)                     |
-| `@seamless-auth/fastify` | 0.9.0             | Official       | `fastify` (beta)                       |
-| `@seamless-auth/nextjs`  | 0.2.0             | Official       | `nextjs`, a full-stack template (beta) |
+| `@seamless-auth/express` | 0.19.1            | Official       | `express` (stable)                     |
+| `@seamless-auth/fastify` | 0.10.1            | Official       | `fastify` (beta)                       |
+| `@seamless-auth/nextjs`  | 0.3.1             | Official       | `nextjs`, a full-stack template (beta) |
 
 Express is the most mature path. It is the reference adapter: the Fastify and Next.js adapters'
 tests hold them to the Express adapter's responses. It is also the only adapter released in lockstep
