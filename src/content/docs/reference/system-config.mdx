@@ -5,6 +5,8 @@ sidebar:
   order: 5
 ---
 
+import { Aside } from '@astrojs/starlight/components';
+
 System config is the runtime configuration stored by `seamless-auth-api` in the `system_config`
 table.
 
@@ -70,15 +72,22 @@ The auth API logs system config reads, updates, and validation errors as auth ev
 | `available_roles`                | `AVAILABLE_ROLES`                | string array       | Roles allowed in the system                            |
 | `login_methods`                  | `LOGIN_METHODS`                  | login method array | Methods offered after login starts                     |
 | `passkey_login_fallback_enabled` | `PASSKEY_LOGIN_FALLBACK_ENABLED` | boolean            | Whether fallback methods can appear with passkey login |
+| `prompt_passkey_enrollment` | `PROMPT_PASSKEY_ENROLLMENT` | boolean | Ask users with no passkey to enroll one after a code or magic-link sign-in |
+| `phishing_resistant_only` | `PHISHING_RESISTANT_ONLY` | boolean | Accept only passkeys to start a session |
 | `oauth_providers`                | `OAUTH_PROVIDERS`                | JSON array         | OAuth provider metadata                                |
 | `lockout_policy`                 | `LOCKOUT_POLICY`                 | JSON object        | Failed-login lockout policy                            |
+| `authenticator_policy` | `AUTHENTICATOR_POLICY` | JSON object | Which passkey authenticators may register, and how they are verified |
 | `access_token_ttl`               | `ACCESS_TOKEN_TTL`               | duration           | Access token and access cookie TTL                     |
 | `refresh_token_ttl`              | `REFRESH_TOKEN_TTL`              | duration           | Refresh cookie TTL                                     |
+| `session_idle_ttl` | `SESSION_IDLE_TTL` | duration | How long a session may go without a refresh |
+| `max_concurrent_sessions` | `MAX_CONCURRENT_SESSIONS` | positive integer or `null` | Sessions one user may hold at once; `null` is no cap |
 | `rate_limit`                     | `RATE_LIMIT`                     | number             | Request rate limit value                               |
 | `delay_after`                    | `DELAY_AFTER`                    | number             | Slowdown threshold                                     |
+| `flow_rate_limits` | `FLOW_RATE_LIMITS` | JSON object | Per-IP and per-identity limits on OTP, magic-link, and OAuth starts |
 | `rpid`                           | `RPID`                           | string             | WebAuthn relying party ID                              |
 | `origins`                        | `ORIGINS`                        | URL array          | WebAuthn allowed browser origins                       |
 | `frontend_url`                   | `FRONTEND_URL`                   | URL                | Sign-in and magic-link base URL; else `origins[0]`     |
+| `magic_link_redirect_uris` | `MAGIC_LINK_REDIRECT_URIS` | URL array | Exact-match magic-link destinations; empty falls back to `origins` |
 
 Built-in defaults exist for:
 
@@ -87,7 +96,14 @@ Built-in defaults exist for:
 | `login_methods`                  | `["passkey", "magic_link"]`                               |
 | `oauth_providers`                | `[]`                                                      |
 | `passkey_login_fallback_enabled` | `true`                                                    |
+| `prompt_passkey_enrollment` | `false` |
+| `phishing_resistant_only` | `false` |
 | `lockout_policy`                 | enabled, 10 failures, 15-minute window, 15-minute lockout |
+| `authenticator_policy` | see [Authenticator Policy](#authenticator-policy) |
+| `session_idle_ttl` | `"8h"` |
+| `max_concurrent_sessions` | `null` (no cap) |
+| `flow_rate_limits` | see [Flow Rate Limits](#flow-rate-limits) |
+| `magic_link_redirect_uris` | `[]` |
 
 Other keys must come from env or an existing database row.
 
@@ -101,16 +117,27 @@ Other keys must come from env or an existing database row.
 | `AVAILABLE_ROLES`                | Comma-separated list                      |
 | `LOGIN_METHODS`                  | Comma-separated list                      |
 | `ORIGINS`                        | Comma-separated URL list                  |
+| `MAGIC_LINK_REDIRECT_URIS` | Comma-separated URL list |
 | `OAUTH_PROVIDERS`                | JSON array                                |
 | `LOCKOUT_POLICY`                 | JSON object                               |
+| `AUTHENTICATOR_POLICY` | JSON object |
+| `FLOW_RATE_LIMITS` | JSON object |
 | `RATE_LIMIT`                     | Number                                    |
 | `DELAY_AFTER`                    | Number                                    |
+| `MAX_CONCURRENT_SESSIONS` | Number; empty, `null`, `none`, or `unlimited` (any case) means no cap |
 | `PASSKEY_LOGIN_FALLBACK_ENABLED` | `true` means true; anything else is false |
+| `PROMPT_PASSKEY_ENROLLMENT` | `true` means true; anything else is false |
+| `PHISHING_RESISTANT_ONLY` | `true` means true; anything else is false |
 | `ACCESS_TOKEN_TTL`               | Duration string                           |
 | `REFRESH_TOKEN_TTL`              | Duration string                           |
+| `SESSION_IDLE_TTL` | Duration string |
 | `RPID`                           | String                                    |
 | `APP_NAME`                       | String                                    |
 | `FRONTEND_URL`                   | String                                    |
+
+JSON objects are stored as given. Fields left out of `LOCKOUT_POLICY`, `AUTHENTICATOR_POLICY`, or
+`FLOW_RATE_LIMITS` take their schema defaults when the config is read, so a partial object such as
+`{"syncedPasskeys":"block"}` is enough.
 
 Duration strings in system config use:
 
@@ -242,6 +269,46 @@ When a user is locked, the auth API returns `423` with `error: "account_locked"`
 
 ---
 
+## Flow Rate Limits
+
+`flow_rate_limits` bounds how often one caller may drive a message-carrying, code-checking, or
+provider flow. The general `rate_limit` still applies to every request.
+
+Default:
+
+```json
+{
+  "windowSeconds": 900,
+  "otp": { "perIp": 10, "perIdentity": 5 },
+  "magicLink": { "perIp": 20, "perIdentity": 5 },
+  "oauth": { "perIp": 30, "perProvider": 10 }
+}
+```
+
+| Field                   | Counts requests per window                         |
+| ----------------------- | -------------------------------------------------- |
+| `windowSeconds`         | The window, in seconds, shared by every limiter    |
+| `otp.perIp`             | OTP-group requests from one IP address             |
+| `otp.perIdentity`       | OTP-group requests for one email address or phone  |
+| `magicLink.perIp`       | `GET /magic-link` requests from one IP address     |
+| `magicLink.perIdentity` | `GET /magic-link` requests for one email address   |
+| `oauth.perIp`           | OAuth start and callback requests from one IP      |
+| `oauth.perProvider`     | OAuth start and callback requests from one IP, per provider |
+
+The OTP group is one shared counter across `/otp/*`, `POST /registration/register`,
+`POST /registration/phone`, and the TOTP `enroll/verify`, `disable`, `verify-login`, and
+`verify-mfa` routes. A request with no email or phone to key on is counted by IP for the
+per-identity limit.
+
+Every value is a positive integer. A limit change takes effect on the next request; a
+`windowSeconds` change starts fresh counters.
+
+Mobile carriers put many subscribers behind one public address, so a deployment that serves
+native apps usually raises the `perIp` values and leaves `perIdentity` alone. See
+[Mobile Passkeys](/build/mobile-passkeys#rate-limits-behind-carrier-nat).
+
+---
+
 ## WebAuthn Config
 
 | Key        | Use                                                |
@@ -277,6 +344,98 @@ Native apps add their own entries. iOS reports the relying party as `https://<rp
 reports `android:apk-key-hash:<base64url SHA-256 of the signing certificate>`, one per
 certificate. Keep the web origin first: `origins[0]` is the fallback for a request that gives no
 origin of its own. See [Mobile Passkeys](/build/mobile-passkeys).
+
+---
+
+## Authenticator Policy
+
+`authenticator_policy` decides which passkeys `POST /webauthn/register/finish` will store. It does
+not affect credentials that are already registered.
+
+Default:
+
+```json
+{
+  "attachment": "any",
+  "userVerification": "required",
+  "attestation": "none",
+  "requireKnownAuthenticator": false,
+  "syncedPasskeys": "allow",
+  "aaguidAllowList": [],
+  "aaguidDenyList": []
+}
+```
+
+| Field                       | Values                                    | Effect                                                                                 |
+| --------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------- |
+| `attachment`                | `any`, `platform`, `cross-platform`       | Authenticator kind offered at registration; a pinned value also bounds the `attachment` query on `/webauthn/register/start` |
+| `userVerification`          | `required`, `preferred`, `discouraged`    | Asked of the browser and enforced by the server for registration and login             |
+| `attestation`               | `none`, `direct`                          | Whether the authenticator is asked to identify itself with an attestation statement    |
+| `requireKnownAuthenticator` | boolean                                   | Refuse an authenticator that cannot be matched against the FIDO Metadata Service       |
+| `syncedPasskeys`            | `allow`, `block`                          | Whether a credential that can sync off its authenticator may register                  |
+| `aaguidAllowList`           | AAGUID array                              | When non-empty, only these authenticator models may register                           |
+| `aaguidDenyList`            | AAGUID array                              | These authenticator models may not register                                            |
+
+### Synced Passkeys
+
+A passkey kept in iCloud Keychain, Google Password Manager, or another platform password manager
+is synced, so its private key can exist outside the authenticator that created it. The server
+judges this on WebAuthn backup eligibility (`credentialDeviceType: "multiDevice"`), not on whether
+the credential has been backed up yet: a credential that can sync is the exposure.
+
+`allow` registers synced passkeys. `block` refuses them with
+`403 {"error":"synced_passkey_not_allowed"}`. Device-bound credentials, such as most hardware
+security keys, register under either value.
+
+<Aside type="caution" title="block refuses most consumer passkeys">
+  Every iCloud Keychain and Google Password Manager passkey is backup eligible, so
+  `syncedPasskeys: "block"` refuses the passkey a normal phone or laptop offers. A consumer-facing
+  deployment wants `"allow"`. Set `"block"` only when you issue your own device-bound
+  authenticators.
+
+`seamless-auth-api` 0.8.0 shipped with `block` as the default and seeded it into
+`system_config`. 0.9.0 returned the default to `allow`, and a migration moves the stored value to
+`allow` on rows that were never changed through the admin API. If registration answers
+`synced_passkey_not_allowed` and you did not choose `block`, read `authenticator_policy` from
+`/system-config/admin` and check `AUTHENTICATOR_POLICY`.
+
+</Aside>
+
+### AAGUID Allow And Deny Lists
+
+An AAGUID identifies an authenticator model, for example one make of security key. Entries are
+compared case-insensitively.
+
+The server checks registration in this order, and the first rule that fails refuses it:
+
+1. `requireKnownAuthenticator`: under `attestation: "direct"`, a credential that self attests or
+   presents no attestation is refused
+2. `aaguidDenyList`: a listed AAGUID is refused, even when the allow list also names it
+3. `aaguidAllowList`: when non-empty, an AAGUID that is missing, all-zero, or unlisted is refused
+4. `syncedPasskeys`: under `block`, a backup-eligible credential is refused
+
+Rules 1 to 3 refuse with `403 {"error":"authenticator_not_allowed"}`. Rule 4 refuses with
+`403 {"error":"synced_passkey_not_allowed"}`. The audit event (`webauthn_registration_failed`)
+records which rule refused, with the AAGUID and device type.
+
+Both lists, and `requireKnownAuthenticator`, need `attestation: "direct"`. An authenticator that
+was not asked to identify itself can report an all-zero AAGUID, which no allow list admits and no
+deny list entry matches. At startup the API logs an error when `aaguidAllowList` or
+`requireKnownAuthenticator` is set while `attestation` is `none`.
+
+Example for an organization that issues its own security keys:
+
+```json
+{
+  "attachment": "cross-platform",
+  "attestation": "direct",
+  "requireKnownAuthenticator": true,
+  "syncedPasskeys": "block",
+  "aaguidAllowList": ["ee882879-721c-4913-9775-3dfcce97072a"]
+}
+```
+
+See [Auth API Routes](/reference/auth-api-routes#webauthn) for the registration error codes.
 
 ---
 

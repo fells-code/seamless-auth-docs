@@ -101,6 +101,28 @@ Registration start accepts `requestPrf=true` or `requirePrf=true` query flags. A
 accept an optional PRF request body. The auth server verifies the passkey assertion but does not
 store or return PRF output.
 
+Both registration routes require an access session. `POST /webauthn/register/finish` can answer:
+
+| Status | Body                                                 | Cause                                                                                    |
+| ------ | ---------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `400`  | validation error                                     | Request body failed schema validation                                                    |
+| `401`  | error                                                | No valid access session                                                                  |
+| `403`  | `{"error":"Not allowed"}`                            | No user for the session, or no attestation response |
+| `403`  | `{"error":"Missing challenge"}`                      | No live registration challenge; call `/webauthn/register/start` again                    |
+| `403`  | `{"error":"Registration failed verification"}`       | The attestation did not verify                                                           |
+| `403`  | `{"error":"authenticator_not_allowed"}`              | Refused by `authenticator_policy`: deny list, allow list, or `requireKnownAuthenticator` |
+| `403`  | `{"error":"synced_passkey_not_allowed"}`             | Refused by `authenticator_policy.syncedPasskeys: "block"`                                |
+| `403`  | `{"error":"prf_required"}`                           | Registration started with `requirePrf=true` and the credential did not report PRF        |
+| `500`  | `{"error":"An error occured will verifying. Try again"}` | Attestation verification threw, for example an origin or RP ID mismatch               |
+| `500`  | `{"error":"Unknown error verifying passkey"}` | Unexpected server error |
+
+`authenticator_not_allowed` and `synced_passkey_not_allowed` come from config, not from the user
+or the device being faulty. Under the default policy neither is returned; they appear once an
+operator restricts `authenticator_policy`. See
+[Authenticator Policy](/reference/system-config#authenticator-policy) for each rule and the order
+they run in. `GET /webauthn/register/start` answers `400 {"error":"attachment_not_allowed"}` when
+its `attachment` query asks for a kind the policy's pinned `attachment` excludes.
+
 ---
 
 ## Magic Links

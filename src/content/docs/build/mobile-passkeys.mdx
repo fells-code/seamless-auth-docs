@@ -166,7 +166,17 @@ Rebuild the development client after changing either; the entitlement is baked i
 Phones on mobile networks share a small pool of public addresses. The auth API's per-IP limits on
 OTP, magic link and OAuth starts are configurable through the `flow_rate_limits` system config
 key, and a mobile audience usually needs them wider than the defaults, which were chosen for
-browsers. Per-identity limits stay as they are.
+browsers. Per-identity limits stay as they are. See
+[Flow Rate Limits](/reference/system-config#flow-rate-limits) for the shape and defaults.
+
+---
+
+## Which Passkeys Register
+
+Native passkeys on iOS and Android are normally synced by iCloud Keychain or Google Password
+Manager. They register under the default `authenticator_policy`. A deployment that sets
+`syncedPasskeys: "block"` refuses them with `403 {"error":"synced_passkey_not_allowed"}`; see
+[Authenticator Policy](/reference/system-config#authenticator-policy).
 
 ---
 

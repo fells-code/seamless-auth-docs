@@ -42,16 +42,26 @@ These values seed the `system_config` table when missing.
 | `AVAILABLE_ROLES`                | Roles allowed in the system                                                       |
 | `LOGIN_METHODS`                  | Enabled login methods: `passkey`, `magic_link`, `email_otp`, `phone_otp`, `oauth` |
 | `PASSKEY_LOGIN_FALLBACK_ENABLED` | Whether fallback methods can appear alongside passkey login                       |
+| `PROMPT_PASSKEY_ENROLLMENT` | `true` asks users with no passkey to enroll one after a code or magic-link sign-in; default `false` |
+| `PHISHING_RESISTANT_ONLY` | `true` accepts only passkeys to start a session; default `false` |
 | `OAUTH_PROVIDERS`                | JSON array of OAuth provider configs                                              |
 | `LOCKOUT_POLICY`                 | JSON login lockout policy                                                         |
+| `AUTHENTICATOR_POLICY` | JSON passkey authenticator policy, such as `{"syncedPasskeys":"allow"}` |
 | `ACCESS_TOKEN_TTL`               | Access token lifetime, such as `30m`                                              |
 | `REFRESH_TOKEN_TTL`              | Refresh token lifetime, such as `1h`                                              |
+| `SESSION_IDLE_TTL` | Session idle timeout, such as `8h` (the default) |
+| `MAX_CONCURRENT_SESSIONS` | Sessions per user; empty, `null`, `none`, or `unlimited` means no cap (the default) |
 | `RATE_LIMIT`                     | Base request rate limit                                                           |
 | `DELAY_AFTER`                    | Slowdown threshold                                                                |
+| `FLOW_RATE_LIMITS` | JSON per-IP and per-identity limits for OTP, magic-link, and OAuth flows |
 | `RPID`                           | WebAuthn relying party ID                                                         |
 | `ORIGINS`                        | Comma-separated WebAuthn browser origins                                          |
 | `APP_NAME`                       | Application name shown in auth experiences                                        |
 | `FRONTEND_URL`                   | Frontend base URL for sign-in and magic-link links (optional)                     |
+| `MAGIC_LINK_REDIRECT_URIS` | Comma-separated exact-match magic-link destinations, such as `myapp://auth` (optional) |
+
+See [System Config Reference](/reference/system-config) for each key's type, default, and parsing
+rule, and for the JSON shapes of `AUTHENTICATOR_POLICY` and `FLOW_RATE_LIMITS`.
 
 `OAUTH_PROVIDERS` stores provider metadata, not provider client secrets. Each provider references a
 secret env var through `clientSecretEnv`.
