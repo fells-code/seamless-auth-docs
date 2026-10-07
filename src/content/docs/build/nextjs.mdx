@@ -345,6 +345,14 @@ Next.js answers `405` for any other method, because the route exports only `GET`
 | `basePath`      | `/console` | Subtree requested upstream                                       |
 | `mountPath`     | `/console` | Where the route is mounted, including any Next.js `basePath`     |
 
+The Next.js starter ships this route at `src/app/console/[[...path]]/route.ts`, gated by
+`SERVE_ADMIN_CONSOLE`, the same switch the Express and Fastify starters use. With anything but
+`true`, `/console` answers `404` and nothing is requested upstream. `seamless init --nextjs
+--admin=api`, the default, writes `SERVE_ADMIN_CONSOLE=true` and serves the console at
+`http://localhost:5173/console`, starting with the seamless-cli release that includes [fells-code/seamless-cli#239](https://github.com/fells-code/seamless-cli/pull/239). The auth server needs
+`SERVE_ADMIN_DASHBOARD=true`, and the app's origin must be in its `ORIGINS` for passkey ceremonies
+started in the console (the local stack already allows `http://localhost:5173`).
+
 Set `mountPath` when the route lives somewhere other than `app/console`, or when `next.config.ts`
 sets a `basePath`: with `basePath: '/app'`, pass `mountPath: '/app/console'`. Only the same-origin
 shape is supported; a dashboard on another origin cannot call the route handler, which sends no
