@@ -34,7 +34,9 @@ the auth API; `ORIGINS` controls WebAuthn browser origins in system config.
 
 ## System Config Bootstrap
 
-These values seed the `system_config` table when missing.
+These values seed the `system_config` table when a row is missing, and are re-applied on every
+boot to rows that were never changed through the admin API. See
+[How System Config Is Loaded](/reference/system-config#how-system-config-is-loaded).
 
 | Variable                         | Purpose                                                                           |
 | -------------------------------- | --------------------------------------------------------------------------------- |
