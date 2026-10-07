@@ -54,7 +54,7 @@ It provides:
 - `getSeamlessUser(...)`
 - `createEnsureCookiesMiddleware(...)`
 - scoped role helpers re-exported from `@seamless-auth/core`
-- public export createSeamlessConsoleProxy(SeamlessConsolePRoxyOptions)`
+- `createSeamlessConsoleProxy(...)` and its `SeamlessConsoleProxyOptions` type
 
 ### Typical shape
 
@@ -104,7 +104,19 @@ app.get(
 | `serviceSecret` | Shared service secret for machine-to-machine calls to the auth instance |
 | `audience`      | Expected audience, usually the auth server URL                  |
 
-Optional values include `jwksKid`, `cookieDomain`, custom cookie names, and `messaging`, `cookieSecure`, `cookeSameSite`, `resolveClientIp`.
+Optional values:
+
+| Option            | Default                            | Purpose                                             |
+| ----------------- | ---------------------------------- | --------------------------------------------------- |
+| `jwksKid`         | `dev-main`, with a startup warning | Active JWKS key ID; set it explicitly in production |
+| `cookieDomain`    | unset                              | Domain attribute for adapter cookies                |
+| `cookieSecure`    | `true`                             | Secure attribute; set `false` only for local HTTP   |
+| `cookieSameSite`  | `none` if secure, else `lax`       | SameSite attribute for adapter cookies              |
+| `resolveClientIp` | Express `trust proxy` hops         | End-user IP forwarded to the auth API               |
+| `messaging`       | unset                              | Deliver auth email and SMS from the adapter         |
+
+Custom cookie names are also accepted (`accessCookieName`, `registrationCookieName`,
+`refreshCookieName`, `preAuthCookieName`).
 
 ### Managed vs self-hosted configuration
 
@@ -248,14 +260,14 @@ createSeamlessAuthServer({
   authServerUrl,
   cookieSecret,
   serviceSecret,
-  issuer,
   audience,
   messaging: {
     email: emailTransport,
     sms: smsTransport,
     handlers: {
-      magicLinkEmail: async (input) => {
-        { /* return a DeliveryResult */ }
+      sendMagicLinkEmail: async (input) => {
+        // Deliver input yourself, then report the outcome as a DeliveryResult.
+        return { accepted: true, provider: 'my-mailer', channel: 'email' }
       },
     },
   },
