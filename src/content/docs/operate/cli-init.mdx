@@ -130,8 +130,17 @@ rest of the stack (Postgres, your app) still runs on Docker Compose.
 - Separate container from the dashboard source, unpacked into `./admin` for modification
 - Don't include the admin console
 
-Full-stack templates cannot host the console yet, so with Next.js the CLI sets this to none without
-asking.
+With a full-stack template such as Next.js, only two options apply. Starting with the seamless-cli release that includes [fells-code/seamless-cli#239](https://github.com/fells-code/seamless-cli/pull/239)
+(after 0.19.0), `api` (the default, and the default under `--yes`) has the web app serve the console
+at `http://localhost:5173/console` through `createSeamlessConsoleProxy`
+([Next.js: Admin Console](/build/nextjs#admin-console)). The CLI writes `SERVE_ADMIN_CONSOLE=true`
+into `web/.env`, the same switch the Express and Fastify starters use, and sets
+`SERVE_ADMIN_DASHBOARD=true` on the auth server. `none` leaves the console out. `--admin=image` and
+`--admin=source` are refused, because a dashboard container on `:5174` would call the app's `/auth`
+cross-origin, which the Next.js route handler does not allow. A templates release whose Next.js
+starter has no `/console` route is scaffolded without the console, with a warning; an explicit
+`--admin=api` with such a release is an error. Earlier CLI releases set the console to none for
+full-stack templates without asking.
 
 ---
 
@@ -268,6 +277,7 @@ For example, the Express template's manifest sets:
 | Placeholder             | Local scaffold value                                              |
 | ----------------------- | ----------------------------------------------------------------- |
 | `{{authServerUrl}}`     | `http://localhost:5312`                                           |
+| `{{authServerIssuer}}`  | `http://auth:5312`, the issuer the local auth container signs with (seamless-cli 0.19.0 or later; the instance URL on a managed instance) |
 | `{{apiUrl}}`            | `http://localhost:3000`                                           |
 | `{{apiToken}}`          | The service token shared with the auth server                     |
 | `{{jwksKid}}`           | The auth server's signing key id                                  |
@@ -308,7 +318,8 @@ The CLI prints the included services and next steps. In the local path, those ar
 2. register in the browser with the owner email you gave `init`, which makes that account an admin
 
 It also prints the local service URLs: auth on `5312`, API on `3000`, web on `5173`, and the admin
-console at `http://localhost:3000/console` or `http://localhost:5174`, depending on the admin mode.
+console at `http://localhost:3000/console` or `http://localhost:5174`, depending on the admin mode
+(`http://localhost:5173/console` for a full-stack template in `api` mode).
 With the `--oauth` starter it adds the OAuth provider summary and redirect URI.
 
 ---

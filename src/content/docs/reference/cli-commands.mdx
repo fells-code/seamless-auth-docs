@@ -74,7 +74,8 @@ same name. A full integration flow for an existing app is not shipped yet.
 - prompts for the owner email, which becomes the admin when you register (prefilled from your
   portal session when you are signed in), or takes `--email`
 - prompts for auth mode
-- optionally includes the admin dashboard (not offered for a full-stack web template)
+- optionally includes the admin dashboard (for a full-stack web template, served by the web app at
+  `/console` or left out, starting with the seamless-cli release that includes [fells-code/seamless-cli#239](https://github.com/fells-code/seamless-cli/pull/239))
 - generates a working local stack
 - writes `seamless.config.json`
 - creates `docker-compose.yml`
@@ -141,7 +142,7 @@ Dockerfile, or a script. Valued flags take either `--flag=value` or `--flag valu
 | `--mobile`    | a mobile template id or alias (`expo`, `mobile`) | none                                                             | Add a mobile starter at `mobile/`; `--yes` never adds one on its own                                       |
 | `--email`     | an email address                                 | your portal session email, when signed in                        | Owner address, which becomes the admin when you register; required under `--yes` without a portal session  |
 | `--auth`      | `docker`, `local`                                | `docker`                                                         | Run the auth server as a Docker image or from local source                                                 |
-| `--admin`     | `api`, `image`, `source`, `none`                 | `api`                                                            | Where the admin console is hosted; a full-stack web template accepts only `none`                           |
+| `--admin`     | `api`, `image`, `source`, `none`                 | `api`                                                            | Where the admin console is hosted; a full-stack web template accepts `api` or `none` (only `none` before the CLI release with #239) |
 | `--force`     | none                                             | off                                                              | Under `--yes`, allow scaffolding into a non-empty directory and rotating an existing managed service token |
 | `--profile`   | any                                              | none                                                             | Accepted and ignored, with a warning; managed connect uses your portal session                             |
 
@@ -244,6 +245,7 @@ For a local (Docker or source) project it then checks:
 | Web     | `http://localhost:5173/health`        | Full-stack project, where the web app serves `/auth`                            |
 | Auth    | `http://localhost:5312/health/status` | Always                                                                          |
 | Console | `http://localhost:3000/console`       | Admin mode `api`; `services.admin.url` in the config, if set, replaces this URL |
+| Console | `http://localhost:5173/console`       | Admin mode `api` with a full-stack template (CLI release with #239)             |
 | Console | `http://localhost:5174`               | Admin mode `image` or `source`                                                  |
 
 Admin mode `none` has no console to probe. For a managed project, `check` skips the Docker, Compose,
