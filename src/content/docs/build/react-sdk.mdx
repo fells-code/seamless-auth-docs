@@ -206,6 +206,41 @@ const { data, error } = await authClient.login({
 })
 ```
 
+### Reading Results
+
+Every request method, on the client and on `useAuth()`, resolves to a `SeamlessAuthResult<T>`. It is
+a plain object with two fields, and exactly one of them is set:
+
+| Outcome | `data`                         | `error`                                                    |
+| ------- | ------------------------------ | ---------------------------------------------------------- |
+| Success | The response body, of type `T` | `null`                                                     |
+| Failure | `null`                         | A `SeamlessAuthError` with `message`, `status`, and `body` |
+
+`const { data, error } = await ...` uses destructuring to pull both fields out of the result object.
+It is the same as `const result = await ...` followed by reading `result.data` and `result.error`.
+Check `error` first, then read `data`:
+
+```ts
+const { data, error } = await authClient.listOAuthProviders()
+
+if (error) {
+  setMessage(error.message)
+  return
+}
+
+setProviders(data.providers)
+```
+
+After the `if (error)` branch returns, TypeScript knows `data` is set. When you only need to know
+whether a call worked, take just the error: `const { error } = await authClient.requestMagicLink()`.
+
+Methods do not throw for HTTP or network failures, so a `try/catch` does not detect a failed call.
+A result has no `.ok`, `.json()`, or `.success`. Two methods do not return a result:
+`isPasskeyPrfSupported()` is a local capability check that returns a boolean, and `authorizedFetch`
+returns the raw `Response` from your own API.
+
+### What It Covers
+
 The headless client covers:
 
 - current-user/session lookup
@@ -216,14 +251,12 @@ The headless client covers:
 - OAuth provider listing, start, and callback completion
 - passkey registration
 - step-up status and verification
-- logout and user deletion
+- authenticator-app (TOTP) status, enrollment, and disable: `getTotpStatus()`,
+  `startTotpEnrollment()`, `verifyTotpEnrollment(code)`, `disableTotp(code)`
+- TOTP step-up: `verifyStepUpWithTotp(code)`
+- logout, signing out every session (`logoutAllSessions()`), and user deletion
 - credential update and deletion
 - organization and organization-member operations
-
-Every request method, on the client and on `useAuth()`, resolves to a `SeamlessAuthResult<T>`:
-`{ data, error }`, with exactly one of them set. Methods do not throw for HTTP or network failures;
-check `error`, which is a `SeamlessAuthError` carrying `status` and the response `body`.
-`isPasskeyPrfSupported()` is the exception: a local capability check that returns a boolean.
 
 ---
 
@@ -328,13 +361,24 @@ Complete the callback by passing the provider `code` and Seamless Auth `state` b
 
 ```tsx
 const { finishOAuthLogin } = useAuth()
+const params = new URLSearchParams(window.location.search)
 
-await finishOAuthLogin({
+const { error } = await finishOAuthLogin({
   providerId: 'google',
-  code: new URLSearchParams(window.location.search).get('code')!,
-  state: new URLSearchParams(window.location.search).get('state')!,
+  code: params.get('code')!,
+  state: params.get('state')!,
 })
+
+if (error) {
+  setMessage(error.message)
+  return
+}
+
+navigate('/dashboard')
 ```
+
+`finishOAuthLogin` does not throw when the callback fails, so check `error` before sending the user
+into the app.
 
 OAuth requires `LOGIN_METHODS` to include `oauth` and at least one configured OAuth provider on the
 auth API.
@@ -402,8 +446,8 @@ function SensitiveActionButton() {
 }
 ```
 
-The current React SDK supports WebAuthn/passkey step-up helpers. The API also supports TOTP
-step-up through the TOTP route surface.
+`useAuth()` also exposes `verifyStepUpWithTotp(code)` for users who have enrolled an authenticator
+app. See [How To Use TOTP And Step-Up](/build/totp-step-up).
 
 ---
 

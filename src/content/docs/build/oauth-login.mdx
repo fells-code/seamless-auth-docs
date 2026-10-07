@@ -176,22 +176,35 @@ import { useAuth, type OAuthProvider } from '@seamless-auth/react'
 export function OAuthButtons() {
   const { listOAuthProviders, startOAuthLogin } = useAuth()
   const [providers, setProviders] = useState<OAuthProvider[]>([])
+  const [message, setMessage] = useState<string | null>(null)
 
   useEffect(() => {
-    void listOAuthProviders().then((result) => setProviders(result.providers))
+    void listOAuthProviders().then(({ data, error }) => {
+      if (error) {
+        setMessage(error.message)
+        return
+      }
+
+      setProviders(data.providers)
+    })
   }, [listOAuthProviders])
 
   async function start(provider: OAuthProvider) {
     // Remember which provider so the callback can finish the right flow.
     sessionStorage.setItem('seamless:oauth:provider', provider.id)
 
-    const result = await startOAuthLogin({
+    const { data, error } = await startOAuthLogin({
       providerId: provider.id,
       redirectUri: `${window.location.origin}/oauth/callback`,
       returnTo: `${window.location.origin}/dashboard`,
     })
 
-    window.location.assign(result.authorizationUrl)
+    if (error) {
+      setMessage(error.message)
+      return
+    }
+
+    window.location.assign(data.authorizationUrl)
   }
 
   return (
@@ -201,10 +214,14 @@ export function OAuthButtons() {
           Continue with {provider.name}
         </button>
       ))}
+      {message && <p>{message}</p>}
     </div>
   )
 }
 ```
+
+Both helpers resolve to `{ data, error }` (see [Reading Results](/build/react-sdk#reading-results)).
+The provider list is `data.providers` and the provider's sign-in URL is `data.authorizationUrl`.
 
 `returnTo` must be a full URL. The auth API only preserves it when its origin is allowed by the
 configured origins.
@@ -244,13 +261,15 @@ export function OAuthCallback() {
         return
       }
 
-      try {
-        await finishOAuthLogin({ providerId, code, state })
-        sessionStorage.removeItem('seamless:oauth:provider')
-        navigate('/dashboard', { replace: true })
-      } catch {
-        setError('OAuth login failed.')
+      const result = await finishOAuthLogin({ providerId, code, state })
+      sessionStorage.removeItem('seamless:oauth:provider')
+
+      if (result.error) {
+        setError(result.error.message)
+        return
       }
+
+      navigate('/dashboard', { replace: true })
     }
 
     void finish()
@@ -261,6 +280,15 @@ export function OAuthCallback() {
   return <p>Signing you in...</p>
 }
 ```
+
+`finishOAuthLogin` never throws. A failed callback (an expired `state`, a provider that refuses the
+code, an unverified email) resolves to a result with `error` set, so a `try/catch` around it would
+fall through to `navigate('/dashboard')` and send a signed-out user into the app. Check `error` and
+return before navigating. On success the provider refreshes its session before the promise
+resolves, so `useAuth()` is already signed in when the dashboard renders.
+
+The snippet reads `result.error` instead of destructuring because the component already has an
+`error` state variable.
 
 When the Express adapter handles `/auth/oauth/:providerId/callback`, it verifies the auth API
 response and sets the access and refresh cookies.

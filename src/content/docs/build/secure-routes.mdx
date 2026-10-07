@@ -52,7 +52,6 @@ app.use(
     authServerUrl: process.env.AUTH_SERVER_URL!,
     cookieSecret,
     serviceSecret: process.env.SERVICE_SECRET!,
-    issuer: process.env.JWT_ISSUER!,
     audience: process.env.JWT_AUDIENCE!,
     jwksKid: process.env.SEAMLESS_JWKS_KID,
   }),
@@ -275,8 +274,13 @@ function SensitiveActionButton() {
   const { refreshStepUpStatus, verifyStepUpWithPasskey } = useAuth()
 
   async function run() {
-    const status = await refreshStepUpStatus()
-    const fresh = status?.fresh ? true : (await verifyStepUpWithPasskey()).success
+    const { data } = await refreshStepUpStatus()
+    let fresh = data?.fresh === true
+
+    if (!fresh) {
+      const { error } = await verifyStepUpWithPasskey()
+      fresh = !error
+    }
 
     if (!fresh) return
 
@@ -289,6 +293,10 @@ function SensitiveActionButton() {
   return <button onClick={() => void run()}>Recover device</button>
 }
 ```
+
+Both helpers resolve to `{ data, error }` (see [Reading Results](/build/react-sdk#reading-results)).
+`data` is `null` when the status request fails, and a dismissed passkey prompt comes back as
+`error`, so `fresh` is only `true` when the session really is fresh.
 
 The current Express `requireAuth(...)` middleware does not enforce step-up freshness for arbitrary
 app routes. Use step-up for built-in auth/admin operations that require it, and add an explicit
