@@ -158,27 +158,71 @@ the session (`refreshSession()`), not to retry the request.
 
 ## Sign-In Flows
 
-The flows are the web's, with the client holding the tokens instead of a cookie:
+The flows are the web's, with the client holding the tokens instead of a cookie. Signing in takes
+two steps, as in the React SDK's [Custom Auth UI](/build/react-sdk#custom-auth-ui): `login()`
+starts sign-in and returns the `loginMethods` the account can use, then one of those methods
+completes it. Every call resolves to `{ data, error }`, so check `error` before moving on (see
+[Reading Results](/build/react-sdk#reading-results)).
 
 ```ts
-const client = useAuthClient()
-const { login, handlePasskeyLogin, markSignedIn, refreshSession } = useAuth()
+import { useState } from 'react'
+import { useAuth, useAuthClient, usePasskeySupport } from '@seamless-auth/react-native'
 
-// 1. Identifier first. The answer lists what the account can use and hands the
-//    client the ephemeral token for the rest of the flow.
-const { data } = await login(identifier, passkeySupported)
+function useSignIn() {
+  const client = useAuthClient()
+  const { login, handlePasskeyLogin, refreshSession } = useAuth()
+  const { passkeySupported } = usePasskeySupport()
+  const [message, setMessage] = useState('')
 
-// 2a. Passkey, when offered and the device supports one.
-const passkey = await handlePasskeyLogin()
+  // 1. Identifier first. The answer lists what the account can use and hands the
+  //    client the ephemeral token for the rest of the flow.
+  async function start(identifier: string) {
+    const { data, error } = await login(identifier, passkeySupported)
 
-// 2b. Or a code.
-await client.requestLoginEmailOtp()
-await client.verifyLoginEmailOtp(code)
+    if (error) {
+      setMessage(error.message)
+      return
+    }
 
-// 3. The provider loaded its state before the tokens existed.
-markSignedIn()
-await refreshSession()
+    // 2. One method, not both. A passkey when offered and the device has one;
+    //    handlePasskeyLogin() refreshes the session itself once it succeeds.
+    if (passkeySupported && data.loginMethods?.includes('passkey')) {
+      const { error: passkeyError } = await handlePasskeyLogin()
+
+      if (!passkeyError) return
+    }
+
+    // Otherwise, or after a dismissed prompt, a code.
+    if (!data.loginMethods?.includes('email_otp')) {
+      setMessage('No sign-in method this screen supports is enabled for this account.')
+      return
+    }
+
+    const { error: otpError } = await client.requestLoginEmailOtp()
+    setMessage(otpError ? otpError.message : 'Check your email for a sign-in code.')
+  }
+
+  // 3. The code screen. The client stores the tokens the verify call issues, but
+  //    the provider only learns about them from refreshSession().
+  async function submitCode(code: string) {
+    const { error } = await client.verifyLoginEmailOtp(code)
+
+    if (error) {
+      setMessage(error.message)
+      return
+    }
+
+    const { error: sessionError } = await refreshSession()
+    if (sessionError) setMessage(sessionError.message)
+  }
+
+  return { message, start, submitCode }
+}
 ```
+
+A phone identifier offers `phone_otp` instead, which takes `requestLoginPhoneOtp()` and
+`verifyLoginPhoneOtp(code)` in the same places. There is no need to call `markSignedIn()`: a
+successful `refreshSession()` records the sign-in itself.
 
 Passkey errors reach you through `getWebAuthnErrorDetail(error)?.name` with the WebAuthn names
 (`NotAllowedError` for a dismissed prompt, `InvalidStateError` for a device that already holds
