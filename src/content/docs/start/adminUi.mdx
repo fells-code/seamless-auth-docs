@@ -13,7 +13,8 @@ import Image from '../../../components/Image.astro';
 The Seamless Auth Admin UI is the operator-facing application for managing and investigating a
 Seamless Auth deployment.
 
-It runs as a separate app and uses the same auth system as the rest of your stack.
+It runs as a separate app and uses the same auth system as the rest of your stack. In a project
+scaffolded with `seamless init`, your API serves it at `http://localhost:3000/console` by default.
 
 ---
 
@@ -23,11 +24,12 @@ Dashboard access is controlled by scoped admin roles.
 
 In the current dashboard app:
 
-- unauthenticated users are redirected to `/unauthenticated`
-- authenticated users without admin read access should not reach the main operator routes
+- unauthenticated users are redirected to `/unauthenticated`, which links to the dashboard
+  sign-in at `/login`
+- authenticated users without admin read access are also redirected to `/unauthenticated`
 - `admin`, `admin:read`, and `admin:write` can read dashboard data
 - `admin` and `admin:write` can perform write actions
-- sensitive write actions can require fresh step-up verification
+- sensitive write actions require fresh step-up verification, by passkey or, when enabled, TOTP
 
 <Aside type="note">
   The dashboard is an operational tool, not a hidden control plane. It works through explicit API
@@ -43,13 +45,17 @@ The current dashboard app includes:
 - Overview
 - Users
 - Organizations
+- Enrollment
+- Coverage
 - Sessions
 - Events
 - Security
 - System configuration
 - Profile
 
-The most important starter-path sections are the first seven.
+Enrollment shipped in dashboard `v0.8.0`. Coverage is on `main` but not yet in a tagged release.
+A project scaffolded by `seamless-cli` currently pins dashboard `v0.7.0`, which has neither, so
+you will not see those two screens there yet.
 
 ---
 
@@ -77,16 +83,17 @@ Use the overview screen to quickly answer:
 
 Use the users screen and user detail view to:
 
-- browse identities
-- edit user details
+- browse and search identities
+- create, edit, and delete users
 - update global roles
 - inspect credentials
 - review user sessions and anomalies
 - revoke one or all user sessions
 - start device replacement recovery
 
-Device replacement recovery revokes sessions, removes passkeys, disables TOTP credentials, and
-returns counts only. It requires fresh step-up authentication.
+Device replacement recovery revokes sessions, removes passkeys, and disables TOTP credentials, and
+returns counts only. It requires `admin:write`, fresh step-up authentication, and a record of how
+you proofed the user's identity (in person, or a remote exception with a named approver).
 
 <Image src="/adminUsers2.png" alt="Seamless Admin users view" caption="Users view" />
 <Image src="/adminUsersTable.png" alt="Seamless Admin users view" caption="Users view" />
@@ -98,7 +105,7 @@ returns counts only. It requires fresh step-up authentication.
 
 Use the organizations screen to:
 
-- create organization records
+- create and delete organization records
 - edit organization name and slug
 - review membership counts
 - add and remove members
@@ -106,6 +113,26 @@ Use the organizations screen to:
 
 Organization routes are separate from global user roles. Use them when access depends on tenant or
 workspace context.
+
+---
+
+### Enrollment
+
+Use the enrollment screen to:
+
+- filter users by organization, passkey enrollment status, and how they were added
+- invite users who still need a passkey (requires `admin:write`)
+
+---
+
+### Coverage
+
+Use the coverage screen to:
+
+- see how many users hold a phishing-resistant credential, overall and by organization
+- review the coverage trend, authenticator mix, and sign-in mix
+- check the login policy the deployment enforces
+- download the report as CSV
 
 ---
 
@@ -145,6 +172,7 @@ Use the security screen to:
 - inspect failed login pressure
 - pivot into suspicious events
 - support lockout-policy investigations
+- verify the audit trail hash chain and export a period of events (export requires step-up)
 
 <Image src="/adminSecurity2.png" alt="Seamless Admin security view" caption="Security view" />
 <Image src="/adminSecurityTable.png" alt="Seamless Admin security view" caption="Security view" />
@@ -155,14 +183,16 @@ Use the security screen to:
 
 Use the system screen to review and update runtime auth configuration:
 
+- app name
 - default and available roles
-- login methods
-- passkey fallback policy
+- login methods, passkey fallback, and passkey enrollment prompts
+- "Phishing-resistant only" mode (not yet in a tagged release)
 - OAuth provider configuration
-- token TTLs
+- access and refresh token TTLs
 - rate limit and slowdown values
 - account lockout policy
-- WebAuthn relying party and browser origins
+- WebAuthn relying party ID and allowed origins
+- authenticator policy, such as synced passkeys and AAGUID allow and deny lists
 
 OAuth provider client secrets stay in environment variables referenced by provider config. Do not
 paste raw provider secrets into the dashboard.
@@ -183,11 +213,11 @@ paste raw provider secrets into the dashboard.
 
 ## How It Connects To The Stack
 
-The dashboard sits on top of:
+The dashboard calls `<API_URL>/auth/*` on your application backend, and the server adapter
+mounted there forwards each call to the auth API. Through the adapter, it sits on top of:
 
-- admin routes such as `/admin/*`
+- admin routes such as `/admin/*`, including admin session routes under `/admin/sessions/*`
 - internal metrics routes such as `/internal/*`
-- session routes such as `/sessions/*`
 - system config routes such as `/system-config/*`
 - step-up routes such as `/step-up/*`
 

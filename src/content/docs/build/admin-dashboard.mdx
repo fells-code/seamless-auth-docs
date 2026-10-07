@@ -5,11 +5,14 @@ sidebar:
   order: 7
 ---
 
+import { Aside } from '@astrojs/starlight/components';
+
 `seamless-auth-admin-dashboard` is the operator-facing application for managing and observing a
 Seamless Auth deployment.
 
-It is a separate frontend app that runs alongside the auth stack, not a hidden screen inside the
-auth server.
+It is a separate React/Vite frontend built as static assets, not a hidden screen inside the auth
+server. It talks to your application backend through the Seamless Auth server adapter, and the
+adapter talks to the auth API.
 
 ---
 
@@ -17,9 +20,10 @@ auth server.
 
 Use the dashboard when you need a UI for:
 
-- browsing and managing users
+- browsing, creating, editing, and deleting users
 - editing global user roles
 - managing organizations and organization memberships
+- tracking passkey enrollment and sending enrollment invites
 - inspecting and revoking sessions
 - preparing an account for device replacement
 - reviewing auth events
@@ -33,36 +37,53 @@ It is the operational layer for your auth system.
 
 ## Main Areas
 
-The current dashboard app includes routes for:
+The dashboard defines these routes in `src/App.tsx`. Screens inside the operator shell require
+admin read access:
 
-- overview
-- users
-- user detail
-- organizations
-- sessions
-- events
-- security
-- system configuration
-- profile
+| Route            | Screen                                                          |
+| ---------------- | --------------------------------------------------------------- |
+| `/`              | Overview                                                        |
+| `/users`         | Users                                                           |
+| `/users/:id`     | User detail                                                     |
+| `/organizations` | Organizations                                                   |
+| `/enrollment`    | Passkey enrollment directory and invites                        |
+| `/coverage`      | Authentication coverage report                                  |
+| `/sessions`      | Sessions                                                        |
+| `/events`        | Events                                                          |
+| `/security`      | Security signals and the audit trail panel                      |
+| `/system`        | System configuration                                            |
+| `/profile`       | Profile                                                         |
 
-That maps closely to the admin, internal, system-config, and session route groups exposed by the auth
-API.
+Public routes handle sign-in and redirects:
+
+| Route               | Purpose                                                       |
+| ------------------- | ------------------------------------------------------------- |
+| `/login`            | Dashboard sign-in (passkey, magic link, OTP, and OAuth flows) |
+| `/verify-magiclink` | Magic link verification                                       |
+| `/oauth/callback`   | OAuth provider callback                                       |
+| `/unauthenticated`  | Landing screen for signed-out or non-admin users              |
+
+<Aside type="note">
+  Maturity varies by screen. Enrollment shipped in dashboard `v0.8.0`. The Coverage page, the
+  Security audit trail panel, and the "Phishing-resistant only" setting are on `main` but not yet
+  in a tagged release. `seamless-cli` and the auth API image currently pin dashboard `v0.7.0`,
+  which has none of these.
+</Aside>
 
 ---
 
 ## Access Model
 
-The dashboard uses `@seamless-auth/react` and expects to talk to a backend/API layer that owns auth
-cookies.
-
-Current app shape:
+The dashboard uses `@seamless-auth/react` and every data call goes through the server adapter:
 
 ```txt
-Admin Dashboard
-  -> API URL from runtime config or Vite env
-  -> @seamless-auth/react provider
-  -> admin-protected routes
+dashboard  ->  <API_URL>/auth/*  ->  server adapter  ->  Seamless Auth API
 ```
+
+The adapter reads the dashboard's session cookie and forwards a bearer token upstream. Point the
+dashboard at the origin that mounts the adapter at `/auth`, normally your own application backend.
+Pointing it at the Seamless Auth API directly does not work, because the API does not serve the
+`/auth` prefix.
 
 Dashboard access is based on scoped admin roles:
 
@@ -72,8 +93,12 @@ Dashboard access is based on scoped admin roles:
 | `admin:read`  | Can read admin screens and data         |
 | `admin:write` | Can perform write actions and also read |
 
-Write actions are guarded separately from route access. Some sensitive writes require fresh step-up
-authentication.
+Route access is gated on `admin:read` and write controls on `admin:write`. Both checks run in the
+browser for user experience only; the auth API is the enforcement point for every request.
+
+Sensitive writes require fresh step-up authentication, including user create, edit, and delete,
+session revocation, device-replacement recovery, OAuth provider changes, and audit trail export.
+The dashboard tries a passkey first and falls back to TOTP when the account has it enabled.
 
 ---
 
@@ -81,18 +106,31 @@ authentication.
 
 ### Users
 
-The users area supports user search, user detail review, role edits, session review, credential
-review, anomaly context, and user lifecycle actions.
+The users area supports user search, user creation, user detail review, role edits, session
+review and revocation, credential review, anomaly context, and user deletion.
 
 ### Organizations
 
-The organizations area uses `/admin/organizations/*` routes to create organizations, edit names and
-slugs, list members, and manage membership roles and scopes.
+The organizations area uses `/admin/organizations/*` routes to create and delete organizations,
+edit names and slugs, list members, and add, update, or remove members with roles and scopes.
+
+### Enrollment
+
+The enrollment area uses `/admin/enrollment` to filter users by organization, passkey enrollment
+status, and how they were added, and `/admin/enrollment/invites` to invite users who still need a
+passkey. Sending invites requires `admin:write`.
+
+### Coverage
+
+The coverage area reads `/admin/reports/authentication-coverage`. It shows how many users hold a
+phishing-resistant credential, overall and by organization, with a trend, the authenticator mix,
+the sign-in mix, and the enforced login policy. The report can be downloaded as CSV.
 
 ### Sessions
 
-The sessions area uses `/admin/sessions` and revocation routes to inspect active sessions across
-users and revoke stale or risky sessions.
+The sessions area uses `/admin/sessions` to list active sessions across users and
+`/admin/sessions/by-id/:id` to revoke individual or selected sessions. The user detail page uses
+`/admin/sessions/:userId/revoke-all` to revoke every session for one user.
 
 ### Device replacement recovery
 
@@ -102,41 +140,63 @@ The user detail page can call:
 POST /admin/users/:userId/recovery/device-replacement
 ```
 
-That route requires `admin:write` access and fresh step-up authentication. It revokes sessions,
-removes passkeys, disables TOTP credentials, and returns counts only.
+That route requires `admin:write` access and fresh step-up authentication. The request must record
+identity proofing (`in_person` or `remote_exception`, an evidence reference such as a ticket
+number, and a named approver for a remote exception). Revoking sessions, removing passkeys, and
+disabling TOTP credentials each default to on. The response returns counts only.
+
+### Audit trail
+
+The security area includes an audit trail panel. It runs the auth event hash chain check through
+`/admin/auth-events/integrity` and exports a period of events as NDJSON through
+`/admin/auth-events/export` after a fresh step-up.
 
 ### System configuration
 
-The system configuration area can update:
+The system configuration area reads and writes `/system-config/admin` and can update:
 
+- app name
 - available and default roles
-- login methods
-- passkey fallback policy
-- OAuth provider configuration
-- token TTLs
+- login methods, passkey fallback, and passkey enrollment prompts
+- the "Phishing-resistant only" mode, which refuses every sign-in that is not a passkey
+- OAuth provider configuration, through `/system-config/oauth-providers`
+- access and refresh token TTLs
 - rate limit and slowdown values
 - lockout policy
-- WebAuthn relying party and origin settings
+- WebAuthn relying party ID and allowed origins
+- authenticator policy (synced passkeys, attachment, user verification, attestation, and AAGUID
+  allow and deny lists)
 
 OAuth provider client secrets are referenced by env var name, not entered as raw secret values in
-the dashboard.
+the dashboard. Changing the relying party ID invalidates passkeys registered against the old ID,
+and the dashboard asks for confirmation before saving that change.
 
 ---
 
 ## Runtime Configuration Model
 
-The dashboard is built as static assets and is designed for runtime config injection.
+The dashboard is built as static assets and is designed for runtime config injection, so the same
+built image can be pointed at different environments without a rebuild.
 
-That matters because the same built image can be pointed at different environments without a
-rebuild.
+`src/lib/runtimeConfig.ts` resolves the API base in this order:
 
-Current runtime model:
+1. `window.__SEAMLESS_CONFIG__.API_URL`, from `/config.js`
+2. the page's own origin, when built with `VITE_SAME_ORIGIN=true`
+3. the baked `VITE_API_URL`
 
-- `index.html` loads `/config.js`
-- container startup writes `window.__SEAMLESS_CONFIG__`
-- the app reads runtime config first, then falls back to `import.meta.env`
+In the container image, `index.html` loads `/config.js`, and `entrypoint.sh` writes
+`window.__SEAMLESS_CONFIG__` from the `API_URL` env var at startup. The entrypoint rejects a value
+that does not start with `http://` or `https://`. The app throws on startup if no API URL resolves.
 
-For local development, `VITE_API_URL` is the main value to care about.
+| Variable           | When it is read | Purpose                                                             |
+| ------------------ | --------------- | ------------------------------------------------------------------- |
+| `API_URL`          | Container start | Origin serving the server adapter, written into `config.js`         |
+| `VITE_API_URL`     | Build time      | Baked API base for local development and the root build             |
+| `VITE_SAME_ORIGIN` | Build time      | `true` derives the API base from `window.location.origin`           |
+| `VITE_BASE_PATH`   | Build time      | Asset and router base path: `/` by default, `/console/` for console |
+
+For local development, copy `.env.example` to `.env` and set `VITE_API_URL` to the origin that runs
+your server adapter (`http://localhost:3000` in the example).
 
 ---
 
@@ -144,11 +204,44 @@ For local development, `VITE_API_URL` is the main value to care about.
 
 You can use the dashboard in a few ways:
 
-- run the official image
+- run the official image, `ghcr.io/fells-code/seamless-auth-admin-dashboard`
 - clone the source and customize it
+- serve it at `/console` from your application API or an auth instance
 - include it from `seamless-cli` during project setup
 
-The CLI supports including the admin dashboard and lets you choose image mode or source mode.
+### Official image
+
+The image is published to GHCR on each version tag (`vX.Y.Z`), and `latest` tracks the newest
+version. Pin an explicit `vX.Y.Z` tag in production. The image serves the build through
+unprivileged nginx on port `8080` and includes a health check at `/health`.
+
+```bash
+docker run -p 8080:8080 \
+  -e API_URL=https://app.example.com \
+  ghcr.io/fells-code/seamless-auth-admin-dashboard:v0.8.0
+```
+
+### Served at `/console`
+
+`npm run build:console` sets `VITE_BASE_PATH=/console/` and `VITE_SAME_ORIGIN=true`, so the
+dashboard runs under `/console` and calls its own origin. The auth API image bundles this build at
+a pinned dashboard tag and serves it at `/console` unless `SERVE_ADMIN_DASHBOARD=false`. The
+Seamless API templates reverse-proxy it from the auth server at `/console` when
+`SERVE_ADMIN_CONSOLE=true`, so the dashboard shares the origin and cookie scope of `/auth`.
+
+### From `seamless-cli`
+
+`seamless init` asks where the admin console is hosted, or takes `--admin=<mode>`:
+
+| Mode     | Result                                                                  |
+| -------- | ----------------------------------------------------------------------- |
+| `api`    | Default. Your API serves the console at `http://localhost:3000/console` |
+| `image`  | Separate `admin` container from the official image                      |
+| `source` | Separate `admin` container built from source unpacked into `admin/`     |
+| `none`   | No admin console                                                        |
+
+The `image` and `source` modes pin the same dashboard tag. Full-stack templates cannot host the
+console yet, so only `none` applies to them.
 
 ---
 
@@ -159,12 +252,11 @@ The dashboard sits on top of the same auth system the rest of the ecosystem uses
 It depends on:
 
 - auth sessions being issued correctly
+- the server adapter mounted at `/auth`
 - scoped admin access
-- admin and internal API routes
-- session revocation routes
-- organization routes
-- system configuration endpoints
-- step-up routes for sensitive writes
+- admin routes under `/admin/*` and metrics routes under `/internal/*`
+- system configuration routes under `/system-config/*`
+- step-up routes under `/step-up/*` for sensitive writes
 
 It does not replace the auth server. It visualizes and operates it.
 
