@@ -7,8 +7,6 @@ sidebar:
 
 import { Aside } from '@astrojs/starlight/components';
 
-# Auth API Routes
-
 This page maps the current route groups exposed by `seamless-auth-api`.
 
 It is not a replacement for the generated OpenAPI document, but it gives you a reliable top-level
@@ -218,6 +216,7 @@ All admin routes require authenticated admin access. Read routes accept `admin`,
 | `POST`   | `/admin/organizations`                                 | Create organization                 |
 | `GET`    | `/admin/organizations/:organizationId`                 | Get organization                    |
 | `PATCH`  | `/admin/organizations/:organizationId`                 | Update organization                 |
+| `DELETE` | `/admin/organizations/:organizationId`                 | Delete organization                 |
 | `GET`    | `/admin/organizations/:organizationId/members`         | List organization members           |
 | `POST`   | `/admin/organizations/:organizationId/members`         | Add organization member             |
 | `PATCH`  | `/admin/organizations/:organizationId/members/:userId` | Update organization member          |
@@ -225,6 +224,33 @@ All admin routes require authenticated admin access. Read routes accept `admin`,
 
 The device-replacement recovery route requires fresh step-up authentication and returns counts for
 revoked sessions, removed passkeys, and disabled TOTP credentials.
+
+Deleting an organization also deletes every membership in it, in one transaction. The member
+accounts themselves are not deleted. Sessions scoped to the organization stay active with no
+organization, though an access token issued before the deletion carries the old organization ID
+until it expires. There is no way to delete an organization through the user-facing
+`/organizations` routes; deletion is admin only.
+
+### Paging and filtering the admin collections
+
+The four admin list routes take a window and return `total`. `total` counts every row matching the
+filter, not the rows in the returned page, so a caller can tell whether there is another page to
+ask for.
+
+| Route                  | `limit`              | `offset`    | Filters                                                    |
+| ---------------------- | -------------------- | ----------- | ---------------------------------------------------------- |
+| `/admin/organizations` | 1 to 100, default 50 | default `0` | `search` over name and slug, case-insensitive              |
+| `/admin/sessions`      | 1 to 100, default 50 | default `0` | none                                                       |
+| `/admin/auth-events`   | 1 to 100, default 10 | default `0` | `userId`, `actorUserId`, `sessionId`, `type`, `from`, `to` |
+| `/admin/users`         | default 50           | default `0` | `search` over email and phone, case-insensitive            |
+
+Sending no parameters returns the first page, not the whole collection. A deployment with more
+rows than the default receives only that first page, which is what `total` is for.
+
+`/admin/users` is the exception to the rest of this table: it reads these parameters but does not
+declare them, so they do not appear in `openapi.json` and a generated client will not know they
+exist. It also applies no maximum to `limit`. The other three validate the window and reject one
+outside the allowed range with a `400`.
 
 ---
 

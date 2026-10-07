@@ -1,6 +1,6 @@
 ---
 title: "Self-Hosted Quickstart"
-description: "The fastest way to run Seamless Auth yourself: scaffold a project with the CLI, start the local stack with Docker, and complete the first admin bootstrap flow."
+description: "The fastest way to run Seamless Auth yourself: scaffold a project with the CLI, start the local stack with Docker, and sign in as the first admin."
 sidebar:
   order: 4
 ---
@@ -11,7 +11,7 @@ import Image from '../../../components/Image.astro';
 ## Self-Hosted Quickstart
 
 This guide walks through the fastest supported way to run Seamless Auth yourself: scaffold a
-project with the CLI, start the stack locally, and complete the first admin bootstrap flow.
+project with the CLI, start the stack locally, and sign in as the first admin.
 
 <Aside type="tip">
   Want authentication working without running a database or an auth server? Use the
@@ -23,9 +23,9 @@ project with the CLI, start the stack locally, and complete the first admin boot
 
 ## What you will need to complete this walkthrough
 
-- A machine with node > 24 installed
-- A way to run a postgres database locally (we recommend via a container)
-- A terminal like application or interface
+- Node 22 or newer (the CLI's supported range is `>=22`)
+- Docker with Docker Compose, which runs Postgres and every other service for you
+- A terminal
 - A web browser
 
 <Aside type="note">
@@ -47,7 +47,7 @@ Today it is primarily used to:
 - Optionally include the admin dashboard
 - Generate local secrets and service-to-service wiring
 - Validate the generated local stack
-- Bootstrap the first admin user
+- Make the email you give it the first admin
 
 <Aside type="note">
   The current CLI is opinionated on purpose. It prefers giving you a working local stack over
@@ -75,9 +75,11 @@ npx seamless-cli --help
 
 This will show:
 
-- Available commands (`init`, `check`, `bootstrap-admin`)
+- Every command (`init`, `templates`, `check`, `verify`, and the instance commands such as
+  `users` and `config`)
 - Usage patterns
-- Default CLI behavior
+
+Every command also documents itself, for example `npx seamless-cli init --help`.
 
 ---
 
@@ -90,13 +92,8 @@ npx seamless-cli init my-app
 cd my-app
 ```
 
-You can also use the project-name shorthand:
-
-```bash
-npx seamless-cli my-app
-```
-
-Running the CLI with no command prints help.
+Scaffolding always goes through `init`. A bare project name (`npx seamless-cli my-app`) is rejected
+as an unknown command, and running the CLI with no command prints help.
 
 ---
 
@@ -104,11 +101,14 @@ Running the CLI with no command prints help.
 
 The CLI will guide you through:
 
-- The frontend framework
+- The web starter
 - The backend framework
-- How to run the auth server
-- Whether to include the admin dashboard
-- Whether to use the dashboard image or source
+- Whether to include a mobile starter
+- **Your email address.** It becomes the owner, and registering with it later makes you the first
+  admin
+- How to run the auth server (Docker or local)
+- Where the admin console is hosted (served by your API at `/console`, a separate container, or
+  not at all)
 
 <Aside type="tip">
   Choose Docker mode for the most reliable local environment. It closely mirrors production
@@ -186,22 +186,29 @@ You should see the starter UI with:
 
 ---
 
-## Step 6: Bootstrap Your First Admin
+## Step 6: Register As The First Admin
 
-Once the stack is running, create your first admin invite:
+There is no separate admin command. `init` wrote the email you gave it to the auth server as
+`OWNER_EMAIL`, and the auth server grants the admin role to the account created with that address.
 
-```bash
-npx seamless-cli bootstrap-admin admin@example.com
-```
+1. In the web app at `http://localhost:5173`, register with the email you gave `init`.
+2. When asked for a code, read it from the API logs. In local development the starter API logs
+   codes instead of sending email:
 
-If the CLI can resolve the bootstrap secret locally, it will use it automatically. Otherwise it
-will prompt you for the secret.
+   ```bash
+   docker compose logs -f api
+   ```
 
-After the invite is created:
+   Look for a line like `Dev OTP for you@example.com: 123456`.
+3. Enter the code, and enroll a passkey when prompted.
 
-- open the registration URL
-- complete the registration flow with the invited email
-- the resulting user will receive admin access
+You are now signed in as an admin. Open the admin console at `http://localhost:3000/console` (or
+`http://localhost:5174` if you chose a separate dashboard container).
+
+<Aside type="caution">
+  The grant happens only when the account is created. Changing `OWNER_EMAIL` after that account
+  exists promotes nobody.
+</Aside>
 
 ---
 
@@ -213,7 +220,7 @@ You now have a local stack with:
 - A running auth server
 - Connected frontend and backend services
 - Passwordless authentication enabled
-- A bootstrap path for your first admin user
+- An admin account for the email you gave `init`
 - A CLI that can also check the generated stack
 
 <Card title="What You Just Built">
@@ -222,14 +229,7 @@ You now have a local stack with:
 
 ---
 
-## Prompt for AI Help
-
-Copy this into ChatGPT:
-
-"Help me customize a Seamless Auth project created with seamless-cli. I want to add roles, protect routes, and understand which package does what."
-
----
-
 ## Next Step
 
-Continue to [Create Your First User](/start/firstuser).
+Continue to [Create Your First User](/start/firstuser) for what happens during sign-in, or
+[Create Your First Admin](/start/firstadmin) for how the owner grant works.

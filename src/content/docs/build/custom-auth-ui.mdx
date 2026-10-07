@@ -2,12 +2,10 @@
 title: "How To Build Your Own Auth UI"
 description: "Use this guide when the built-in AuthRoutes screens work functionally, but your application needs its own layout, copy, validation, or route structure."
 sidebar:
-  order: 6
+  order: 8
 ---
 
 import { Aside } from '@astrojs/starlight/components';
-
-# How To Build Your Own Auth UI
 
 Use this guide when the built-in `AuthRoutes` screens work functionally, but your application needs
 its own layout, copy, validation, or route structure.
@@ -57,8 +55,12 @@ export function App() {
 You only need `AuthRoutes` if you want the packaged screens:
 
 ```tsx
-import { AuthProvider, AuthRoutes } from '@seamless-auth/react'
+import { AuthProvider } from '@seamless-auth/react'
+import { AuthRoutes } from '@seamless-auth/react/routes'
 ```
+
+`AuthRoutes` ships from the `/routes` subpath (since 0.14.0) and is the only part of the SDK that
+needs `react-router-dom`. A fully custom UI does not install react-router at all.
 
 For fully custom UI, keep `AuthProvider` and route to your own components instead.
 

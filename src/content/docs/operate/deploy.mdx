@@ -7,8 +7,6 @@ sidebar:
 
 import { Aside } from '@astrojs/starlight/components';
 
-# Running In Production
-
 There are two ways to run Seamless Auth in production. The managed offering hosts the auth instance
 for you. Self-hosting means you provision and operate the stack yourself.
 
@@ -35,11 +33,11 @@ For self-hosting, the public CLI command surface is:
 
 ```bash
 seamless init [project-name]
+seamless templates list
 seamless check
-seamless bootstrap-admin [email]
 seamless verify
 seamless login
-seamless profile <list|add|use|remove>
+seamless profile <list|add|use|remove|login>
 seamless --help
 seamless --version
 ```

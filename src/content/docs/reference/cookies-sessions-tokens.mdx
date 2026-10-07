@@ -5,8 +5,6 @@ sidebar:
   order: 4
 ---
 
-# Cookie, Session, And Token Reference
-
 Seamless Auth uses signed browser cookies at the app boundary and bearer tokens at the auth API
 boundary.
 
@@ -181,6 +179,7 @@ Access tokens include:
 | `typ`    | `access`                              |
 | `roles`  | User roles                            |
 | `org_id` | Active organization ID, when selected |
+| `aud`    | Issuer / auth-server URL              |
 
 Refresh tokens are currently opaque random strings. The auth API refresh endpoint expects the raw
 opaque refresh token in the bearer header, not the access JWT.

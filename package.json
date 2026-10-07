@@ -4,13 +4,13 @@
   "version": "0.0.0",
   "type": "module",
   "engines": {
-    "node": ">=24 <25"
+    "node": ">=22"
   },
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "lint": "eslint .",
+    "lint": "eslint . && node scripts/check-no-h1.mjs",
     "format": "prettier -w .",
     "typecheck": "astro check",
     "prepare": "husky"
