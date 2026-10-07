@@ -4,3 +4,4 @@ node_modules
 public
 src/content/docs
 package-lock.json
+.claude
