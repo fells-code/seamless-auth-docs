@@ -37,7 +37,7 @@ seamless-auth-admin-dashboard
 
 | Project                         | What it is                                      | Use it when                                                                                                   |
 | ------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `seamless-cli`                  | CLI for scaffolding and checking a local stack  | You want a working React + Express project with generated auth wiring                                         |
+| `seamless-cli`                  | CLI for scaffolding and checking a local stack  | You want a working project (React or Next.js web, Express or Fastify API, optional Expo app) with auth wired  |
 | `seamless-auth-api`             | Self-hostable auth server                       | You need the passwordless auth engine itself                                                                  |
 | `@seamless-auth/core`           | Framework-agnostic server auth primitives       | You are building your own backend adapter                                                                     |
 | `@seamless-auth/express`        | Official Express adapter                        | Your backend is Express (the most mature adapter path)                                                        |
@@ -129,8 +129,9 @@ That separation matters because:
 
 ### 5. The CLI Connects Everything
 
-`seamless-cli` is the fastest way to get a working stack. It currently scaffolds a React
-frontend, an Express API, the auth server in Docker or local mode, and an optional admin dashboard.
+`seamless-cli` is the fastest way to get a working stack. It scaffolds a web app (React or a
+full-stack Next.js app), an API (Express or Fastify) unless the web template serves `/auth` itself,
+an optional Expo mobile app, the auth server in Docker or local mode, and an optional admin console.
 
 It also includes `check`, `verify`, and admin commands against a running instance. The first admin
 is the account registered with the owner email `init` asks for. The current `../seamless-cli` source

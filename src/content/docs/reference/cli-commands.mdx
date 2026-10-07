@@ -13,27 +13,30 @@ The npm package is named `seamless-cli`. The executable binary is named `seamles
 
 ## Command Summary
 
-| Command                            | Purpose                                                                                    |
-| ---------------------------------- | ------------------------------------------------------------------------------------------ |
-| `seamless init [project-name]`     | Scaffold a project, either a local self-hosted stack or connected to a managed application |
-| `seamless templates list`          | List the starters `init` can scaffold and the flags that select them                       |
-| `seamless check`                   | Validate generated project config, Docker, Compose, containers, and local health endpoints |
-| `seamless verify [flags]`          | Run the cross-package auth conformance harness (api / adapter / react matrix)               |
-| `seamless profile <sub>`           | Manage the instances the CLI targets, and sign in to one with `profile login`              |
-| `seamless login [identifier]`      | Sign in to the Seamless portal (managed control plane) with email OTP                      |
-| `seamless apps <list\|get>`         | Show the managed applications your portal account owns                                     |
-| `seamless whoami`                  | Show the identity, profile, and instance URL behind the current session                    |
-| `seamless logout [--all]`          | End the session and clear local tokens                                                     |
-| `seamless sessions <sub>`          | List or revoke sessions for the logged-in user                                             |
-| `seamless config <sub>`            | Read and write instance system configuration (admin)                                       |
-| `seamless users <sub>`             | Admin user management (admin)                                                              |
-| `seamless org <sub>`               | Admin organization and membership management (admin)                                       |
-| `seamless --help`                  | Print usage                                                                                |
-| `seamless --version`               | Print the installed CLI version                                                            |
+| Command                        | Purpose                                                                                    |
+| ------------------------------ | ------------------------------------------------------------------------------------------ |
+| `seamless init [project-name]` | Scaffold a project, either a local self-hosted stack or connected to a managed application |
+| `seamless templates list`      | List the starters `init` can scaffold and the flags that select them                       |
+| `seamless check [--strict]`    | Validate generated project config, Docker, Compose, containers, and local health endpoints |
+| `seamless verify [flags]`      | Run the cross-package auth conformance harness (api / adapter / react matrix)              |
+| `seamless profile <sub>`       | Manage the instances the CLI targets, and sign in to one with `profile login`              |
+| `seamless login [identifier]`  | Sign in to the Seamless portal (managed control plane) with email OTP                      |
+| `seamless apps <list\|get>`    | Show the managed applications your portal account owns                                     |
+| `seamless whoami`              | Show the identity and instance URL behind the portal session, or an instance profile       |
+| `seamless logout [--all]`      | End the session and clear local tokens                                                     |
+| `seamless sessions <sub>`      | List or revoke sessions for the logged-in user                                             |
+| `seamless config <sub>`        | Read and write instance system configuration (admin)                                       |
+| `seamless users <sub>`         | Admin user management (admin)                                                              |
+| `seamless org <sub>`           | Admin organization and membership management (admin)                                       |
+| `seamless migrate csv <file>`  | Import users from a CSV export into an instance, as a dry run unless `--apply` (admin)     |
+| `seamless help [command]`      | Print usage, for every command or for one                                                  |
+| `seamless --help`              | Print usage                                                                                |
+| `seamless --version`           | Print the installed CLI version                                                            |
 
 The `init`, `templates`, `check`, and `verify` commands are for building and testing a stack.
-`login` and `apps` use your portal account. The `profile`, `whoami`, `logout`, `sessions`, `config`,
-`users`, and `org` commands act as an authenticated client against a running instance (managed or
+`login` and `apps` use your portal account. `whoami` and `logout` act on the portal session by
+default and on an instance with `--profile <name>`. The `profile`, `sessions`, `config`, `users`,
+`org`, and `migrate` commands act as an authenticated client against a running instance (managed or
 self-hosted), signed in with `seamless profile login`.
 
 There is no `bootstrap-admin` command. The first admin is the account registered with the owner
@@ -68,8 +71,10 @@ same name. A full integration flow for an existing app is not shipped yet.
 
 - prompts for web and backend templates read from the template registry, or takes a template flag
 - prompts for an optional mobile app (Expo), or takes `--mobile=expo` to skip the prompt
+- prompts for the owner email, which becomes the admin when you register (prefilled from your
+  portal session when you are signed in), or takes `--email`
 - prompts for auth mode
-- optionally includes the admin dashboard
+- optionally includes the admin dashboard (not offered for a full-stack web template)
 - generates a working local stack
 - writes `seamless.config.json`
 - creates `docker-compose.yml`
@@ -110,10 +115,10 @@ Microsoft, GitLab), wires the ones you configure into the auth server, and print
 to register: `http://localhost:5173/oauth/callback`. See
 [CLI Init Flow](/operate/cli-init#the---oauth-starter) for the full behavior and the template table.
 
-| Environment variable     | Effect on `init` and `templates list`                                          |
-| ------------------------ | ------------------------------------------------------------------------------ |
-| `SEAMLESS_TEMPLATES_REF` | Read the published templates repository at this ref instead of the pinned tag   |
-| `SEAMLESS_TEMPLATES_DIR` | Read templates from a local checkout instead; takes precedence over the ref     |
+| Environment variable     | Effect on `init` and `templates list`                                         |
+| ------------------------ | ----------------------------------------------------------------------------- |
+| `SEAMLESS_TEMPLATES_REF` | Read the published templates repository at this ref instead of the pinned tag |
+| `SEAMLESS_TEMPLATES_DIR` | Read templates from a local checkout instead; takes precedence over the ref   |
 
 ### Non-interactive flags
 
@@ -174,31 +179,80 @@ server.
   local when you are not signed in.
 - `--local` forces the self-hosted stack without contacting the control plane.
 - `init` issues the application's service token and writes it, the managed auth server URL, and the
-  JWKS key id into `api/.env`. Issuing a token invalidates any earlier one, so `init` asks first.
+  JWKS key id into the `.env` of the project that serves `/auth`: `api/.env` for an api template,
+  or `web/.env` for a full-stack web template (`nextjs`), which has no api layer. Issuing a token
+  invalidates any earlier one, so `init` asks first.
+- The Express and Fastify starters also get `DATABASE_URL` in `api/.env`, pointing at the
+  application's managed database with `USER:PASSWORD` placeholders for you to fill in from the
+  dashboard. It is left empty, with a warning, while the database is still provisioning.
+- Connecting a directory that is not empty (chosen at the prompt, or implied by `--app`) copies no
+  starters and writes the same values into an existing `api/.env`, keeping any keys already there
+  (an existing `DATABASE_URL` is never overwritten). Without an `api/` directory, `init` prints the
+  values to set by hand.
 - No local auth server, Docker Compose file, or admin dashboard is generated.
 
 See the [Managed Quickstart](/start/managed-quickstart).
 
 ---
 
+## `templates`
+
+```bash
+seamless templates list [--json]
+seamless templates
+```
+
+Lists the starters `init` can scaffold, read from the same registry `init` uses, so
+`SEAMLESS_TEMPLATES_REF` and `SEAMLESS_TEMPLATES_DIR` apply here too. It needs no login. `list` is
+the only subcommand, and a bare `seamless templates` runs it.
+
+The table shows each template's id, kind (`web`, `fullstack`, `api`, or `mobile`), framework, the
+`init` flags that select it (`--<id>`, plus `--<alias>` when it declares one), and status. A
+`coming-soon` template cannot be selected yet, so it lists no flag.
+
+| Flag     | Effect                                                    |
+| -------- | --------------------------------------------------------- |
+| `--json` | Print the registry entries as a JSON array, for scripting |
+
+---
+
 ## `check`
 
 ```bash
-seamless check
+seamless check [--strict]
 ```
 
-Use this when you want to validate a generated project.
+Use this when you want to validate a generated project. Run it from the project root, where
+`seamless.config.json` lives.
 
-It checks:
+Every check runs, so one failure does not hide the rest. It checks:
 
-- `seamless.config.json`
-- configured web and API paths
+- `seamless.config.json` exists and is valid JSON
+- the configured web path, the API path (or, for a full-stack web template, that the web app serves
+  the backend), and the mobile path when the project has one
+
+For a local (Docker or source) project it then checks:
+
 - Docker availability
 - `docker-compose.yml`
-- expected running containers
-- API health at `http://localhost:3000/`
-- auth health at `http://localhost:5312/health/status`
-- admin availability at `http://localhost:5174`
+- that the backend container is running (`api`, or `web` for a full-stack project)
+- the health endpoints below
+
+| Probe   | URL                                   | When                                                                            |
+| ------- | ------------------------------------- | ------------------------------------------------------------------------------- |
+| API     | `http://localhost:3000/`              | The project has an api layer                                                    |
+| Web     | `http://localhost:5173/health`        | Full-stack project, where the web app serves `/auth`                            |
+| Auth    | `http://localhost:5312/health/status` | Always                                                                          |
+| Console | `http://localhost:3000/console`       | Admin mode `api`; `services.admin.url` in the config, if set, replaces this URL |
+| Console | `http://localhost:5174`               | Admin mode `image` or `source`                                                  |
+
+Admin mode `none` has no console to probe. For a managed project, `check` skips the Docker, Compose,
+and container checks and instead probes `<instance-url>/health/status` on the managed auth server
+recorded in `seamless.config.json`.
+
+| Flag       | Effect                                                                                          |
+| ---------- | ----------------------------------------------------------------------------------------------- |
+| `--strict` | Exit 1 when any check failed, for a health-check script or CI gate. Without it, `check` exits 0 |
 
 It does not currently check Terraform, AWS CLI, or deployment state.
 
@@ -211,16 +265,19 @@ seamless verify
 ```
 
 Runs a cross-package auth conformance harness. It stands up the ecosystem with Docker Compose
-(Postgres, the auth API, an Express adapter app and a Fastify adapter app, and the React starter),
-then runs a Playwright matrix across the api, adapter, and react layers and prints a flow x layer
-pass/fail grid alongside JUnit and HTML reports.
+(Postgres, the auth API, an Express adapter app and a Fastify adapter app, and each web template in
+turn), then runs a Playwright matrix across the api, adapter, and react layers and prints a flow x
+layer pass/fail grid alongside JUnit and HTML reports.
 
 - **api** verifies the auth API directly (Bearer / JSON).
 - **adapter** verifies the cookie path through both adopter frameworks, with the same specs run
   twice: once against `@seamless-auth/express` and once against `@seamless-auth/fastify`. Each
   framework gets its own row in the grid, so a regression in one shows up on its own.
-- **react** drives the React starter in a real browser (Chromium), including passkeys via a virtual
-  authenticator and OAuth via an in-process mock OIDC provider.
+- **react** drives every runnable (not `coming-soon`) web template in the registry, one at a time,
+  in a real browser (Chromium), including passkeys via a virtual authenticator and OAuth via an
+  in-process mock OIDC provider. Mobile templates (`expo`) and full-stack templates (`nextjs`) are
+  skipped with a printed notice: the harness cannot drive a native app, and cannot yet run a
+  template that serves its own `/auth`.
 
 Covered flows include register, email and phone OTP, magic-link, passkey register and login, OAuth,
 TOTP, step-up, refresh, sessions, logout, organizations, the owner admin grant, and JWKS.
@@ -262,6 +319,17 @@ Requires Docker. The sibling repos are resolved relative to the CLI checkout and
 | `SEAMLESS_TEMPLATES_DIR` | The `seamless-templates` checkout; every runnable web template in its `registry.json` is driven |
 | `SEAMLESS_REACT_DIR`     | A single template directory to drive instead of the whole registry                              |
 
+The stack runs with fixed development values, which these environment variables override:
+
+| Environment variable | Default                                      | Used as                                                                 |
+| -------------------- | -------------------------------------------- | ----------------------------------------------------------------------- |
+| `API_SERVICE_TOKEN`  | `verify-dev-service-token-not-a-real-secret` | The service token shared by the auth API and the adapter apps           |
+| `OWNER_EMAIL`        | `owner@verify.local`                         | The owner address; the harness registers it and asserts the admin grant |
+| `JWKS_KID`           | `dev-main`                                   | The key id the adapters expect; it must match the auth API's active kid |
+
+The adapters reuse the service token as their cookie signing key, which `@seamless-auth/express`
+requires to be at least 32 characters, so keep an override at that length or longer.
+
 `SEAMLESS_VERIFY_COMPOSE_OVERRIDE` names an extra Compose file that `verify` layers over its base
 `verify/docker-compose.verify.yml`, passed as a second `-f` on every `docker compose` call it makes
 (build, up, logs, and teardown). It is unset by default, and a local run needs nothing from it. CI
@@ -293,8 +361,10 @@ seamless profile login [name] [identifier] [--identifier <email>] [--local]
   must be `https`.
 - `use` sets the active profile for later commands.
 - `remove` deletes a profile and clears its keychain tokens.
-- `login` signs in to that instance so `users`, `config`, `org`, and `sessions` can run. It defaults
-  to the active profile and does not change which profile is active.
+- `login` signs in to that instance so `users`, `config`, `org`, `sessions`, and `migrate` can run.
+  It defaults to the active profile and does not change which profile is active. `--local` reads
+  the OTP from the instance response, as on [`login`](#login), and only works against a local
+  instance URL.
 
 Choose the active profile per command with `--profile <name>` or the `SEAMLESS_PROFILE` environment
 variable.
@@ -315,6 +385,12 @@ session in the OS keychain (macOS Keychain, Windows Credential Manager, or Linux
 To sign in to an auth instance you administer, use `seamless profile login` instead. The two are
 separate accounts even when they share an email address.
 
+`--local` is for developing against a local portal only: the instance returns the OTP in its
+response instead of emailing it, and the CLI verifies with it automatically. It needs
+`SEAMLESS_PORTAL_AUTH_URL` pointed at a local instance running outside production with
+`ALLOW_UNCREDENTIALED_DELIVERY_SECRETS=true`. `login --profile <name>` still works but is
+deprecated; it prints a warning and runs `seamless profile login <name>`.
+
 ---
 
 ## `apps`
@@ -325,18 +401,25 @@ seamless apps get <id|name|infra-id> [--json]
 ```
 
 Shows the managed applications your portal account owns. Requires `seamless login`, not an instance
-profile. `apps get` reports whether a service token has been issued, masked, never the live value.
+profile. A bare `seamless apps` lists. `apps get` reports whether a service token has been issued,
+masked, never the live value.
 
 ---
 
 ## `whoami`
 
 ```bash
-seamless whoami [--profile <name>]
+seamless whoami [--profile <name>] [--json]
 ```
 
-Shows the identity behind the active session (`sub`, email, roles), along with the profile name and
-instance URL. Fails cleanly if you are not logged in.
+Shows the identity behind your portal session (`sub`, email, roles), along with the account and
+instance URL. With no portal session it falls back to the active instance profile, and
+`--profile <name>` reports that instance session instead. Exits 1 if you are not logged in.
+
+| Flag               | Effect                                                                                                         |
+| ------------------ | -------------------------------------------------------------------------------------------------------------- |
+| `--profile <name>` | Report the session for that instance profile instead of the portal                                             |
+| `--json`           | Print `account`, `instanceUrl`, `sub`, `email`, and `roles` as JSON, with a missing `sub` or `email` as `null` |
 
 ---
 
@@ -346,22 +429,29 @@ instance URL. Fails cleanly if you are not logged in.
 seamless logout [--all] [--profile <name>]
 ```
 
-Ends the current session on the instance and clears the local keychain tokens. `--all` revokes every
-session for the user before clearing local tokens.
+Ends your portal session and clears the local keychain tokens. Like `whoami`, it falls back to the
+active instance profile when there is no portal session, and `--profile <name>` logs out of that
+instance instead. `--all` revokes every session for the user before clearing local tokens.
 
 ---
 
 ## `sessions`
 
 ```bash
-seamless sessions list
-seamless sessions revoke <id>
-seamless sessions revoke --all
+seamless sessions [list] [--json]
+seamless sessions revoke <id> [--force]
+seamless sessions revoke --all [--force]
 ```
 
 Lists active sessions for the logged-in user (session id, device or user agent, IP, and last-used
-time, with the current session marked) and revokes them. Revoking the current session or `--all`
-prompts for confirmation and then clears local tokens.
+time, with the current session marked) and revokes them. A bare `seamless sessions` lists. Revoking
+the current session or `--all` prompts for confirmation and then clears local tokens.
+
+| Flag               | Effect                                                                                                       |
+| ------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `--json`           | On `list`, print the sessions as JSON instead of the table                                                   |
+| `--force`          | On `revoke`, skip the confirmation (`--yes` and `-y` are aliases), which also lets it run without a terminal |
+| `--profile <name>` | Act on that instance profile instead of the active one                                                       |
 
 ---
 
@@ -374,12 +464,47 @@ seamless config get [key] [--json]
 seamless config set <key> <value>
 seamless config roles [--json]
 seamless config diff <file>
-seamless config apply <file> [--dry-run]
+seamless config apply <file> [--dry-run] [--force]
+seamless config oauth-providers list [--json]
+seamless config oauth-providers add (<json> | --file <path>)
+seamless config oauth-providers update <id> (<json> | --file <path>)
+seamless config oauth-providers remove <id> [--force]
 ```
 
-`set` parses the value as JSON, falling back to a string (for example
-`seamless config set login_methods '["email_otp","passkey"]'`). `apply` writes a local JSON config
-file after a confirmation prompt.
+- `get` prints the whole config, or one key. `roles` lists the instance's available roles.
+- `set` updates one writable key. The string-typed keys (`app_name`, `rpid`, `access_token_ttl`,
+  `session_idle_ttl`, `refresh_token_ttl`) take the value verbatim, so `config set app_name 123`
+  sets the string `"123"`. Every other key parses the value as JSON, falling back to a string (for
+  example `seamless config set login_methods '["email_otp","passkey"]'`).
+- `diff` shows how a local JSON config file differs from the instance.
+- `apply` writes a local JSON config file after a confirmation prompt, ignoring read-only and
+  unknown keys. `--dry-run` prints the changes and writes nothing.
+
+`config oauth-providers` (alias `config oauth`) manages OAuth providers one at a time through the
+`/system-config/oauth-providers` routes, without rewriting the whole `oauth_providers` key. A
+provider is a JSON object, passed inline or with `--file`, in the shape described under
+[OAuth Providers](/reference/system-config#oauth-providers). Client secrets stay server-side,
+referenced by `clientSecretEnv`; the secret value is never sent.
+
+- `list` shows each provider's id, name, and whether it is enabled.
+- `add` creates a provider.
+- `update` changes the provider named by `<id>`. The id comes from the argument, and an `id` in the
+  body is dropped.
+- `remove` (alias `delete`) asks for confirmation, then deletes the provider.
+
+```bash
+seamless config oauth-providers add --file google.json
+seamless config oauth-providers update google '{"enabled":false}'
+seamless config oauth-providers remove google --force
+```
+
+| Flag               | Effect                                                                                                                                    |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `--json`           | On `get`, `roles`, and `oauth-providers list`, print JSON                                                                                 |
+| `--dry-run`        | On `apply`, show the changes without writing them                                                                                         |
+| `--force`          | Skip the confirmation on `apply` and `oauth-providers remove` (`--yes` and `-y` are aliases), which also lets them run without a terminal |
+| `--file <path>`    | On `oauth-providers add` and `update`, read the provider JSON from a file                                                                 |
+| `--profile <name>` | Act on that instance profile instead of the active one                                                                                    |
 
 ---
 
@@ -389,13 +514,20 @@ Admin user management. Requires an admin role.
 
 ```bash
 seamless users list [--limit <n>] [--offset <n>] [--json]
-seamless users delete <id>
+seamless users delete <id> [--force]
 seamless users credentials <id> [--json]
-seamless users prepare-device-replacement <id> [--keep-sessions] [--keep-passkeys] [--keep-totp]
+seamless users prepare-device-replacement <id> [--force] [--keep-sessions] [--keep-passkeys] [--keep-totp]
 ```
 
+`list` shows 50 users at a time by default. `--limit` takes 1 to 100 and `--offset` 0 or more, and
+the total it prints counts every user, not just the page shown. `delete` asks for confirmation.
+
 `prepare-device-replacement` is admin-assisted account recovery and needs an elevated (stepped-up)
-session.
+session. By default it revokes the user's sessions, removes their passkeys, and disables TOTP, after
+a confirmation; each `--keep-*` flag leaves that one in place.
+
+`--force` skips the confirmation on `delete` and `prepare-device-replacement` (`--yes` and `-y` are
+aliases), which also lets them run without a terminal. `--profile <name>` targets another instance.
 
 ---
 
@@ -404,15 +536,90 @@ session.
 Admin organization and membership management. Requires an admin role.
 
 ```bash
-seamless org list [--json]
+seamless org list [--limit <n>] [--offset <n>] [--search <text>] [--json]
 seamless org create <name> [--slug <slug>]
 seamless org get <id> [--json]
 seamless org update <id> [--name <name>] [--slug <slug>]
 seamless org members list <orgId> [--json]
 seamless org members add <orgId> (--user <id> | --email <email>) [--roles a,b] [--scopes a,b]
 seamless org members update <orgId> <userId> [--roles a,b] [--scopes a,b]
-seamless org members remove <orgId> <userId>
+seamless org members remove <orgId> <userId> [--force]
 ```
+
+`list` shows 50 organizations at a time by default; `--limit` takes 1 to 100 and `--offset` 0 or
+more. `--search` matches the name and slug, and the total counts every match rather than the page
+shown. `create` also takes the name as `--name <name>`. `members remove` asks for confirmation, and
+`--force` skips it (`--yes` and `-y` are aliases), which also lets it run without a terminal.
+`--profile <name>` targets another instance.
+
+---
+
+## `migrate`
+
+```bash
+seamless migrate csv <file> [--map <mapping.json>] [--source <name>] [--apply] [--report <path>] [--json]
+```
+
+Imports users from another identity system's CSV export into the instance. Requires an admin role,
+signed in with `seamless profile login`. `csv` is the only source. The run is a dry run unless you
+pass `--apply`, and it writes a report either way.
+
+What it does:
+
+- finds the columns by header name, or takes them from a mapping file
+- validates each row locally; a row that fails is reported as `invalid` and never sent
+- sends the valid rows to `POST /admin/users/import` in batches of 200, with `dryRun` set unless
+  `--apply` is passed, so a dry run is still checked by the instance
+- prints a summary (created, updated, unchanged, rejected, invalid) and the first problem rows
+- writes the full per-row report as `<path>.csv` and `<path>.json`
+- exits 1 when any row is rejected or invalid
+
+Without a mapping file, headers are matched case-insensitively, ignoring spaces, underscores, and
+hyphens:
+
+| Field           | Recognized headers                                           | Notes                                                            |
+| --------------- | ------------------------------------------------------------ | ---------------------------------------------------------------- |
+| `email`         | `email`, `email address`, `work email`, `mail`               | Required                                                         |
+| `externalId`    | `externalId`, `id`, `employee id`, `user id`                 | Matches people on re-runs from the same source                   |
+| `phone`         | `phone`, `phone number`, `mobile`, `mobile phone`            |                                                                  |
+| `roles`         | `roles`, `role`                                              | Multi-value                                                      |
+| `organizations` | `organizations`, `organization`, `department`, `departments` | Multi-value; each a slug or an organization id, which must exist |
+
+Multi-value cells are split on `;`, or the mapping's `separator`. Any other column, including a password column, is not read.
+
+| Flag                   | Default                          | Effect                                                                                                                                            |
+| ---------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--map <mapping.json>` | none                             | Name the columns and defaults yourself (see below)                                                                                                |
+| `--source <name>`      | the mapping's `source`, or `csv` | The system the users come from: lowercase letters, digits, and hyphens. Keep it stable across re-runs                                             |
+| `--apply`              | off                              | Write to the instance. Without it nothing is written                                                                                              |
+| `--report <path>`      | next to the input                | Write `<path>.csv` and `<path>.json`. By default `users.csv` gets `users.migrate-plan.*` on a dry run and `users.migrate-result.*` with `--apply` |
+| `--json`               | off                              | Print the report as JSON instead of the summary                                                                                                   |
+| `--profile <name>`     | the active profile               | Import into that instance profile                                                                                                                 |
+
+A mapping file sets the source, the header for each field, the separator, roles added to every row,
+and the membership roles given for each organization a row names (the server defaults to `member`):
+
+```json
+{
+  "source": "hr-export",
+  "columns": { "email": "Work Email", "externalId": "Employee ID" },
+  "separator": "|",
+  "roles": ["staff"],
+  "organizationRoles": ["member"]
+}
+```
+
+`columns` accepts only `email`, `externalId`, `phone`, `roles`, and `organizations`. Any other key,
+such as `password`, is refused with `Unknown mapping column`, and so is a header the CSV does not
+have.
+
+Imports carry no passwords or other credentials. Each imported user signs in for the first time by
+registering with their email. Roles and memberships are only added, never removed, so re-running an
+import after correcting the source data cannot take access away. The instance rejects a row that
+grants an admin role, or that would link an external id to an existing account holding one
+(`admin_role_not_allowed`), and reports other rejections such as `role_unavailable`,
+`organization_not_found`, `duplicate_in_batch`, and `external_id_conflict` per row. An auth server
+without the import route fails with a message to upgrade it.
 
 ---
 
@@ -433,5 +640,12 @@ If no command is provided, the CLI prints help.
 
 ```bash
 seamless --help
+seamless help [command]
+seamless <command> --help
 seamless --version
 ```
+
+`-h` and `-v` are short forms of `--help` and `--version`. `seamless help <command>` and
+`seamless <command> --help` (or `-h`) print that one command's usage, ahead of any argument parsing,
+so they work without a login or a project. A `--help` after a literal `--` is passed through as an
+argument instead. An unknown command exits 1 and lists the valid ones.
