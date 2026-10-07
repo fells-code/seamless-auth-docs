@@ -44,7 +44,8 @@ The portal is itself passwordless and built on Seamless Auth, so there is no pas
 3. Register a passkey when prompted, or continue with email and magic links.
 
 You now have a portal account. The portal is where you create applications, manage plans and billing,
-generate service tokens, and watch users and auth events for each application.
+generate service tokens, and review logs and auth events for each application. End users and roles
+live in the admin console bundled with each instance, which the portal links to.
 
 ---
 
@@ -90,7 +91,7 @@ https://<your-app-id>.seamlessauth.com
 ```
 
 This URL is what your backend adapter points at (your frontend points at your backend). You can find
-it on the application's **Auth API Configuration** card at any time.
+it on the application's **Credentials** page, in the **Auth API Configuration** card, at any time.
 
 ---
 
@@ -99,7 +100,7 @@ it on the application's **Auth API Configuration** card at any time.
 Your backend authenticates to the hosted auth instance with a **service token**. Generate it from the
 application's **Auth API Configuration** card:
 
-1. Open your application in the portal.
+1. Open your application in the portal and choose **Credentials** in the sidebar.
 2. Find the **Auth API Configuration** card and its **Service Token** section.
 3. Choose **Generate Token**.
 
@@ -236,26 +237,33 @@ Run your frontend and backend, then sign in:
 2. Sign in with a passkey or an emailed code.
 3. Confirm the session resolves and `useAuth()` reports the user as authenticated.
 
-Back in the portal, the new account appears on the application's **Users** page once it authenticates,
-and the sign-in shows up under **Auth Events**. Here you can manage users and roles. This is the managed-path equivalent of role editing.
+Back in the portal, the application's **Logs** page records the sign-in on its **Auth events** tab,
+and the **Users** count on the application **Dashboard** includes the new account.
+
+To manage that user, choose **Open admin console** on the application **Dashboard**. It opens the
+admin console bundled with your instance (at `/console` on your instance URL). Its **Users** screen
+lists end users (open one to edit its roles), its **Events** screen shows the auth event stream, and
+its **System** screen defines the available and default roles. See
+[Explore the Admin Dashboard](/start/adminui) for a tour.
 
 <Card title="What you just built">
   A real app authenticating against a hosted Seamless Auth instance: passwordless sign-in, a
-  server-side security boundary, and a portal to manage users, roles, plans, and tokens. No auth
-  infrastructure to operate.
+  server-side security boundary, a portal for plans and tokens, and an admin console for users and
+  roles. No auth infrastructure to operate.
 </Card>
 
 ---
 
 ## Where things live in the portal
 
-| You need to                    | Go to                                             |
-| ------------------------------ | ------------------------------------------------- |
-| Copy your Auth Server URL      | Application → Auth API Configuration card         |
-| Generate or rotate the token   | Application → Auth API Configuration → Service Token |
-| See users and their sign-ins   | Application → Users, Application → Auth Events     |
-| Change or upgrade your plan     | Application → Billing                              |
-| Re-run the connection steps     | Application → Get connected                        |
+| You need to                     | Go to                                                       |
+| ------------------------------- | ----------------------------------------------------------- |
+| Copy your Auth Server URL       | Credentials → Auth API Configuration                        |
+| Generate or rotate the token    | Credentials → Auth API Configuration → Service Token        |
+| See sign-ins and auth events    | Logs → Auth events tab                                      |
+| Manage end users and roles      | Dashboard → **Open admin console** → Users                  |
+| Change or upgrade your plan     | Billing → Change plan                                       |
+| Re-run the connection steps     | Dashboard → Get connected (Connection guide once completed) |
 
 ---
 
