@@ -144,23 +144,27 @@ rather than by assembling every piece manually.
 
 ## Compatibility Matrix
 
-Versions and declared ranges as of **2026-10-06**, read from the `package.json` on each repository's
+Versions and declared ranges as of **2026-10-07**, read from the `package.json` on each repository's
 `main` branch. The npm `latest` tag matched every package version below on that date. Every package
-and the auth API require Node.js 22 or later (`engines.node` is `>=22` throughout).
+and the auth API require Node.js 22 or later (`engines.node` is `>=22`), except the messaging
+packages, which require Node.js 18 or later.
 
-| Package                         | Version on `main` | Declares on other Seamless packages                            | Other peer ranges                                                             |
-| ------------------------------- | ----------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `seamless-auth-api`             | 0.16.0            | `@seamless-auth/types` ^0.27.0                                 | None                                                                          |
-| `@seamless-auth/core`           | 0.18.0            | `@seamless-auth/types` ^0.27.0                                 | None                                                                          |
-| `@seamless-auth/express`        | 0.18.0            | `@seamless-auth/core` ^0.18.0                                  | `express` >=5.0.0                                                             |
-| `@seamless-auth/fastify`        | 0.9.0             | `@seamless-auth/core` ^0.18.0                                  | `fastify` >=5.0.0                                                             |
-| `@seamless-auth/nextjs`         | 0.2.0             | `@seamless-auth/core` ^0.18.0, `@seamless-auth/types` ^0.27.0  | None                                                                          |
-| `@seamless-auth/client`         | 0.3.0             | `@seamless-auth/types` ^0.26.0                                 | None                                                                          |
-| `@seamless-auth/react`          | 0.15.0            | `@seamless-auth/client` ^0.3.0, `@seamless-auth/types` ^0.26.0 | `react` and `react-dom` 18 or 19, optional `react-router-dom` 6.4+ or 7.15.1+ |
-| `@seamless-auth/react-native`   | 0.2.0             | `@seamless-auth/client` ^0.3.0, `@seamless-auth/types` ^0.26.0 | `react` 18 or 19                                                              |
-| `@seamless-auth/types`          | 0.27.0            | None                                                           | None                                                                          |
-| `seamless-cli`                  | 0.18.0            | `@seamless-auth/types` ^0.26.0                                 | None                                                                          |
-| `seamless-auth-admin-dashboard` | 0.8.0             | `@seamless-auth/react` ^0.13.0, `@seamless-auth/types` ^0.27.0 | None                                                                          |
+| Package                           | Version on `main` | Declares on other Seamless packages                                                  | Other peer ranges                                                             |
+| --------------------------------- | ----------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| `seamless-auth-api`               | 0.16.0            | `@seamless-auth/types` ^0.28.0, `@seamless-auth/messaging`, `-aws`, `-twilio` ^0.2.0 | None                                                                          |
+| `@seamless-auth/core`             | 0.18.0            | `@seamless-auth/types` ^0.28.0                                                       | None                                                                          |
+| `@seamless-auth/express`          | 0.18.0            | `@seamless-auth/core` ^0.18.0                                                        | `express` >=5.0.0                                                             |
+| `@seamless-auth/fastify`          | 0.9.0             | `@seamless-auth/core` ^0.18.0                                                        | `fastify` >=5.0.0                                                             |
+| `@seamless-auth/nextjs`           | 0.2.0             | `@seamless-auth/core` ^0.18.0, `@seamless-auth/types` ^0.28.0                        | None                                                                          |
+| `@seamless-auth/client`           | 0.3.1             | `@seamless-auth/types` ^0.26.0                                                       | None                                                                          |
+| `@seamless-auth/react`            | 0.15.1            | `@seamless-auth/client` ^0.3.1, `@seamless-auth/types` ^0.26.0                       | `react` and `react-dom` 18 or 19, optional `react-router-dom` 6.4+ or 7.15.1+ |
+| `@seamless-auth/react-native`     | 0.2.1             | `@seamless-auth/client` ^0.3.1, `@seamless-auth/types` ^0.26.0                       | `react` 18 or 19                                                              |
+| `@seamless-auth/types`            | 0.28.0            | None                                                                                 | None                                                                          |
+| `@seamless-auth/messaging`        | 0.2.0             | None                                                                                 | None                                                                          |
+| `@seamless-auth/messaging-aws`    | 0.2.0             | `@seamless-auth/messaging` ^0.2.0                                                    | None                                                                          |
+| `@seamless-auth/messaging-twilio` | 0.2.0             | `@seamless-auth/messaging` ^0.2.0                                                    | None                                                                          |
+| `seamless-cli`                    | 0.18.0            | `@seamless-auth/types` ^0.27.0                                                       | None                                                                          |
+| `seamless-auth-admin-dashboard`   | 0.8.0             | `@seamless-auth/react` ^0.13.0, `@seamless-auth/types` ^0.28.0                       | None                                                                          |
 
 How to read it:
 
@@ -170,11 +174,15 @@ How to read it:
 - `@seamless-auth/express`, `fastify`, and `nextjs` declare `@seamless-auth/core` as
   `workspace:^`, which pnpm rewrites at publish to a caret on the core version in the same release
   (`^0.18.0` today).
-- On `main`, `@seamless-auth/core` and `@seamless-auth/nextjs` already declare
-  `@seamless-auth/types` ^0.27.0. Their published releases (core 0.18.0, nextjs 0.2.0) still declare
-  ^0.26.0 until their next release.
+- `@seamless-auth/types` ranges are mixed. The API, `core`, `nextjs`, and the admin dashboard declare
+  ^0.28.0 on `main`, `seamless-cli` declares ^0.27.0, and `client`, `react`, and `react-native`
+  declare ^0.26.0. The published releases of `core`, `nextjs`, and `seamless-cli` still declare
+  ^0.26.0 until their next release. An app that installs packages on different types minors gets
+  more than one copy of `@seamless-auth/types`.
 - The admin dashboard depends on `@seamless-auth/react` ^0.13.0, two minors behind the current React
   SDK.
+- The messaging packages are used by `seamless-auth-api` to deliver email and SMS. Your application
+  does not install them.
 - The auth API exposes an HTTP contract, not a package range. No package declares a range on
   `seamless-auth-api`, so pair the API and the server SDK from the same release window.
 
