@@ -1,0 +1,385 @@
+---
+title: "Migrate Users From Another Identity System"
+description: "Move an existing user base onto Seamless Auth: export identities to CSV, import them with seamless migrate, then track and invite passkey enrollment, optionally signing users in through the old provider during cutover."
+sidebar:
+  order: 5
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Use this guide when you are moving an existing organization's users onto Seamless Auth from another
+identity system. Every migration has the same shape: import the identities (email, external id,
+phone, roles, organization memberships), then run an enrollment campaign that gets each person onto
+a passkey. Passwords are never imported, because Seamless Auth has no password flow to import them
+into.
+
+The steps are:
+
+1. export users from the old system to CSV
+2. prepare the instance: roles and organizations the import refers to
+3. dry run `seamless migrate csv`, read the plan, fix the source data
+4. apply the import and keep the result report
+5. get users onto passkeys: prompts, invites, and coverage tracking
+6. optionally, let users sign in through the old provider while they enroll, then retire it
+
+---
+
+## What Each Step Needs
+
+| Step                                             | Needs                                                                                                          |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| Import (`seamless migrate csv`)                  | `seamless-cli` 0.18.0 or later, `seamless-auth-api` 0.16.0 or later (`POST /admin/users/import`)               |
+| Enrollment directory and invites                 | `seamless-auth-api` 0.17.0 (`/admin/enrollment`, `/admin/enrollment/invites`)                                  |
+| The same, from the admin dashboard               | `seamless-auth-admin-dashboard` 0.8.0, and `@seamless-auth/express` 0.18.0, `fastify` 0.9.0, or `nextjs` 0.2.0 |
+| Enrollment prompt after a code or link sign-in   | `seamless-auth-api` 0.17.0 (`prompt_passkey_enrollment`)                                                       |
+| Authentication coverage report                   | `seamless-auth-api` 0.17.0, dashboard 0.9.0 for the Coverage page                                              |
+| Sign in through the old provider, linked by id   | `seamless-auth-api` 0.16.0 (OpenID Connect provider with `externalIdSource`)                                   |
+| Enrollment prompt after that sign-in, retirement | `seamless-auth-api` 0.17.0, `@seamless-auth/express` 0.17.0 or `fastify` 0.8.0, `@seamless-auth/react` 0.14.0  |
+
+<Aside type="caution">
+  A project scaffolded by `seamless init` runs the auth API image pinned in `seamless-cli`
+  (`v0.13.1` as of `seamless-cli` 0.19.0, see
+  [What The CLI Scaffolds](/build/ecosystem#what-the-cli-scaffolds)), which has none of these
+  routes. Move the `auth` service to a `seamless-auth-api` 0.17.0 image before migrating into it.
+  Against an older server, `seamless migrate` stops with a message to upgrade.
+</Aside>
+
+`seamless migrate` has one source today, `csv`. A direct Microsoft Entra ID source is tracked in
+[fells-code/seamless-cli#213](https://github.com/fells-code/seamless-cli/issues/213) and is not
+shipped; export Entra ID users to CSV instead.
+
+---
+
+## Step 1: Export Users To CSV
+
+Export one row per person from the old system. The import reads five fields, and only `email` is
+required:
+
+| Field           | What to export                                                               |
+| --------------- | ---------------------------------------------------------------------------- |
+| `email`         | The address the person signs in with. Required                               |
+| `externalId`    | The old system's stable id for the person (employee id, directory object id) |
+| `phone`         | A phone number, in international form such as `+15555550101`                 |
+| `roles`         | Global roles to add, several separated by `;`                                |
+| `organizations` | Organization slugs or ids to add the person to, several separated by `;`     |
+
+Always export `externalId` when the old system has one. It is what matches a person on a re-run
+after their row changes, it is what the enrollment directory's "imported" filter counts (a user
+imported without one is not reported as imported), and it is what links a sign-in through the old
+provider to the right account during cutover.
+
+The CLI reads RFC 4180 CSV, so quoted fields with commas, line breaks, and doubled quotes are fine,
+and a leading byte order mark is ignored. Headers are matched without a mapping file when they use a
+recognized spelling, compared case-insensitively with spaces, underscores, and hyphens removed:
+
+| Field           | Recognized headers                                           |
+| --------------- | ------------------------------------------------------------ |
+| `email`         | `email`, `email address`, `work email`, `mail`               |
+| `externalId`    | `externalId`, `id`, `employee id`, `user id`                 |
+| `phone`         | `phone`, `phone number`, `mobile`, `mobile phone`            |
+| `roles`         | `roles`, `role`                                              |
+| `organizations` | `organizations`, `organization`, `department`, `departments` |
+
+Every other column is ignored, including any password or hash column the export carries. For
+example:
+
+```csv
+Employee ID,Work Email,Mobile,Role,Department
+1001,ada@example.com,+15555550101,staff,engineering
+1002,grace@example.com,,staff;manager,engineering;platform
+```
+
+When the headers are something else, or you want defaults, write a mapping file and keep it beside
+the export so the same mapping is used on every re-run:
+
+```json
+{
+  "source": "hr-export",
+  "columns": { "email": "Primary Email", "externalId": "Object Id" },
+  "separator": ";",
+  "roles": ["staff"],
+  "organizationRoles": ["member"]
+}
+```
+
+- `source` names the system the users come from, in lowercase letters, digits, and hyphens. Keep it
+  the same for every run from that system, because external ids are matched within a source.
+  `--source` overrides it, and it defaults to `csv`.
+- `columns` maps any of the five fields to a header in your file. Any other key, such as `password`,
+  is refused with `Unknown mapping column`.
+- `roles` is added to every row, and `organizationRoles` is the membership role given in each
+  organization a row names (the server defaults to `member`).
+
+The full flag and mapping reference is at [`migrate`](/reference/cli-commands#migrate).
+
+---
+
+## Step 2: Prepare The Instance
+
+Sign in to the target instance as an admin. `migrate` uses the active profile, or `--profile`:
+
+```bash
+seamless profile login production
+```
+
+The import refers to roles and organizations; it does not create them. A row naming a role outside
+the instance's `available_roles` is rejected with `role_unavailable`, and one naming an organization
+that does not exist is rejected with `organization_not_found`.
+
+```bash
+seamless config roles
+seamless config set available_roles '["user","staff","manager"]'
+seamless org create "Engineering" --slug engineering
+seamless org create "Platform" --slug platform
+```
+
+`config set available_roles` replaces the whole list, so include every role the instance already
+has. See [Roles](/reference/system-config#roles) for the rules on changing it.
+
+---
+
+## Step 3: Dry Run And Read The Plan
+
+Without `--apply`, nothing is written. The CLI still sends every valid row to the instance with
+`dryRun` set, so the plan reflects the instance's real data and rules:
+
+```bash
+seamless migrate csv users.csv --map users.map.json
+```
+
+```txt
+Dry run users.csv as source "hr-export"
+  externalId    <- Employee ID
+  email         <- Work Email
+  phone         <- Mobile
+  roles         <- Role
+  organizations <- Department
+  sent 2 of 2
+
+2 would be created  ·  0 would be updated  ·  0 unchanged  ·  0 rejected  ·  0 invalid
+
+Report: users.migrate-plan.csv
+        users.migrate-plan.json
+
+Dry run: nothing was written. Re-run with --apply to import.
+```
+
+The column list at the top shows which header feeds each field. Check it first: a wrong match is
+the most common mistake. The summary prints the first ten problem rows, and the report has all of
+them. Rows go to the instance in batches of 200.
+
+The report is written next to the input (`users.migrate-plan.csv` and `.json`, or the path given by
+`--report`). It has one row per CSV row, numbered as a spreadsheet numbers them, with the header as
+row 1:
+
+| Column       | Meaning                                                                            |
+| ------------ | ---------------------------------------------------------------------------------- |
+| `row`        | The spreadsheet row the outcome belongs to                                         |
+| `email`      | The row's email                                                                    |
+| `externalId` | The row's external id, when it has one                                             |
+| `status`     | `created`, `updated`, `unchanged`, `rejected`, or `invalid`                        |
+| `userId`     | The Seamless Auth user the row matched or created                                  |
+| `changes`    | What the row adds, from `created`, `linked`, `phone`, `roles`, and `organizations` |
+| `reason`     | Why the instance rejected the row                                                  |
+| `detail`     | More about the rejection, or the validation error for an `invalid` row             |
+
+`invalid` rows failed validation in the CLI (for example an email that is not an address) and were
+never sent. `rejected` rows were refused by the instance:
+
+| `reason`                 | What to fix                                                                                   |
+| ------------------------ | --------------------------------------------------------------------------------------------- |
+| `admin_role_not_allowed` | The row grants `admin` or an `admin:*` role, or links an external id to an existing admin     |
+| `role_unavailable`       | Add the role to `available_roles`, or drop it from the row                                    |
+| `organization_not_found` | Create the organization, or correct the slug or id                                            |
+| `duplicate_in_batch`     | The email, external id, or phone repeats another row in the same batch                        |
+| `email_mismatch`         | The external id is already linked to a user with a different email. Change that email by hand |
+| `external_id_conflict`   | The email belongs to a user already linked to a different external id from this source        |
+| `phone_invalid`          | The phone number is not a valid number                                                        |
+| `phone_in_use`           | Another user already has that phone number                                                    |
+| `write_failed`           | The row lost a race with another write, such as a concurrent signup. Re-run it                |
+
+`--json` prints the same report to stdout instead of the summary. The command exits 1 whenever any
+row is rejected or invalid, so a script can stop before applying a plan with problems.
+
+Fix the source data or the mapping and repeat the dry run until the plan is what you expect.
+
+---
+
+## Step 4: Apply The Import
+
+```bash
+seamless migrate csv users.csv --map users.map.json --apply
+```
+
+The result report is written as `users.migrate-result.csv` and `.json`. Keep it: `userId` maps each
+source row to its Seamless Auth account. Each created or updated account is recorded as an
+`admin_user_imported` auth event and each batch as `admin_user_import_completed`, against the admin
+who ran it.
+
+Re-running is safe. A row is matched on its external id within the source first, then on email, and
+a row with nothing new to add is `unchanged`. If a batch fails partway (a network error, for
+example), the report still lists the rows that completed, and running the same command again
+finishes the rest.
+
+What the import never does:
+
+- **It never imports a password, hash, MFA secret, or session.** There is no password login to use
+  them with, and carrying them across would move the old system's weakest credential into the new
+  one. An imported user stays unverified until they prove control of the email by registering with
+  it, or by signing in through the old provider when [cutover](#step-6-optional-sign-in-through-the-old-provider-during-cutover)
+  is set up.
+- **It never removes access.** Roles and organization memberships are only added, so re-running an
+  import after correcting the source data cannot take access away. Remove access with
+  `seamless org members remove` or the admin dashboard.
+- **It never grants admin.** Grant admin roles individually after the import, from the user's page
+  in the admin dashboard or `PATCH /admin/users/:userId`.
+- **It never changes an existing account's email.** That is the `email_mismatch` rejection.
+
+---
+
+## Step 5: Get Users Onto Passkeys
+
+Imported users sign in for the first time by registering with their imported email: an email code
+proves the address, and they can then enroll a passkey. The rest of the migration is getting each
+of them to that passkey, ideally two, so losing one device does not lock them out.
+
+### Prompt at sign-in
+
+Turn on `prompt_passkey_enrollment` (API 0.17.0). With it on, an email code, phone code, or magic
+link sign-in by a user with no passkey carries `nextStep: 'enroll_passkey'` in the response, so your
+sign-in UI can send them straight to passkey enrollment. Set it from the System page of the admin
+dashboard ("Prompt for passkey enrollment", dashboard 0.8.0), with `PATCH /system-config/admin`, or
+with `PROMPT_PASSKEY_ENROLLMENT=true` (see
+[How System Config Is Loaded](/reference/system-config#how-system-config-is-loaded)).
+`seamless config set` does not accept this key.
+
+### Track enrollment
+
+`GET /admin/enrollment` (admin read access) lists active users with their WebAuthn credential count
+and status: `none`, `one`, or `two_or_more`. TOTP does not count. It filters by `organizationId`,
+`status`, `imported=true` (users with an imported external id), and `search` over email, pages with
+`limit` (1 to 100, default 50) and `offset`, and returns a `summary` of every matching user by
+status. Each user row also carries `lastLogin` and `enrollmentInvitedAt`.
+
+In the admin dashboard (0.8.0), the **Passkey enrollment** screen at `/enrollment` shows the same
+directory with the summary tiles and filters.
+
+For a point-in-time figure to report upward, `GET /admin/reports/authentication-coverage` (API
+0.17.0) reports how many active users hold a passkey overall, per organization, and over time, with
+`format=csv` for a spreadsheet. The dashboard's **Coverage** page (0.9.0) shows it.
+
+### Invite users who have not enrolled
+
+`POST /admin/enrollment/invites` (admin write access) emails each target a notice to sign in and add
+a passkey. The email links to the sign-in page (`signInUrl`, default `<frontend_url>/login`) and
+carries no credential, so a forwarded invite gives nobody access.
+
+Invite listed users, up to 200 per call:
+
+```json
+{ "userIds": ["7b0f3c1e-2a4d-4e8f-9c6b-1d2e3f4a5b6c"] }
+```
+
+Or invite an organization's members whose enrollment is at or below `status` (`none`, the default,
+or `one`):
+
+```json
+{ "organizationId": "c2a1b0d9-8e7f-4a6b-9c5d-4e3f2a1b0c9d", "status": "none" }
+```
+
+An organization-wide call sends at most 200 and returns `remaining`, so repeat it until `remaining`
+is `0`. Anyone invited in the last 24 hours is skipped, which makes repeating safe. Each result is
+`sent` or `skipped`, with a skip `reason` of `not_found`, `already_enrolled`, `recently_invited`, or
+`delivery_failed`. Each invite is recorded as `admin_enrollment_invite_sent`.
+
+The call answers `409` when no sign-in method other than passkey is enabled, since an unenrolled
+user would have no way to sign in and add one. Under `x-seamless-auth-delivery-mode: external`,
+each result carries the delivery for the caller to send, and the server adapters send it as the
+`enrollment_invite_email` kind (`@seamless-auth/core` 0.18.0).
+
+In the dashboard, admins with write access invite selected users, or every unenrolled member of the
+selected organization, from the same **Passkey enrollment** screen.
+
+---
+
+## Step 6 (Optional): Sign In Through The Old Provider During Cutover
+
+When the old system is an OpenID Connect provider, such as Microsoft Entra ID, imported users can
+keep signing in through it while they enroll. Their first sign-in links to the imported account by
+the directory's id rather than by email, and the provider can then be retired one organization at a
+time.
+
+1. **Import with the directory's id.** Import with `--source` set to a name for the directory, such
+   as `entra-id`, and `externalId` set to the id the directory puts in its ID tokens (Entra ID's
+   object id, the `oid` claim).
+
+2. **Configure the provider as OpenID Connect** with `issuer` and `jwksUri`, and point it at the
+   import: `externalIdSource` is the import's source and `externalIdJsonPath` is the claim holding
+   the external id. Set `promptPasskeyEnrollment` so a sign-in by a user with no passkey carries
+   `nextStep: 'enroll_passkey'`. For Entra ID, see [Microsoft Entra ID](/build/oauth-login#microsoft-entra-id),
+   then:
+
+   ```bash
+   seamless config oauth-providers update microsoft '{"promptPasskeyEnrollment": true}'
+   ```
+
+   `seamless init --oauth` writes the Microsoft preset with `externalIdSource: "entra-id"` and
+   `externalIdJsonPath: "oid"` (`seamless-cli` 0.18.0). The link is honored only from a verified ID
+   token, so it needs `issuer` and `jwksUri`.
+
+3. **Users sign in through the old provider.** The first sign-in finds the user imported under
+   `externalIdSource` whose external id equals the claim, marks the account claimed, and links the
+   provider identity. The session is a full session; with `nextStep: 'enroll_passkey'`, the
+   bundled OAuth callback in `@seamless-auth/react` 0.14.0 and later sends the user to passkey
+   enrollment, then on to where they were going.
+
+4. **Track and invite** each organization as in [Step 5](#step-5-get-users-onto-passkeys).
+
+5. **Retire the provider for an organization** once its members have enrolled:
+
+   ```txt
+   PUT /admin/organizations/:organizationId/oauth-providers/:providerId/retirement
+   ```
+
+   From then on, a member of that organization who signs in through the provider is refused at the
+   callback with `403` and code `oauth_provider_retired`, before any account is linked. Retiring
+   also revokes every live session of every member of the organization, whichever method started
+   it, so the cutover takes effect at once and members sign in again with a passkey or another
+   enabled method. It is recorded as `admin_oauth_provider_retired` with the number of sessions
+   revoked. Organization responses list retired providers in `retiredOAuthProviders`.
+
+   To roll back, send `DELETE` to the same path, recorded as `admin_oauth_provider_restored`.
+
+Retirement needs admin write access. Neither the CLI nor the dashboard has a control for it, so
+call the auth API with an admin session, or the server adapter's pass-through route
+(`@seamless-auth/express` 0.17.0 or `fastify` 0.8.0). `@seamless-auth/react` 0.14.0 and later show a
+specific message for `oauth_provider_retired`.
+
+<Aside type="caution">
+  Retiring a provider signs every member of the organization out. Check the enrollment directory
+  for that organization first: a member with no passkey needs another enabled sign-in method, such
+  as an email code, to get back in.
+</Aside>
+
+---
+
+## Finishing The Migration
+
+When coverage is where you want it, you can tighten sign-in:
+
+- `passkey_login_fallback_enabled: false` stops a user who holds a passkey from signing in with a
+  code or magic link instead
+- `phishing_resistant_only: true` (API 0.17.0) accepts only passkeys to start a session, so anyone
+  still without one is locked out until an admin helps them
+
+Both are described in [System Config](/reference/system-config#config-keys).
+
+---
+
+## Related Docs
+
+- [CLI Commands: `migrate`](/reference/cli-commands#migrate)
+- [How To Add OAuth Login](/build/oauth-login)
+- [Admin Dashboard App](/build/admin-dashboard)
+- [System Config](/reference/system-config)
+- [Users](/understand/users)

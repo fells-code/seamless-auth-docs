@@ -1,0 +1,24 @@
+# .github/workflows/check-compat-matrix.yaml
+name: check-compat-matrix
+on:
+  workflow_dispatch:
+  schedule:
+    # Mondays 13:00 UTC. Fails when a package has been released past the version the
+    # Compatibility Matrix in build/ecosystem.mdx documents.
+    - cron: '0 13 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: compatibility matrix versions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+      - run: npm run check:matrix
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
