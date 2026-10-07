@@ -214,8 +214,16 @@ Update this section in the same change that documents a release:
 2. When `seamless-cli` changes `SEAMLESS_AUTH_API_VERSION`, `SEAMLESS_AUTH_ADMIN_DASHBOARD_VERSION`,
    or `SEAMLESS_TEMPLATES_REF` in `src/core/images.ts`, update the scaffold table and re-read the
    template ranges at the new tag.
-3. Change the date at the top of the section, and check each version against
-   `npm view <package> version`.
+3. Change the date at the top of the section, then run `npm run check:matrix`.
+
+`npm run check:matrix` (`scripts/check-compat-matrix.mjs`) reads the table above and compares each
+"Version on `main`" with the latest release: `npm view <package> version` for the npm packages, and
+the latest GitHub release tag for `seamless-auth-api` and `seamless-auth-admin-dashboard`, which are
+not published to npm. It prints `ok` or `drift` per row and exits 1 on any drift or on an npm
+package it cannot look up. A GitHub row it cannot read (for example over the unauthenticated rate
+limit) is skipped with a note. It needs the network, so it is not part of `npm run lint`. The
+`check-compat-matrix` workflow runs it every Monday and on demand (`workflow_dispatch`), so a failed
+run means a release has outpaced this table.
 
 ---
 

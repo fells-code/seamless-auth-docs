@@ -13,6 +13,7 @@
     "lint": "eslint . && node scripts/check-no-h1.mjs && node scripts/check-sdk-results.mjs",
     "format": "prettier -w .",
     "typecheck": "astro check",
+    "check:matrix": "node scripts/check-compat-matrix.mjs",
     "prepare": "husky"
   },
   "dependencies": {
