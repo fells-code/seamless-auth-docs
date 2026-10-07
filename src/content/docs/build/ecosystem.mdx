@@ -157,9 +157,9 @@ packages, which require Node.js 18 or later.
 | `@seamless-auth/express`          | 0.19.1         | `@seamless-auth/core` ^0.19.1                                                        | `express` >=5.0.0                                                             |
 | `@seamless-auth/fastify`          | 0.10.1         | `@seamless-auth/core` ^0.19.1                                                        | `fastify` >=5.0.0                                                             |
 | `@seamless-auth/nextjs`           | 0.3.1          | `@seamless-auth/core` ^0.19.1, `@seamless-auth/types` ^0.28.0                        | None                                                                          |
-| `@seamless-auth/client`           | 0.3.1          | `@seamless-auth/types` ^0.26.0                                                       | None                                                                          |
-| `@seamless-auth/react`            | 0.15.1         | `@seamless-auth/client` ^0.3.1, `@seamless-auth/types` ^0.26.0                       | `react` and `react-dom` 18 or 19, optional `react-router-dom` 6.4+ or 7.15.1+ |
-| `@seamless-auth/react-native`     | 0.2.1          | `@seamless-auth/client` ^0.3.1, `@seamless-auth/types` ^0.26.0                       | `react` 18 or 19                                                              |
+| `@seamless-auth/client`           | 0.3.2          | `@seamless-auth/types` ^0.28.0                                                       | None                                                                          |
+| `@seamless-auth/react`            | 0.15.2         | `@seamless-auth/client` ^0.3.2, `@seamless-auth/types` ^0.28.0                       | `react` and `react-dom` 18 or 19, optional `react-router-dom` 6.4+ or 7.15.1+ |
+| `@seamless-auth/react-native`     | 0.2.2          | `@seamless-auth/client` ^0.3.2, `@seamless-auth/types` ^0.28.0                       | `react` 18 or 19                                                              |
 | `@seamless-auth/types`            | 0.28.0         | None                                                                                 | None                                                                          |
 | `@seamless-auth/messaging`        | 0.2.0          | None                                                                                 | None                                                                          |
 | `@seamless-auth/messaging-aws`    | 0.2.0          | `@seamless-auth/messaging` ^0.2.0                                                    | None                                                                          |
@@ -175,10 +175,8 @@ How to read it:
 - `@seamless-auth/express`, `fastify`, and `nextjs` declare `@seamless-auth/core` as
   `workspace:^`, which pnpm rewrites at publish to a caret on the core version in the same release
   (`^0.19.1` today).
-- `@seamless-auth/types` ranges are mixed. The API, `core`, `nextjs`, `seamless-cli`, and the admin
-  dashboard declare ^0.28.0. The released `client`, `react`, and `react-native` still declare
-  ^0.26.0; their `main` already declares ^0.28.0 and ships in their next release. An app that
-  installs packages on different types minors gets more than one copy of `@seamless-auth/types`.
+- Every package that depends on `@seamless-auth/types` declares ^0.28.0, so an app that installs
+  any mix of the SDKs and adapters resolves a single copy of it.
 - The messaging packages are used by `seamless-auth-api` to deliver email and SMS. Your application
   does not install them.
 - The auth API exposes an HTTP contract, not a package range. No package declares a range on
