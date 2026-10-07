@@ -351,11 +351,14 @@ All three adapters are official packages of `seamless-auth-server`, published to
 `@seamless-auth/core`, still pre-1.0. The `beta` label you see in `seamless init` belongs to the
 starter templates in `seamless-templates`, not to the adapter packages:
 
-| Adapter                  | Version on `main` | Package status | CLI starter template (status)          |
-| ------------------------ | ----------------- | -------------- | -------------------------------------- |
-| `@seamless-auth/express` | 0.18.0            | Official       | `express` (stable)                     |
-| `@seamless-auth/fastify` | 0.9.0             | Official       | `fastify` (beta)                       |
-| `@seamless-auth/nextjs`  | 0.2.0             | Official       | `nextjs`, a full-stack template (beta) |
+| Adapter                  | Package status | CLI starter template (status)          |
+| ------------------------ | -------------- | -------------------------------------- |
+| `@seamless-auth/express` | Official       | `express` (stable)                     |
+| `@seamless-auth/fastify` | Official       | `fastify` (beta)                       |
+| `@seamless-auth/nextjs`  | Official       | `nextjs`, a full-stack template (beta) |
+
+Current versions and the ranges each adapter declares on `@seamless-auth/core` are in the
+[Compatibility Matrix](/build/ecosystem#compatibility-matrix).
 
 Express is the most mature path. It is the reference adapter: the Fastify and Next.js adapters'
 tests hold them to the Express adapter's responses. It is also the only adapter released in lockstep

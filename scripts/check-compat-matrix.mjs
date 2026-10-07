@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 
-// Compares the "Version on main" column of the Compatibility Matrix against what is
+// Compares the "Latest release" column of the Compatibility Matrix against what is
 // actually released: `npm view` for published packages, and the latest GitHub release
 // for the two components that ship as images rather than npm packages. It needs the
 // network, so it runs as `npm run check:matrix` and on a schedule, never in `lint`.
@@ -20,8 +20,8 @@ function readMatrix(source) {
 
   const header = lines.findIndex((line, i) => i > start && line.startsWith('|'))
   const columns = splitRow(lines[header])
-  const versionColumn = columns.findIndex((cell) => /^Version on/.test(cell))
-  if (versionColumn === -1) throw new Error('The matrix has no "Version on main" column')
+  const versionColumn = columns.findIndex((cell) => /^(Latest release|Version on)/.test(cell))
+  if (versionColumn === -1) throw new Error('The matrix has no "Latest release" column')
 
   const rows = []
   for (let i = header + 2; i < lines.length && lines[i].startsWith('|'); i++) {
