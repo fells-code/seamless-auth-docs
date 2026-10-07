@@ -52,7 +52,7 @@ boot to rows that were never changed through the admin API. See
 | `ACCESS_TOKEN_TTL`               | Access token lifetime, such as `30m`                                              |
 | `REFRESH_TOKEN_TTL`              | Refresh token lifetime, such as `1h`                                              |
 | `SESSION_IDLE_TTL` | Session idle timeout, such as `8h` (the default) |
-| `MAX_CONCURRENT_SESSIONS` | Sessions per user; empty, `null`, `none`, or `unlimited` means no cap (the default) |
+| `MAX_CONCURRENT_SESSIONS` | Sessions per user; `null`, `none`, or `unlimited` means no cap (the default); empty counts as unset |
 | `RATE_LIMIT`                     | Base request rate limit                                                           |
 | `DELAY_AFTER`                    | Slowdown threshold                                                                |
 | `FLOW_RATE_LIMITS` | JSON per-IP and per-identity limits for OTP, magic-link, and OAuth flows |
