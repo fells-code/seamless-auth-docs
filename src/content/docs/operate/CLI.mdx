@@ -89,19 +89,23 @@ and see the [CLI Init Flow](/operate/cli-init#template-flags) for what each step
 
 ```bash
 npx seamless-cli check
+npx seamless-cli check --strict
 ```
 
-Validates the generated project shape and local runtime:
+Validates the generated project shape and runtime:
 
 - `seamless.config.json`
-- configured web and API paths
-- Docker availability
-- `docker-compose.yml`
-- expected running containers
-- API, auth, and admin health endpoints on local ports
+- configured web, API, and mobile paths
+- Docker availability, `docker-compose.yml`, and the expected running containers
+- health endpoints for the API, the auth server, and the admin console (wherever the project's admin
+  mode serves it)
 
-This command checks the local generated stack. It does not currently check Terraform, AWS CLI, or
-deployment state.
+Every check runs and reports. Without `--strict` the command exits 0 even when a check fails; with
+`--strict` it exits 1 on any failure, which suits CI. For a managed project the Docker checks are
+skipped and the managed instance's health endpoint is probed instead. The
+[CLI command reference](/reference/cli-commands#check) lists every probe.
+
+It does not check Terraform, AWS CLI, or deployment state.
 
 ---
 

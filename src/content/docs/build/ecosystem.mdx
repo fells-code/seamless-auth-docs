@@ -129,8 +129,9 @@ That separation matters because:
 
 ### 5. The CLI Connects Everything
 
-`seamless-cli` is the fastest way to get a working stack. It currently scaffolds a React
-frontend, an Express API, the auth server in Docker or local mode, and an optional admin dashboard.
+`seamless-cli` is the fastest way to get a working stack. It scaffolds a web app (React or a
+full-stack Next.js app), an API (Express or Fastify) unless the web template serves `/auth` itself,
+an optional Expo mobile app, the auth server in Docker or local mode, and an optional admin console.
 
 It also includes `check`, `verify`, and admin commands against a running instance. The first admin
 is the account registered with the owner email `init` asks for. The current `../seamless-cli` source
