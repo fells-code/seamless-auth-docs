@@ -76,8 +76,9 @@ same name. A full integration flow for an existing app is not shipped yet.
 
 The mobile app lands in `mobile/` next to the web and API projects, wired to the same API with
 `@seamless-auth/react-native`. It is not part of the Docker stack: run it with
-`cd mobile && npm install && npx expo run:ios` (or `run:android`). See
-[React Native SDK](/build/react-native-sdk).
+`cd mobile && npm install && npx expo start`, which is the command `init` prints. An Android
+emulator reaches the API at `http://10.0.2.2:3000`, so set `EXPO_PUBLIC_API_URL` in `mobile/.env`
+when you use one. See [React Native SDK](/build/react-native-sdk).
 
 ### Current generated stack
 
@@ -113,6 +114,50 @@ to register: `http://localhost:5173/oauth/callback`. See
 | ------------------------ | ------------------------------------------------------------------------------ |
 | `SEAMLESS_TEMPLATES_REF` | Read the published templates repository at this ref instead of the pinned tag   |
 | `SEAMLESS_TEMPLATES_DIR` | Read templates from a local checkout instead; takes precedence over the ref     |
+
+### Non-interactive flags
+
+```bash
+seamless init my-app --local --yes --email=you@example.com
+seamless init my-app --local --yes --email=you@example.com --api=fastify --admin=none
+```
+
+Flags answer the questions `init` would otherwise ask, and a question answered by a flag is
+skipped. `--yes` answers the rest with the recommended option, so `init` can run in CI, a
+Dockerfile, or a script. Valued flags take either `--flag=value` or `--flag value`.
+
+| Flag          | Accepted values                                  | Default                                                          | Effect                                                                                                     |
+| ------------- | ------------------------------------------------ | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `--yes`, `-y` | none                                             | off                                                              | Answer every question no flag answers with the recommended option                                          |
+| `--local`     | none                                             | off                                                              | Scaffold the self-hosted stack without contacting the control plane                                        |
+| `--app`       | a managed application id or infra id             | none                                                             | Connect to that managed application (needs `seamless login`)                                               |
+| `--web`       | a web or full-stack template id or alias         | the first selectable web template in the registry (`react-vite`) | Choose the web starter; a full-stack template (`nextjs`) leaves no api layer                               |
+| `--api`       | an api template id or alias                      | the first selectable api template in the registry (`express`)    | Choose the backend starter; refused alongside a full-stack web template                                    |
+| `--mobile`    | a mobile template id or alias (`expo`, `mobile`) | none                                                             | Add a mobile starter at `mobile/`; `--yes` never adds one on its own                                       |
+| `--email`     | an email address                                 | your portal session email, when signed in                        | Owner address, which becomes the admin when you register; required under `--yes` without a portal session  |
+| `--auth`      | `docker`, `local`                                | `docker`                                                         | Run the auth server as a Docker image or from local source                                                 |
+| `--admin`     | `api`, `image`, `source`, `none`                 | `api`                                                            | Where the admin console is hosted; a full-stack web template accepts only `none`                           |
+| `--force`     | none                                             | off                                                              | Under `--yes`, allow scaffolding into a non-empty directory and rotating an existing managed service token |
+| `--profile`   | any                                              | none                                                             | Accepted and ignored, with a warning; managed connect uses your portal session                             |
+
+The template defaults are the first selectable entries of each kind in the registry at the pinned
+tag. `--web`, `--api`, and `--mobile` take the same ids and aliases as the bare template flags, and
+naming one layer twice with different templates is an error. Every flag is validated before a
+directory is created.
+
+`--yes` will not make three decisions on its own:
+
+- **Managed or local.** If you are signed in to the portal and have an application to connect,
+  pass `--app <id>` or `--local`. If the control plane cannot be reached, `--yes` fails rather than
+  falling back to a local stack; pass `--local`.
+- **Destructive steps.** Scaffolding into a directory that is not empty and rotating a managed
+  application's existing service token both need `--force` as well.
+- **OAuth providers.** The `--oauth` starter is scaffolded with no providers configured. Add them
+  later with `seamless config oauth-providers add`.
+
+Without a terminal attached and without `--yes`, any question no flag answers fails with an error
+that names the flag to pass, instead of waiting for input. See [CLI Init Flow](/operate/cli-init)
+for the interactive walkthrough.
 
 ### No shortcut
 
@@ -166,12 +211,14 @@ seamless verify
 ```
 
 Runs a cross-package auth conformance harness. It stands up the ecosystem with Docker Compose
-(Postgres, the auth API, the `@seamless-auth/express` adapter, and the React starter), then runs a
-Playwright matrix across three layers and prints a flow x layer pass/fail grid alongside JUnit and
-HTML reports.
+(Postgres, the auth API, an Express adapter app and a Fastify adapter app, and the React starter),
+then runs a Playwright matrix across the api, adapter, and react layers and prints a flow x layer
+pass/fail grid alongside JUnit and HTML reports.
 
 - **api** verifies the auth API directly (Bearer / JSON).
-- **adapter** verifies the `@seamless-auth/express` cookie path.
+- **adapter** verifies the cookie path through both adopter frameworks, with the same specs run
+  twice: once against `@seamless-auth/express` and once against `@seamless-auth/fastify`. Each
+  framework gets its own row in the grid, so a regression in one shows up on its own.
 - **react** drives the React starter in a real browser (Chromium), including passkeys via a virtual
   authenticator and OAuth via an in-process mock OIDC provider.
 
@@ -185,23 +232,41 @@ seamless verify              # test the published @seamless-auth/* packages
 seamless verify --local      # build the SDKs from local source (pre-publish contract test)
 ```
 
-| Flag              | Effect                                                             |
-| ----------------- | ----------------------------------------------------------------- |
-| `--local`         | Build `@seamless-auth/*` from local source instead of published   |
-| `--api-only`      | Run only the api project (skip adapter and react)                 |
-| `--no-react`      | Skip the browser layer                                            |
-| `--filter <grep>` | Run only tests matching the grep                                  |
-| `--keep-up`       | Leave the Docker stack running after the run                      |
+| Flag              | Effect                                                                                                                              |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `--local`         | Build `@seamless-auth/*` (core, express, fastify, and react when the browser layer runs) from local source instead of published     |
+| `--api-only`      | Run only the api project (skip both adapters and react)                                                                             |
+| `--no-react`      | Skip the browser layer                                                                                                              |
+| `--filter=<flow>` | Run only tests matching `<flow>` (passed to Playwright as `--grep`), in every layer. The space form `--filter <flow>` is not parsed |
+| `--keep-up`       | Leave the Docker stack running after the run                                                                                        |
+
+Without `--filter`, each web template runs only the flows its `template.json` lists under
+`verify.flows`, or every flow when it lists none. `--filter` replaces that per-template scope.
+
+| Adapter | Package under test       | Compose service   | URL the harness calls                                    |
+| ------- | ------------------------ | ----------------- | -------------------------------------------------------- |
+| Express | `@seamless-auth/express` | `adapter`         | `http://localhost:3000` (`SEAMLESS_ADAPTER_URL`)         |
+| Fastify | `@seamless-auth/fastify` | `adapter-fastify` | `http://localhost:3001` (`SEAMLESS_FASTIFY_ADAPTER_URL`) |
+
+`verify` sets both URLs for the harness itself, so they are listed to explain the grid, not as
+settings. Without `--local`, each adapter app installs the version its `package.json` pins, and the
+end-of-run summary lists the package versions that were tested.
 
 Requires Docker. The sibling repos are resolved relative to the CLI checkout and can be overridden:
 
-| Environment variable     | Overrides                                                                                         |
-| ------------------------ | ------------------------------------------------------------------------------------------------- |
-| `SEAMLESS_API_DIR`       | The `seamless-auth-api` checkout the auth server is built from                                    |
-| `SEAMLESS_SERVER_DIR`    | The `seamless-auth-server` checkout (needed for `--local`)                                        |
-| `SEAMLESS_REACT_SDK_DIR` | The `seamless-auth-react` checkout (needed for `--local` browser runs)                            |
-| `SEAMLESS_TEMPLATES_DIR` | The `seamless-templates` checkout; every runnable web template in its `registry.json` is driven   |
-| `SEAMLESS_REACT_DIR`     | A single template directory to drive instead of the whole registry                                |
+| Environment variable     | Overrides                                                                                       |
+| ------------------------ | ----------------------------------------------------------------------------------------------- |
+| `SEAMLESS_API_DIR`       | The `seamless-auth-api` checkout the auth server is built from                                  |
+| `SEAMLESS_SERVER_DIR`    | The `seamless-auth-server` checkout (needed for `--local`)                                      |
+| `SEAMLESS_REACT_SDK_DIR` | The `seamless-auth-react` checkout (needed for `--local` browser runs)                          |
+| `SEAMLESS_TEMPLATES_DIR` | The `seamless-templates` checkout; every runnable web template in its `registry.json` is driven |
+| `SEAMLESS_REACT_DIR`     | A single template directory to drive instead of the whole registry                              |
+
+`SEAMLESS_VERIFY_COMPOSE_OVERRIDE` names an extra Compose file that `verify` layers over its base
+`verify/docker-compose.verify.yml`, passed as a second `-f` on every `docker compose` call it makes
+(build, up, logs, and teardown). It is unset by default, and a local run needs nothing from it. CI
+points it at `verify/docker-compose.cache.yml`, which attaches a GitHub Actions build cache to each
+image. A relative path resolves from the CLI's `verify/` directory, so an absolute path is safer.
 
 `verify` always reads templates from a local checkout, so `SEAMLESS_TEMPLATES_REF` (which selects a
 ref of the published repository for `init`) has no effect here. A reusable GitHub workflow runs
