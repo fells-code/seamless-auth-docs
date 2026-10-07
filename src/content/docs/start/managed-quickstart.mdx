@@ -21,7 +21,7 @@ If you would rather run the whole stack yourself, follow the
 
 ## What you will need
 
-- Node.js 24 and a package manager (`npm` is used below)
+- Node 22 or newer and a package manager (`npm` is used below)
 - An existing app, or two empty projects: a React frontend and an Express backend
 - A web browser and an email inbox you control
 - About ten minutes
@@ -89,8 +89,8 @@ about five). When it finishes, the application has its own **Auth Server URL** o
 https://<your-app-id>.seamlessauth.com
 ```
 
-This URL is what your SDKs point at. You can find it on the application's **Auth API Configuration**
-card at any time.
+This URL is what your backend adapter points at (your frontend points at your backend). You can find
+it on the application's **Auth API Configuration** card at any time.
 
 ---
 
@@ -118,7 +118,63 @@ The service token is a long, URL-safe secret. Your backend reads it from an envi
 
 ---
 
-## Step 4: Connect your frontend
+## Step 4: Connect your backend
+
+Your backend runs the Seamless Auth adapter. It is the only piece that talks to the hosted instance:
+it holds the service token, sets the session cookies in the browser, and calls the Auth Server URL
+over bearer tokens. The browser never talks to the Auth Server URL directly.
+
+Install the Express adapter and CORS middleware in your backend project:
+
+```bash
+npm install @seamless-auth/express cors
+```
+
+Mount the adapter at `/auth`. Point `authServerUrl` and `audience` at your **Auth Server URL**:
+
+```ts
+import cors from 'cors';
+import express from 'express';
+import createSeamlessAuthServer from '@seamless-auth/express';
+
+const AUTH_URL = 'https://<your-app-id>.seamlessauth.com';
+
+const app = express();
+
+// The browser SDK sends cookies, so the frontend origin must be allowed with credentials.
+app.use(cors({ origin: process.env.FRONTEND_ORIGIN, credentials: true }));
+
+app.use(
+  '/auth',
+  createSeamlessAuthServer({
+    authServerUrl: AUTH_URL,
+    audience: AUTH_URL,
+    cookieSecret: process.env.COOKIE_SIGNING_KEY!,
+    serviceSecret: process.env.SEAMLESS_SERVICE_TOKEN!, // from the portal, shown once
+    jwksKid: process.env.JWKS_KID!,
+  }),
+);
+
+app.listen(3000);
+```
+
+Set these environment variables on your backend:
+
+| Variable                 | Value                                                                                                     |
+| ------------------------ | --------------------------------------------------------------------------------------------------------- |
+| `SEAMLESS_SERVICE_TOKEN` | The service token generated in Step 3                                                                     |
+| `COOKIE_SIGNING_KEY`     | A random secret of at least 32 characters, for example from `openssl rand -base64 48`                     |
+| `JWKS_KID`               | The `kid` of your instance's signing key, listed at `https://<your-app-id>.seamlessauth.com/.well-known/jwks.json` |
+| `FRONTEND_ORIGIN`        | Your frontend's origin, for example `http://localhost:5173`                                               |
+
+The service token is never sent raw. The adapter uses it to sign short-lived service tokens for
+machine-to-machine calls to your hosted instance. To protect routes, add `requireAuth` and
+`requireRole` from the same package. See the [Server SDKs](/build/server-sdks) reference for the full
+option list and middleware.
+
+---
+
+## Step 5: Connect your frontend
 
 Install the React SDK in your frontend project:
 
@@ -126,17 +182,17 @@ Install the React SDK in your frontend project:
 npm install @seamless-auth/react
 ```
 
-Wrap your app in `AuthProvider`, using your application's **Auth Server URL** as `apiHost`, then read
-session state with `useAuth()`:
+Wrap your app in `AuthProvider`, using **your backend's origin** as `apiHost`, then read session state
+with `useAuth()`. The SDK calls the adapter you mounted at `/auth` on that origin.
 
 ```tsx
 import { AuthProvider, useAuth } from '@seamless-auth/react';
 
-const AUTH_URL = 'https://<your-app-id>.seamlessauth.com';
+const API_URL = 'http://localhost:3000';
 
 export function App() {
   return (
-    <AuthProvider apiHost={AUTH_URL}>
+    <AuthProvider apiHost={API_URL}>
       <AppRoutes />
     </AuthProvider>
   );
@@ -149,63 +205,20 @@ function AppRoutes() {
 }
 ```
 
-`AuthProvider` takes only `apiHost` (required) and an optional `autoDetectPreviousSignin`. There is no
-frontend token or client id: the browser SDK carries no secret and relies on cookies. For built-in
-sign-in screens, mount `AuthRoutes`; for custom UI, use the headless client. See the
-[React SDK](/build/react-sdk) reference for the full API.
-
-<Aside type="tip">
-  Put `AUTH_URL` in a frontend environment variable (for example `VITE_AUTH_URL` in a Vite app) rather
-  than hardcoding it, so the value differs cleanly between environments.
+<Aside type="caution">
+  Do not set `apiHost` to the Auth Server URL. The hosted instance speaks bearer tokens to your
+  backend and sets no browser cookies, so a browser pointed at it cannot sign in.
 </Aside>
 
----
+`AuthProvider` needs only `apiHost`; its other props are optional. There is no frontend token or
+client id: the browser SDK carries no secret and relies on the cookies your backend sets. For
+built-in sign-in screens, mount `AuthRoutes` from `@seamless-auth/react/routes`; for custom UI, use
+the headless client. See the [React SDK](/build/react-sdk) reference for the full API.
 
-## Step 5: Connect your backend
-
-Install the Express SDK in your backend project:
-
-```bash
-npm install @seamless-auth/express
-```
-
-Mount the auth server and read the service token from a server-side environment variable. Point
-`authServerUrl` and `audience` at the same **Auth Server URL** as the frontend:
-
-```ts
-import express from 'express';
-import createSeamlessAuthServer from '@seamless-auth/express';
-
-const AUTH_URL = 'https://<your-app-id>.seamlessauth.com';
-
-const app = express();
-
-app.use(
-  '/auth',
-  createSeamlessAuthServer({
-    authServerUrl: AUTH_URL,
-    cookieSecret: process.env.COOKIE_SIGNING_KEY!,
-    serviceSecret: process.env.SEAMLESS_SERVICE_TOKEN!, // from the portal, shown once
-    jwksKid: process.env.JWKS_KID!,
-    issuer: process.env.APP_ORIGIN!,
-    audience: AUTH_URL,
-  }),
-);
-```
-
-Set these environment variables on your backend:
-
-| Variable                 | Value                                                              |
-| ------------------------ | ----------------------------------------------------------------- |
-| `SEAMLESS_SERVICE_TOKEN` | The service token generated in Step 3                             |
-| `COOKIE_SIGNING_KEY`     | A strong random secret your backend uses to sign its auth cookies |
-| `JWKS_KID`               | The signing key id for your instance                              |
-| `APP_ORIGIN`             | Your backend's own origin, used as the token issuer               |
-
-The service token is never sent raw. The adapter uses it to sign short-lived service tokens for
-machine-to-machine calls to your hosted instance. To protect routes, add `requireAuth` and
-`requireRole` from the same package. See the [Server SDKs](/build/server-sdks) reference for the full
-option list and middleware.
+<Aside type="tip">
+  Put the backend origin in a frontend environment variable (for example `VITE_API_URL` in a Vite
+  app) rather than hardcoding it, so the value differs cleanly between environments.
+</Aside>
 
 <Aside type="note">
   The portal shows these same install commands and snippets in its built-in **Get connected** wizard,

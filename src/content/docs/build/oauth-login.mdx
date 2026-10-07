@@ -2,12 +2,10 @@
 title: "How To Add OAuth Login"
 description: "Use this guide when you want users to sign in with an external OAuth provider while still letting Seamless Auth own local users, sessions, cookies, and…"
 sidebar:
-  order: 8
+  order: 10
 ---
 
 import { Aside } from '@astrojs/starlight/components';
-
-# How To Add OAuth Login
 
 Use this guide when you want users to sign in with an external OAuth provider while still letting
 Seamless Auth own local users, sessions, cookies, and auth events.
@@ -20,7 +18,8 @@ OAuth login is available through:
 
 <Aside type="note">
   As of `@seamless-auth/react` 0.3.0, `AuthRoutes` renders OAuth provider buttons on the sign-in
-  view and includes the `/oauth/callback` route out of the box. If you use `AuthRoutes`, you only
+  view and includes the `/oauth/callback` route out of the box. Since 0.14.0 it is imported from
+  `@seamless-auth/react/routes`. If you use `AuthRoutes`, you only
   need Step 1 (enable OAuth and configure providers). The custom UI steps that follow are for when
   you build your own screens with the headless helpers.
 </Aside>
@@ -77,15 +76,73 @@ Provider config fields:
 | `redirectUris`          | Optional allowlist of exact redirect URIs                           |
 | `subjectJsonPath`       | Profile field used as provider subject, default `sub`               |
 | `emailJsonPath`         | Profile field used as email, default `email`                        |
-| `emailVerifiedJsonPath` | Profile field used for email verification, default `email_verified` |
+| `emailVerifiedJsonPath` | Profile field used for email verification, default `email_verified`. See [Choosing A Provider](#choosing-a-provider) |
 | `nameJsonPath`          | Optional profile field used as display name metadata                |
 | `allowSignup`           | Whether OAuth can create a new local user                           |
 | `accountLinking`        | `email` or `disabled`                                               |
 | `requireEmailVerified`  | Whether profile email must be verified                              |
 | `pkce`                  | Optional boolean                                                    |
+| `issuer` | OpenID Connect issuer. With `jwksUri`, the ID token is verified and used as the profile |
+| `jwksUri` | The provider's signing keys, used to verify the ID token |
+| `externalIdSource` | Import source whose users a first sign-in can link to |
+| `externalIdJsonPath` | ID token claim holding the imported user's external id, such as `oid` |
 
 In production, set `OAUTH_STATE_SECRET`. Development can fall back, but production should not rely
 on derived local state secrets.
+
+---
+
+## Choosing A Provider
+
+A provider's email decides which local account an OAuth sign-in belongs to, so only enable a
+provider whose verified email you are willing to treat as proof of ownership.
+
+- **Use providers that verify the address themselves** and say so in the profile, such as Google's
+  `email_verified`.
+- **Point `emailVerifiedJsonPath` only at a claim the provider sets after verifying the address.**
+  Never point it at a field the user, or an administrator of another tenant, can set, and never at a
+  value that is always true. That turns every profile into a verified one.
+- **Keep `accountLinking` at `disabled`** for a provider you do not trust to verify addresses, so it
+  can only sign in identities it created.
+
+### Microsoft Entra ID
+
+Register a **single-tenant** application and use your tenant's endpoints:
+
+```txt
+https://login.microsoftonline.com/<tenant-id>/oauth2/v2.0/authorize
+https://login.microsoftonline.com/<tenant-id>/oauth2/v2.0/token
+```
+
+Then configure the provider as OpenID Connect, so the profile comes from a verified ID token:
+
+```json
+{
+  "id": "microsoft",
+  "authorizationUrl": "https://login.microsoftonline.com/<tenant-id>/oauth2/v2.0/authorize",
+  "tokenUrl": "https://login.microsoftonline.com/<tenant-id>/oauth2/v2.0/token",
+  "userInfoUrl": "https://graph.microsoft.com/oidc/userinfo",
+  "issuer": "https://login.microsoftonline.com/<tenant-id>/v2.0",
+  "jwksUri": "https://login.microsoftonline.com/<tenant-id>/discovery/v2.0/keys",
+  "scopes": ["openid", "email", "profile"],
+  "emailVerifiedJsonPath": "xms_edov",
+  "externalIdSource": "entra-id",
+  "externalIdJsonPath": "oid"
+}
+```
+
+- `<tenant-id>` is the directory (tenant) id, a GUID. ID tokens name the tenant that way, so a domain
+  will not match the issuer.
+- Add the `xms_edov` optional claim under **Token configuration** in the app registration. It says
+  the tenant has verified the email's domain, which is what lets a Microsoft sign-in link to or
+  create an account by email.
+- `externalIdSource` and `externalIdJsonPath` link users you imported from Entra ID (with
+  `seamless migrate` and source `entra-id`) by their object id, so they sign in to the right account
+  without relying on email.
+
+Do not use `common`, `organizations`, or `consumers`. They accept a sign-in from any Entra tenant,
+and the administrator of each tenant controls the email address its users present. `seamless init
+--oauth` asks for your directory (tenant) id and refuses those three values.
 
 ---
 
@@ -216,16 +273,28 @@ OAuth identity rows link a provider subject to a local user.
 
 The current auth API behavior is:
 
-| Case                                                           | Behavior                                        |
-| -------------------------------------------------------------- | ----------------------------------------------- |
-| Existing `oauth_identities` row                                | Reuse the linked local user                     |
-| No identity, matching user email, `accountLinking: "email"`    | Link provider identity to that user             |
-| No identity, matching user email, `accountLinking: "disabled"` | Reject login                                    |
-| No matching user, `allowSignup: true`                          | Create a verified local user with default roles |
-| No matching user, `allowSignup: false`                         | Reject login                                    |
+| Case                                                                       | Behavior                                        |
+| -------------------------------------------------------------------------- | ----------------------------------------------- |
+| Existing `oauth_identities` row                                            | Reuse the linked local user                     |
+| No identity, matching user email, `accountLinking: "email"`, email verified | Link provider identity to that user             |
+| No identity, matching user email, `accountLinking: "disabled"`             | Reject login                                    |
+| No matching user, `allowSignup: true`, email verified                      | Create a verified local user with default roles |
+| No matching user, `allowSignup: false`                                     | Reject login                                    |
+| No identity yet and the provider does not assert the email is verified     | Reject with `oauth_email_not_verified`          |
 
-The profile email must exist. If `requireEmailVerified` is true, the provider profile must also
-report a verified email.
+The profile email must exist. Linking to an existing account and creating a new one both require
+the provider to assert the email is verified (`email_verified: true`, read from
+`emailVerifiedJsonPath`), whatever `requireEmailVerified` is set to. An identity that is already
+linked keeps signing in. A provider whose profile has no verification claim, such as Microsoft
+Graph's userinfo, can sign in identities it already linked but cannot link or create new ones.
+
+GitHub's `/user` has no verification claim either, so a GitHub provider (a `userInfoUrl` of
+`https://api.github.com/user`, or GitHub Enterprise Server's `/api/v3/user`) also reads
+`/user/emails` and uses the address GitHub lists as verified. Request the `user:email` scope.
+
+When a verified provider email links to an account that had not yet proven its address (one an
+admin created or imported), the account is marked verified, and a phone verified before then is
+removed.
 
 ---
 
@@ -238,6 +307,8 @@ report a verified email.
 | Provider rejects redirect                          | Provider console does not include the same redirect URI                                           |
 | Callback returns `Invalid OAuth state`             | State expired, wrong provider ID, or `OAUTH_STATE_SECRET` changed mid-flow                        |
 | Callback returns `OAuth signup is disabled`        | No matching local user and `allowSignup` is false                                                 |
+| Callback returns `oauth_invalid_id_token` | The ID token failed verification: wrong `issuer` or `jwksUri`, a clock far out of sync, or a reused sign-in |
+| Callback returns `oauth_email_not_verified`        | The provider did not assert the email is verified, and this identity is not linked yet             |
 | Callback succeeds but React still looks signed out | Callback did not hit the backend adapter, cookies were blocked, or `refreshSession()` did not run |
 
 ---
@@ -245,6 +316,8 @@ report a verified email.
 ## Security Notes
 
 - Keep provider client secrets in environment variables.
+- Enable only providers that verify email addresses, and scope Microsoft to your tenant. See
+  [Choosing A Provider](#choosing-a-provider).
 - Use exact redirect URI allowlists for production providers.
 - Set a stable `OAUTH_STATE_SECRET` in production.
 - Treat OAuth as authentication only; app authorization still belongs in your backend.

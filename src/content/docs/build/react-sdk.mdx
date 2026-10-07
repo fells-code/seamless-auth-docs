@@ -5,7 +5,7 @@ sidebar:
   order: 4
 ---
 
-# React SDK
+import { Aside } from '@astrojs/starlight/components'
 
 `@seamless-auth/react` is the official React integration for Seamless Auth.
 
@@ -20,7 +20,7 @@ Core exports:
 
 - `AuthProvider`
 - `useAuth()`
-- `AuthRoutes`
+- `AuthRoutes`, from the `@seamless-auth/react/routes` subpath
 - `createSeamlessAuthClient()`
 - `useAuthClient()`
 - `usePasskeySupport()`
@@ -29,6 +29,27 @@ Core exports:
 
 Important exported types include `AuthContextType`, `User`, `Credential`, `Organization`,
 `OAuthProvider`, `StepUpStatus`, and the headless client input/result types.
+
+The framework-free parts (the headless client, the session store, the ports and the transport)
+live in `@seamless-auth/client`, which `@seamless-auth/react` and
+[`@seamless-auth/react-native`](/build/react-native-sdk) both build on and re-export. A React app
+never needs to install it directly.
+
+### Install
+
+```bash
+npm install @seamless-auth/react
+```
+
+`react-router-dom` is an optional peer dependency. Install it only if you render the built-in
+screens from `@seamless-auth/react/routes`. `AuthProvider`, the hooks, and the headless client do
+not need it.
+
+<Aside type="caution" title="Upgrading to 0.14.0 or later">
+  `AuthRoutes` moved out of the package root in 0.14.0. Change
+  `import { AuthRoutes } from '@seamless-auth/react'` to
+  `import { AuthRoutes } from '@seamless-auth/react/routes'`.
+</Aside>
 
 ---
 
@@ -39,35 +60,40 @@ Important exported types include `AuthContextType`, `User`, `Credential`, `Organ
 | `AuthProvider` + `useAuth()` | You want app-wide auth state and high-level actions                |
 | `createSeamlessAuthClient()` | You want fully custom auth screens outside React context           |
 | `useAuthClient()`            | You want custom React screens while reusing the provider `apiHost` |
-| `AuthRoutes`                 | You want the built-in login, OTP, magic-link, and passkey screens  |
+| `AuthRoutes` (`/routes`)     | You want the built-in login, OTP, magic-link, and passkey screens  |
 
-Most apps still wrap the route tree in `AuthProvider`.
+Most apps still wrap the route tree in `AuthProvider`. For a Next.js App Router application, see
+[Next.js](/build/nextjs).
 
 ---
 
 ## Basic Setup
 
 ```tsx
-import { BrowserRouter } from 'react-router-dom'
 import { AuthProvider } from '@seamless-auth/react'
 
 export function Root() {
   return (
-    <BrowserRouter>
-      <AuthProvider apiHost="http://localhost:3000">
-        <App />
-      </AuthProvider>
-    </BrowserRouter>
+    <AuthProvider apiHost="http://localhost:3000">
+      <App />
+    </AuthProvider>
   )
 }
 ```
 
-`AuthProvider` currently accepts:
+`AuthProvider` does not create a router. If you use the built-in screens, it goes inside your
+`<BrowserRouter>`.
 
-| Prop                       | Purpose                                          |
-| -------------------------- | ------------------------------------------------ |
-| `apiHost`                  | Auth base URL (required)                          |
-| `autoDetectPreviousSignin` | Optional localStorage-backed returning-user hint |
+`AuthProvider` accepts:
+
+| Prop                       | Purpose                                                                                       |
+| -------------------------- | --------------------------------------------------------------------------------------------- |
+| `apiHost`                  | Auth base URL (required)                                                                      |
+| `autoDetectPreviousSignin` | Optional localStorage-backed returning-user hint                                              |
+| `magicLinkRedirectUri`     | Where magic links sent by the built-in screens land                                           |
+| `initialSession`           | A session the server already resolved, so the first paint is not a loading state ([Next.js](/build/nextjs)) |
+| `transport`                | How the session travels: `cookie` (the default, for browsers) or `bearer` (for native)        |
+| `ports`                    | Platform ports for passkeys and the OAuth redirect; browsers use the defaults                 |
 
 There is no service token, client id, or app id prop. The browser SDK carries no secret and relies on
 cookies. `apiHost` may be given with or without a trailing slash; the SDK sends requests to
@@ -119,16 +145,39 @@ OAuth start/callback helpers, passkey login, and step-up verification.
 
 ## Built-In Auth Routes
 
-`AuthRoutes` currently provides screens for:
+`AuthRoutes` ships from its own entry, so applications that build their own screens never load
+react-router:
+
+```tsx
+import { AuthRoutes } from '@seamless-auth/react/routes'
+import { Route, Routes } from 'react-router-dom'
+
+function AppRoutes() {
+  const { isAuthenticated } = useAuth()
+
+  return (
+    <Routes>
+      <Route path="*" element={isAuthenticated ? <Dashboard /> : <AuthRoutes />} />
+    </Routes>
+  )
+}
+```
+
+It serves these paths:
 
 - `/login`
-- `/passKeyLogin`
-- `/verifyPhoneOTP`
-- `/verifyEmailOTP`
+- `/passkey-login`
+- `/verify-phone-otp`
+- `/verify-email-otp`
 - `/verify-magiclink`
 - `/oauth/callback`
-- `/registerPasskey`
-- `/magiclinks-sent`
+- `/register-passkey`
+- `/magic-link-sent`
+
+`/verify-magiclink` and `/oauth/callback` keep their names because the auth API builds magic links
+to the first and OAuth providers redirect to the second. The other paths were renamed from
+mixed case (`/passKeyLogin`, `/verifyPhoneOTP`, `/verifyEmailOTP`, `/registerPasskey`,
+`/magiclinks-sent`), which are no longer served.
 
 The sign-in view registers with just an email (a phone is optional): submit an email, verify the
 emailed code, and you are signed in. It also renders a button for each configured OAuth provider and
@@ -151,7 +200,7 @@ const authClient = createSeamlessAuthClient({
   apiHost: 'http://localhost:3000',
 })
 
-const loginStart = await authClient.login({
+const { data, error } = await authClient.login({
   identifier: 'user@example.com',
   passkeyAvailable: true,
 })
@@ -171,8 +220,38 @@ The headless client covers:
 - credential update and deletion
 - organization and organization-member operations
 
-Most methods return `Response`. Convenience methods such as passkey login, OAuth provider listing,
-and step-up verification return typed result objects.
+Every request method, on the client and on `useAuth()`, resolves to a `SeamlessAuthResult<T>`:
+`{ data, error }`, with exactly one of them set. Methods do not throw for HTTP or network failures;
+check `error`, which is a `SeamlessAuthError` carrying `status` and the response `body`.
+`isPasskeyPrfSupported()` is the exception: a local capability check that returns a boolean.
+
+---
+
+## Platform Ports And Transport
+
+The client reaches its platform through two ports, and `AuthProvider` takes them as an optional
+`ports` prop:
+
+- `passkeys` runs the WebAuthn ceremonies. The default is the browser's WebAuthn API through
+  SimpleWebAuthn.
+- `oauthRedirect` opens the provider. The default is a full-page navigation.
+
+The defaults are what every earlier version did; a React app only reaches for the prop to swap a
+port out in tests. The same ports are what
+[`@seamless-auth/react-native`](/build/react-native-sdk) fills with the native APIs.
+
+`transport` chooses how the session travels: `cookie`, the default and the only one a browser
+should use, or `bearer`, where the client holds the auth API's tokens through a `tokenStorage`
+port and speaks the adapter's bearer contract. Leave it alone on the web.
+
+`useAuthorizedFetch()` (or `client.authorizedFetch`) is a fetch for your own API that carries the
+session the way the transport does: `credentials: 'include'` on the web, the access token with
+one refresh-and-retry on native. A path resolves on `apiHost`:
+
+```ts
+const authorizedFetch = useAuthorizedFetch()
+const plan = await authorizedFetch('/api/plan/mine').then(r => r.json())
+```
 
 ---
 
@@ -189,12 +268,12 @@ function CustomLogin() {
   const { passkeySupported, loading } = usePasskeySupport()
 
   async function startLogin() {
-    const response = await authClient.login({
+    const { error } = await authClient.login({
       identifier: 'user@example.com',
       passkeyAvailable: passkeySupported,
     })
 
-    if (response.ok) {
+    if (!error) {
       await refreshSession()
     }
   }
@@ -224,17 +303,17 @@ function OAuthButtons() {
   const [providers, setProviders] = useState<OAuthProvider[]>([])
 
   useEffect(() => {
-    void listOAuthProviders().then((result) => setProviders(result.providers))
+    void listOAuthProviders().then(({ data }) => setProviders(data?.providers ?? []))
   }, [listOAuthProviders])
 
   async function signIn(providerId: string) {
-    const result = await startOAuthLogin({
+    const { data, error } = await startOAuthLogin({
       providerId,
       redirectUri: `${window.location.origin}/oauth/callback`,
       returnTo: `${window.location.origin}/dashboard`,
     })
 
-    window.location.assign(result.authorizationUrl)
+    if (!error) window.location.assign(data.authorizationUrl)
   }
 
   return providers.map((provider) => (
@@ -312,7 +391,7 @@ function SensitiveActionButton() {
 
   async function runSensitiveAction() {
     const status = await refreshStepUpStatus()
-    const verified = status?.fresh ? true : (await verifyStepUpWithPasskey()).success
+    const verified = status.data?.fresh || !(await verifyStepUpWithPasskey()).error
 
     if (!verified) return
 
@@ -352,13 +431,13 @@ if (supported) {
 For local key-unlock flows, request PRF during step-up:
 
 ```ts
-const result = await authClient.verifyStepUpWithPasskeyPrf({
+const { data, error } = await authClient.verifyStepUpWithPasskeyPrf({
   salt: vaultSaltBase64url,
   credentialId,
 })
 
-if (result.success && result.prf) {
-  const keyMaterial = result.prf.output
+if (!error) {
+  const keyMaterial = data.prf.output
 }
 ```
 
@@ -378,7 +457,9 @@ React app
   -> Seamless Auth API
 ```
 
-The backend layer owns cookie validation, role enforcement, and service-to-service auth.
+The backend layer owns cookie validation, role enforcement, and service-to-service auth. In a
+Next.js application that backend is the application itself, through `@seamless-auth/nextjs`; see
+[Next.js](/build/nextjs).
 
 ---
 
@@ -390,6 +471,8 @@ The backend layer owns cookie validation, role enforcement, and service-to-servi
 - [How To Use TOTP And Step-Up](/build/totp-step-up)
 - [How To Secure Routes](/build/secure-routes)
 - [Server SDKs](/build/server-sdks)
+- [Next.js](/build/nextjs)
+- [React Native SDK](/build/react-native-sdk)
 - [Auth API Routes](/reference/auth-api-routes)
 - [Cookie, Session, And Token Reference](/reference/cookies-sessions-tokens)
 - [Sessions](/understand/sessions)
