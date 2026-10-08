@@ -61,31 +61,32 @@ OAUTH_STATE_SECRET=replace-with-long-random-secret
 
 Provider config fields:
 
-| Field                   | Purpose                                                             |
-| ----------------------- | ------------------------------------------------------------------- |
-| `id`                    | Route identifier, such as `google`                                  |
-| `name`                  | Display name returned to the UI                                     |
-| `enabled`               | Whether the provider is visible and usable                          |
-| `clientId`              | OAuth client ID                                                     |
-| `clientSecretEnv`       | Env var name that contains the client secret                        |
-| `authorizationUrl`      | Provider authorization endpoint                                     |
-| `tokenUrl`              | Provider token endpoint                                             |
-| `userInfoUrl`           | Provider userinfo endpoint                                          |
-| `scopes`                | Provider scopes sent as a space-delimited OAuth `scope` value       |
-| `redirectUri`           | Optional single redirect URI                                        |
-| `redirectUris`          | Optional allowlist of exact redirect URIs                           |
-| `subjectJsonPath`       | Profile field used as provider subject, default `sub`               |
-| `emailJsonPath`         | Profile field used as email, default `email`                        |
-| `emailVerifiedJsonPath` | Profile field used for email verification, default `email_verified`. See [Choosing A Provider](#choosing-a-provider) |
-| `nameJsonPath`          | Optional profile field used as display name metadata                |
-| `allowSignup`           | Whether OAuth can create a new local user                           |
-| `accountLinking`        | `email` or `disabled`                                               |
-| `requireEmailVerified`  | Whether profile email must be verified                              |
-| `pkce`                  | Optional boolean                                                    |
-| `issuer` | OpenID Connect issuer. With `jwksUri`, the ID token is verified and used as the profile |
-| `jwksUri` | The provider's signing keys, used to verify the ID token |
-| `externalIdSource` | Import source whose users a first sign-in can link to |
-| `externalIdJsonPath` | ID token claim holding the imported user's external id, such as `oid` |
+| Field                     | Purpose                                                                                                              |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `id`                      | Route identifier, such as `google`                                                                                   |
+| `name`                    | Display name returned to the UI                                                                                      |
+| `enabled`                 | Whether the provider is visible and usable                                                                           |
+| `clientId`                | OAuth client ID                                                                                                      |
+| `clientSecretEnv`         | Env var name that contains the client secret                                                                         |
+| `authorizationUrl`        | Provider authorization endpoint                                                                                      |
+| `tokenUrl`                | Provider token endpoint                                                                                              |
+| `userInfoUrl`             | Provider userinfo endpoint                                                                                           |
+| `scopes`                  | Provider scopes sent as a space-delimited OAuth `scope` value                                                        |
+| `redirectUri`             | Optional single redirect URI                                                                                         |
+| `redirectUris`            | Optional allowlist of exact redirect URIs                                                                            |
+| `subjectJsonPath`         | Profile field used as provider subject, default `sub`                                                                |
+| `emailJsonPath`           | Profile field used as email, default `email`                                                                         |
+| `emailVerifiedJsonPath`   | Profile field used for email verification, default `email_verified`. See [Choosing A Provider](#choosing-a-provider) |
+| `nameJsonPath`            | Optional profile field used as display name metadata                                                                 |
+| `allowSignup`             | Whether OAuth can create a new local user                                                                            |
+| `accountLinking`          | `email` or `disabled`                                                                                                |
+| `requireEmailVerified`    | Whether profile email must be verified                                                                               |
+| `pkce`                    | Optional boolean                                                                                                     |
+| `issuer`                  | OpenID Connect issuer. With `jwksUri`, the ID token is verified and used as the profile                              |
+| `jwksUri`                 | The provider's signing keys, used to verify the ID token                                                             |
+| `externalIdSource`        | Import source whose users a first sign-in can link to                                                                |
+| `externalIdJsonPath`      | ID token claim holding the imported user's external id, such as `oid`                                                |
+| `promptPasskeyEnrollment` | Default `false`. When `true`, a user with no passkey who signs in through it gets `nextStep: 'enroll_passkey'`       |
 
 In production, set `OAUTH_STATE_SECRET`. Development can fall back, but production should not rely
 on derived local state secrets.
@@ -139,6 +140,9 @@ Then configure the provider as OpenID Connect, so the profile comes from a verif
 - `externalIdSource` and `externalIdJsonPath` link users you imported from Entra ID (with
   `seamless migrate` and source `entra-id`) by their object id, so they sign in to the right account
   without relying on email.
+- Add `"promptPasskeyEnrollment": true` while users are moving off the directory, so the callback
+  answers `nextStep: 'enroll_passkey'` for a user who signs in through it without a passkey. See
+  [Migrate Users](/operate/migrate-users).
 
 Do not use `common`, `organizations`, or `consumers`. They accept a sign-in from any Entra tenant,
 and the administrator of each tenant controls the email address its users present. `seamless init

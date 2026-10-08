@@ -22,25 +22,25 @@ map of the auth server surface as it exists in the source repo today.
 
 ## Route Groups
 
-| Group          | Routes                             | Purpose                                              |
-| -------------- | ---------------------------------- | ---------------------------------------------------- |
-| Authentication | `/login`, `/logout`, `/refresh`    | Login entry, logout, access refresh                  |
-| Registration   | `/registration/*`                  | New-user registration and phone enrollment           |
-| OTP            | `/otp/*`                           | Email and phone OTP generation and verification      |
-| WebAuthn       | `/webauthn/*`                      | Passkey registration and login                       |
-| Magic Links    | `/magic-link*`                     | Magic link request, polling, verification            |
-| OAuth          | `/oauth/*`                         | External provider login start and callback           |
-| TOTP           | `/totp/*`                          | TOTP enrollment, login MFA, and step-up verification |
-| Step-up Auth   | `/step-up/*`                       | Fresh WebAuthn verification before sensitive actions |
-| Users          | `/users/*`                         | Authenticated user profile and credential operations |
-| Organizations  | `/organizations/*`                 | Self-service organization and membership operations  |
-| Sessions       | `/sessions*`                       | Session listing and revocation                       |
-| Admin          | `/admin/*`                         | Admin-only users, orgs, events, sessions, recovery   |
-| Internal       | `/internal/*`                      | Metrics, grouped events, login stats, anomalies      |
-| System Config  | `/system-config/*`                 | Roles, runtime config, and OAuth providers           |
-| Bootstrap      | `/internal/bootstrap/admin-invite` | First-admin bootstrap invite creation                |
-| JWKS           | `/.well-known/jwks.json`           | Public JWKS endpoint                                 |
-| Health         | `/health/*`                        | Status and version probes                            |
+| Group          | Routes                             | Purpose                                               |
+| -------------- | ---------------------------------- | ----------------------------------------------------- |
+| Authentication | `/login`, `/logout`, `/refresh`    | Login entry, logout, access refresh                   |
+| Registration   | `/registration/*`                  | New-user registration and phone enrollment            |
+| OTP            | `/otp/*`                           | Email and phone OTP generation and verification       |
+| WebAuthn       | `/webauthn/*`                      | Passkey registration and login                        |
+| Magic Links    | `/magic-link*`                     | Magic link request, polling, verification             |
+| OAuth          | `/oauth/*`                         | External provider login start and callback            |
+| TOTP           | `/totp/*`                          | TOTP enrollment, login MFA, and step-up verification  |
+| Step-up Auth   | `/step-up/*`                       | Fresh WebAuthn verification before sensitive actions  |
+| Users          | `/users/*`                         | Authenticated user profile and credential operations  |
+| Organizations  | `/organizations/*`                 | Self-service organization and membership operations   |
+| Sessions       | `/sessions*`                       | Session listing and revocation                        |
+| Admin          | `/admin/*`                         | Admin users, import, enrollment, reports, audit, orgs |
+| Internal       | `/internal/*`                      | Metrics, grouped events, login stats, anomalies       |
+| System Config  | `/system-config/*`                 | Roles, runtime config, and OAuth providers            |
+| Bootstrap      | `/internal/bootstrap/admin-invite` | First-admin bootstrap invite creation                 |
+| JWKS           | `/.well-known/jwks.json`           | Public JWKS endpoint                                  |
+| Health         | `/health/*`                        | Status and version probes                             |
 
 ---
 
@@ -49,7 +49,6 @@ map of the auth server surface as it exists in the source repo today.
 | Method   | Path          | Purpose                                                |
 | -------- | ------------- | ------------------------------------------------------ |
 | `POST`   | `/login`      | Start login using email or phone                       |
-| `GET`    | `/logout`     | Deprecated compatibility route for all-session logout  |
 | `DELETE` | `/logout`     | Logout the current session                             |
 | `DELETE` | `/logout/all` | Logout every session owned by the current user         |
 | `POST`   | `/refresh`    | Refresh access state using a valid refresh token state |
@@ -218,35 +217,67 @@ Organization member inputs accept either `userId` or `email` plus optional `role
 ## Admin
 
 All admin routes require authenticated admin access. Read routes accept `admin`, `admin:read`, or
-`admin:write`; write routes accept `admin` or `admin:write`.
+`admin:write`; write routes accept `admin` or `admin:write`. Routes marked step-up also need a fresh
+step-up on the current session (see [Step-up Authentication](#step-up-authentication)).
 
-| Method   | Path                                                   | Purpose                             |
-| -------- | ------------------------------------------------------ | ----------------------------------- |
-| `GET`    | `/admin/users`                                         | List users                          |
-| `POST`   | `/admin/users`                                         | Create user                         |
-| `DELETE` | `/admin/users`                                         | Delete user                         |
-| `GET`    | `/admin/users/:userId`                                 | Get user detail                     |
-| `PATCH`  | `/admin/users/:userId`                                 | Update user                         |
-| `GET`    | `/admin/users/:userId/anomalies`                       | Get anomalies for a user            |
-| `POST`   | `/admin/users/:userId/recovery/device-replacement`     | Prepare user for device replacement |
-| `GET`    | `/admin/auth-events`                                   | Query auth events                   |
-| `GET`    | `/admin/credential-count`                              | Get credential counts               |
-| `GET`    | `/admin/sessions`                                      | List all sessions                   |
-| `GET`    | `/admin/sessions/:userId`                              | List sessions for one user          |
-| `DELETE` | `/admin/sessions/by-id/:id`                            | Revoke one session by session ID    |
-| `DELETE` | `/admin/sessions/:userId/revoke-all`                   | Revoke all sessions for one user    |
-| `GET`    | `/admin/organizations`                                 | List organizations                  |
-| `POST`   | `/admin/organizations`                                 | Create organization                 |
-| `GET`    | `/admin/organizations/:organizationId`                 | Get organization                    |
-| `PATCH`  | `/admin/organizations/:organizationId`                 | Update organization                 |
-| `DELETE` | `/admin/organizations/:organizationId`                 | Delete organization                 |
-| `GET`    | `/admin/organizations/:organizationId/members`         | List organization members           |
-| `POST`   | `/admin/organizations/:organizationId/members`         | Add organization member             |
-| `PATCH`  | `/admin/organizations/:organizationId/members/:userId` | Update organization member          |
-| `DELETE` | `/admin/organizations/:organizationId/members/:userId` | Remove organization member          |
+| Method   | Path                                                                          | Access               | Purpose                                        |
+| -------- | ----------------------------------------------------------------------------- | -------------------- | ---------------------------------------------- |
+| `GET`    | `/admin/users`                                                                | admin read           | List users                                     |
+| `POST`   | `/admin/users`                                                                | admin write          | Create user                                    |
+| `DELETE` | `/admin/users`                                                                | admin write          | Delete user                                    |
+| `POST`   | `/admin/users/import`                                                         | admin write          | Import up to 200 users from another system     |
+| `GET`    | `/admin/users/:userId`                                                        | admin read           | Get user detail                                |
+| `PATCH`  | `/admin/users/:userId`                                                        | admin write          | Update user                                    |
+| `GET`    | `/admin/users/:userId/anomalies`                                              | admin read           | Get anomalies for a user                       |
+| `POST`   | `/admin/users/:userId/recovery/device-replacement`                            | admin write, step-up | Prepare user for device replacement            |
+| `GET`    | `/admin/enrollment`                                                           | admin read           | Passkey enrollment progress per user           |
+| `POST`   | `/admin/enrollment/invites`                                                   | admin write          | Email users a notice to enroll a passkey       |
+| `GET`    | `/admin/reports/authentication-coverage`                                      | admin read           | Authentication coverage report, JSON or CSV    |
+| `GET`    | `/admin/review-accounts`                                                      | admin read           | App store review account status and recent use |
+| `GET`    | `/admin/auth-events`                                                          | admin read           | Query auth events                              |
+| `GET`    | `/admin/auth-events/export`                                                   | admin read, step-up  | Export audit events in a period as NDJSON      |
+| `GET`    | `/admin/auth-events/integrity`                                                | admin read           | Verify the audit event hash chain              |
+| `GET`    | `/admin/credential-count`                                                     | admin read           | Get credential counts                          |
+| `GET`    | `/admin/sessions`                                                             | admin read           | List all sessions                              |
+| `GET`    | `/admin/sessions/:userId`                                                     | admin read           | List sessions for one user                     |
+| `DELETE` | `/admin/sessions/by-id/:id`                                                   | admin write          | Revoke one session by session ID               |
+| `DELETE` | `/admin/sessions/:userId/revoke-all`                                          | admin write          | Revoke all sessions for one user               |
+| `GET`    | `/admin/organizations`                                                        | admin read           | List organizations                             |
+| `POST`   | `/admin/organizations`                                                        | admin write          | Create organization                            |
+| `GET`    | `/admin/organizations/:organizationId`                                        | admin read           | Get organization                               |
+| `PATCH`  | `/admin/organizations/:organizationId`                                        | admin write          | Update organization                            |
+| `DELETE` | `/admin/organizations/:organizationId`                                        | admin write          | Delete organization                            |
+| `GET`    | `/admin/organizations/:organizationId/members`                                | admin read           | List organization members                      |
+| `POST`   | `/admin/organizations/:organizationId/members`                                | admin write          | Add organization member                        |
+| `PATCH`  | `/admin/organizations/:organizationId/members/:userId`                        | admin write          | Update organization member                     |
+| `DELETE` | `/admin/organizations/:organizationId/members/:userId`                        | admin write          | Remove organization member                     |
+| `PUT`    | `/admin/organizations/:organizationId/oauth-providers/:providerId/retirement` | admin write          | Retire an OAuth provider for the organization  |
+| `DELETE` | `/admin/organizations/:organizationId/oauth-providers/:providerId/retirement` | admin write          | Restore a retired OAuth provider               |
 
 The device-replacement recovery route requires fresh step-up authentication and returns counts for
 revoked sessions, removed passkeys, and disabled TOTP credentials.
+
+`POST /admin/users/import` creates or updates users matched on the source system id, then on email.
+It carries no credentials, refuses admin roles, applies each row on its own, and writes nothing
+with `dryRun`. `seamless migrate csv` calls it; see [Migrate Users](/operate/migrate-users).
+
+`POST /admin/enrollment/invites` takes `userIds` (up to 200) or an `organizationId`, whose members
+at or below `status` are invited 200 at a time, skipping anyone invited in the last day. It answers
+`409` when no sign-in method other than passkey is enabled.
+
+Retiring a provider makes its callback answer `403` with `code: oauth_provider_retired` for the
+organization's members and revokes every live session of every member. Repeating the call revokes
+nothing. The `DELETE` undoes it, is idempotent, and accepts the id of a provider that no longer
+exists.
+
+`GET /admin/reports/authentication-coverage` takes `from` and `to` (UTC dates, both included,
+default the last 90 days), `bucket` (`week` or `month`, default `month`), `organizationId`, and
+`format=csv` for a `text/csv` copy. It answers `404` when `organizationId` names no organization.
+
+`GET /admin/auth-events/export` takes optional `from` and `to` timestamps and streams
+`application/x-ndjson`: one event per line in chain order, then a manifest line with the count, the
+first and last `seq`, the anchor hash, and the last hash. A file that does not end with the
+manifest is incomplete.
 
 Deleting an organization also deletes every membership in it, in one transaction. The member
 accounts themselves are not deleted. Sessions scoped to the organization stay active with no

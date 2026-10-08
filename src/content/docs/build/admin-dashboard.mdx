@@ -65,9 +65,12 @@ Public routes handle sign-in and redirects:
 
 <Aside type="note">
   Maturity varies by screen. Enrollment shipped in dashboard `v0.8.0`. The Coverage page, the
-  Security audit trail panel, and the "Phishing-resistant only" setting are on `main` but not yet
-  in a tagged release. `seamless-cli` and the auth API image currently pin dashboard `v0.7.0`,
-  which has none of these.
+  Security audit trail panel, and the "Phishing-resistant only" setting shipped in `v0.9.0`. The
+  auth API image `v0.17.0` serves dashboard `v0.9.1` at `/console`, and `seamless-cli` 0.20.0
+  scaffolds that API image and pins the standalone image at `v0.9.1`. These screens need the
+  routes in auth API 0.17.0 and an adapter that passes them through (`@seamless-auth/express`
+  0.19.1, `fastify` 0.10.1, or `nextjs` 0.3.1). Projects from `seamless-cli` 0.19.0 or earlier pin
+  dashboard `v0.7.0`, which has none of these.
 </Aside>
 
 ---
@@ -218,7 +221,7 @@ unprivileged nginx on port `8080` and includes a health check at `/health`.
 ```bash
 docker run -p 8080:8080 \
   -e API_URL=https://app.example.com \
-  ghcr.io/fells-code/seamless-auth-admin-dashboard:v0.8.0
+  ghcr.io/fells-code/seamless-auth-admin-dashboard:v0.9.1
 ```
 
 ### Served at `/console`

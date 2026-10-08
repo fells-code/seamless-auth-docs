@@ -59,9 +59,11 @@ The current dashboard app includes:
 - System configuration
 - Profile
 
-Enrollment shipped in dashboard `v0.8.0`. Coverage is on `main` but not yet in a tagged release.
-A project scaffolded by `seamless-cli` currently pins dashboard `v0.7.0`, which has neither, so
-you will not see those two screens there yet.
+Enrollment shipped in dashboard `v0.8.0` and Coverage in `v0.9.0`. The auth API image `v0.17.0`
+serves dashboard `v0.9.1` at `/console`, and a project scaffolded by `seamless-cli` 0.20.0 runs
+that image (or the standalone dashboard image `v0.9.1`), so both screens are there. A project
+scaffolded by `seamless-cli` 0.19.0 or earlier pins dashboard `v0.7.0` and an auth API without the
+routes behind them, so it has neither.
 
 ---
 
