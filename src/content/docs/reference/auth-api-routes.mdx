@@ -287,16 +287,20 @@ until it expires. There is no way to delete an organization through the user-fac
 
 ### Paging and filtering the admin collections
 
-The four admin list routes take a window and return `total`. `total` counts every row matching the
+The five admin list routes take a window and return `total`. `total` counts every row matching the
 filter, not the rows in the returned page, so a caller can tell whether there is another page to
 ask for.
 
-| Route                  | `limit`              | `offset`    | Filters                                                    |
-| ---------------------- | -------------------- | ----------- | ---------------------------------------------------------- |
-| `/admin/organizations` | 1 to 100, default 50 | default `0` | `search` over name and slug, case-insensitive              |
-| `/admin/sessions`      | 1 to 100, default 50 | default `0` | none                                                       |
-| `/admin/auth-events`   | 1 to 100, default 10 | default `0` | `userId`, `actorUserId`, `sessionId`, `type`, `from`, `to` |
-| `/admin/users`         | default 50           | default `0` | `search` over email and phone, case-insensitive            |
+| Route                  | `limit`              | `offset`    | Filters                                                                                    |
+| ---------------------- | -------------------- | ----------- | ------------------------------------------------------------------------------------------ |
+| `/admin/organizations` | 1 to 100, default 50 | default `0` | `search` over name and slug, case-insensitive                                              |
+| `/admin/sessions`      | 1 to 100, default 50 | default `0` | none                                                                                       |
+| `/admin/auth-events`   | 1 to 100, default 10 | default `0` | `userId`, `actorUserId`, `sessionId`, `type`, `from`, `to`                                 |
+| `/admin/users`         | default 50           | default `0` | `search` over email and phone, case-insensitive                                            |
+| `/admin/enrollment`    | 1 to 100, default 50 | default `0` | `organizationId`, `status` (`none`, `one`, `two_or_more`), `imported`, `search` over email |
+
+On `/admin/enrollment`, `summary` counts every user matching `organizationId`, `imported`, and
+`search` whatever `status`, while `users` and `total` describe the filtered page.
 
 Sending no parameters returns the first page, not the whole collection. A deployment with more
 rows than the default receives only that first page, which is what `total` is for.

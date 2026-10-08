@@ -169,7 +169,10 @@ npx seamless-cli init my-app --oauth --fastify
 ```
 
 The long forms `--web=<id|alias>`, `--api=<id|alias>`, and `--mobile=<id|alias>` name the layer
-explicitly and take the same values. An unknown flag, two templates for the same layer, or an api
+explicitly and take the same values. Since `seamless-cli` 0.20.0 a bare `--mobile` (with no value
+after it) selects the Expo template through its `mobile` alias, so `seamless init --mobile my-app`
+keeps `my-app` as the project name. A bare `--web` or `--api` is an error, because neither is a
+template alias. An unknown flag, two templates for the same layer, or an api
 template next to a full-stack one is an error reported before any directory is created. Run
 `seamless init --help` for the non-interactive flags (`--yes`, `--email`, `--auth`, `--admin`,
 `--force`).

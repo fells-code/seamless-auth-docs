@@ -148,7 +148,9 @@ Dockerfile, or a script. Valued flags take either `--flag=value` or `--flag valu
 
 The template defaults are the first selectable entries of each kind in the registry at the pinned
 tag. `--web`, `--api`, and `--mobile` take the same ids and aliases as the bare template flags, and
-naming one layer twice with different templates is an error. Every flag is validated before a
+naming one layer twice with different templates is an error. A bare `--mobile` with no value
+selects Expo (its `mobile` alias, `seamless-cli` 0.20.0 and later); a bare `--web` or `--api` is an
+error. Every flag is validated before a
 directory is created.
 
 `--yes` will not make three decisions on its own:
