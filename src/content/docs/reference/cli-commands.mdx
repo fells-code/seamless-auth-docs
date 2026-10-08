@@ -75,7 +75,7 @@ same name. A full integration flow for an existing app is not shipped yet.
   portal session when you are signed in), or takes `--email`
 - prompts for auth mode
 - optionally includes the admin dashboard (for a full-stack web template, served by the web app at
-  `/console` or left out, starting with the seamless-cli release that includes [fells-code/seamless-cli#239](https://github.com/fells-code/seamless-cli/pull/239))
+  `/console` or left out, starting with seamless-cli 0.20.0, [fells-code/seamless-cli#239](https://github.com/fells-code/seamless-cli/pull/239))
 - generates a working local stack
 - writes `seamless.config.json`
 - creates `docker-compose.yml`
@@ -89,7 +89,7 @@ when you use one. See [React Native SDK](/build/react-native-sdk).
 ### Current generated stack
 
 The starters come from the [`fells-code/seamless-templates`](https://github.com/fells-code/seamless-templates)
-registry at the tag the CLI pins (currently `v0.16.0`). As of that tag the generated path covers:
+registry at the tag the CLI pins (`v0.17.0` as of seamless-cli 0.20.0). As of that tag the generated path covers:
 
 - React (Vite) or Next.js (full-stack, beta template) for the web app
 - Express or Fastify (beta template) for the backend
@@ -132,23 +132,25 @@ Flags answer the questions `init` would otherwise ask, and a question answered b
 skipped. `--yes` answers the rest with the recommended option, so `init` can run in CI, a
 Dockerfile, or a script. Valued flags take either `--flag=value` or `--flag value`.
 
-| Flag          | Accepted values                                  | Default                                                          | Effect                                                                                                     |
-| ------------- | ------------------------------------------------ | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `--yes`, `-y` | none                                             | off                                                              | Answer every question no flag answers with the recommended option                                          |
-| `--local`     | none                                             | off                                                              | Scaffold the self-hosted stack without contacting the control plane                                        |
-| `--app`       | a managed application id or infra id             | none                                                             | Connect to that managed application (needs `seamless login`)                                               |
-| `--web`       | a web or full-stack template id or alias         | the first selectable web template in the registry (`react-vite`) | Choose the web starter; a full-stack template (`nextjs`) leaves no api layer                               |
-| `--api`       | an api template id or alias                      | the first selectable api template in the registry (`express`)    | Choose the backend starter; refused alongside a full-stack web template                                    |
-| `--mobile`    | a mobile template id or alias (`expo`, `mobile`) | none                                                             | Add a mobile starter at `mobile/`; `--yes` never adds one on its own                                       |
-| `--email`     | an email address                                 | your portal session email, when signed in                        | Owner address, which becomes the admin when you register; required under `--yes` without a portal session  |
-| `--auth`      | `docker`, `local`                                | `docker`                                                         | Run the auth server as a Docker image or from local source                                                 |
-| `--admin`     | `api`, `image`, `source`, `none`                 | `api`                                                            | Where the admin console is hosted; a full-stack web template accepts `api` or `none` (only `none` before the CLI release with #239) |
-| `--force`     | none                                             | off                                                              | Under `--yes`, allow scaffolding into a non-empty directory and rotating an existing managed service token |
-| `--profile`   | any                                              | none                                                             | Accepted and ignored, with a warning; managed connect uses your portal session                             |
+| Flag          | Accepted values                                  | Default                                                          | Effect                                                                                                           |
+| ------------- | ------------------------------------------------ | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `--yes`, `-y` | none                                             | off                                                              | Answer every question no flag answers with the recommended option                                                |
+| `--local`     | none                                             | off                                                              | Scaffold the self-hosted stack without contacting the control plane                                              |
+| `--app`       | a managed application id or infra id             | none                                                             | Connect to that managed application (needs `seamless login`)                                                     |
+| `--web`       | a web or full-stack template id or alias         | the first selectable web template in the registry (`react-vite`) | Choose the web starter; a full-stack template (`nextjs`) leaves no api layer                                     |
+| `--api`       | an api template id or alias                      | the first selectable api template in the registry (`express`)    | Choose the backend starter; refused alongside a full-stack web template                                          |
+| `--mobile`    | a mobile template id or alias (`expo`, `mobile`) | none                                                             | Add a mobile starter at `mobile/`; `--yes` never adds one on its own                                             |
+| `--email`     | an email address                                 | your portal session email, when signed in                        | Owner address, which becomes the admin when you register; required under `--yes` without a portal session        |
+| `--auth`      | `docker`, `local`                                | `docker`                                                         | Run the auth server as a Docker image or from local source                                                       |
+| `--admin`     | `api`, `image`, `source`, `none`                 | `api`                                                            | Where the admin console is hosted; a full-stack web template accepts `api` or `none` (only `none` before 0.20.0) |
+| `--force`     | none                                             | off                                                              | Under `--yes`, allow scaffolding into a non-empty directory and rotating an existing managed service token       |
+| `--profile`   | any                                              | none                                                             | Accepted and ignored, with a warning; managed connect uses your portal session                                   |
 
 The template defaults are the first selectable entries of each kind in the registry at the pinned
 tag. `--web`, `--api`, and `--mobile` take the same ids and aliases as the bare template flags, and
-naming one layer twice with different templates is an error. Every flag is validated before a
+naming one layer twice with different templates is an error. A bare `--mobile` with no value
+selects Expo (its `mobile` alias, `seamless-cli` 0.20.0 and later); a bare `--web` or `--api` is an
+error. Every flag is validated before a
 directory is created.
 
 `--yes` will not make three decisions on its own:
@@ -245,7 +247,7 @@ For a local (Docker or source) project it then checks:
 | Web     | `http://localhost:5173/health`        | Full-stack project, where the web app serves `/auth`                            |
 | Auth    | `http://localhost:5312/health/status` | Always                                                                          |
 | Console | `http://localhost:3000/console`       | Admin mode `api`; `services.admin.url` in the config, if set, replaces this URL |
-| Console | `http://localhost:5173/console`       | Admin mode `api` with a full-stack template (CLI release with #239)             |
+| Console | `http://localhost:5173/console`       | Admin mode `api` with a full-stack template (seamless-cli 0.20.0 or later)      |
 | Console | `http://localhost:5174`               | Admin mode `image` or `source`                                                  |
 
 Admin mode `none` has no console to probe. For a managed project, `check` skips the Docker, Compose,

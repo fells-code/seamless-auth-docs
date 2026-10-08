@@ -164,7 +164,7 @@ packages, which require Node.js 18 or later.
 | `@seamless-auth/messaging`        | 0.2.0          | None                                                                                 | None                                                                          |
 | `@seamless-auth/messaging-aws`    | 0.2.0          | `@seamless-auth/messaging` ^0.2.0                                                    | None                                                                          |
 | `@seamless-auth/messaging-twilio` | 0.2.0          | `@seamless-auth/messaging` ^0.2.0                                                    | None                                                                          |
-| `seamless-cli`                    | 0.19.0         | `@seamless-auth/types` ^0.28.0                                                       | None                                                                          |
+| `seamless-cli`                    | 0.20.0         | `@seamless-auth/types` ^0.28.0                                                       | None                                                                          |
 | `seamless-auth-admin-dashboard`   | 0.9.1          | `@seamless-auth/react` ^0.15.1, `@seamless-auth/types` ^0.28.0                       | None                                                                          |
 
 How to read it:
@@ -184,21 +184,21 @@ How to read it:
 
 ### What The CLI Scaffolds
 
-`seamless-cli` 0.19.0 does not install the newest of everything. It pins the images and the
+`seamless-cli` 0.20.0 does not install the newest of everything. It pins the images and the
 template tag it scaffolds, so a given CLI version always produces the same project:
 
 | What `seamless init` uses | Pinned to                                                      | Where it is set                                         |
 | ------------------------- | -------------------------------------------------------------- | ------------------------------------------------------- |
-| Auth API image            | `ghcr.io/fells-code/seamless-auth-api:v0.13.1`                 | `seamless-cli` `src/core/images.ts`                     |
-| Admin dashboard image     | `ghcr.io/fells-code/seamless-auth-admin-dashboard:v0.7.0`      | `seamless-cli` `src/core/images.ts`                     |
-| Starter templates         | `fells-code/seamless-templates` at `v0.16.0`                   | `seamless-cli` `src/core/images.ts`                     |
-| Express API template      | `@seamless-auth/express` ^0.16.0                               | `templates/api/express/package.json`                    |
-| Fastify API template      | `@seamless-auth/fastify` ^0.7.0                                | `templates/api/fastify/package.json`                    |
-| Next.js template          | `@seamless-auth/nextjs` ^0.2.0, `@seamless-auth/react` ^0.15.0 | `templates/fullstack/nextjs/package.json`               |
-| React web templates       | `@seamless-auth/react` ^0.14.0                                 | `templates/web/react-vite`, `templates/web/react-oauth` |
-| Expo template             | `@seamless-auth/react-native` ^0.1.0                           | `templates/mobile/expo/package.json`                    |
+| Auth API image            | `ghcr.io/fells-code/seamless-auth-api:v0.17.0`                 | `seamless-cli` `src/core/images.ts`                     |
+| Admin dashboard image     | `ghcr.io/fells-code/seamless-auth-admin-dashboard:v0.9.1`      | `seamless-cli` `src/core/images.ts`                     |
+| Starter templates         | `fells-code/seamless-templates` at `v0.17.0`                   | `seamless-cli` `src/core/images.ts`                     |
+| Express API template      | `@seamless-auth/express` ^0.19.1                               | `templates/api/express/package.json`                    |
+| Fastify API template      | `@seamless-auth/fastify` ^0.10.1                               | `templates/api/fastify/package.json`                    |
+| Next.js template          | `@seamless-auth/nextjs` ^0.3.1, `@seamless-auth/react` ^0.15.2 | `templates/fullstack/nextjs/package.json`               |
+| React web templates       | `@seamless-auth/react` ^0.15.2                                 | `templates/web/react-vite`, `templates/web/react-oauth` |
+| Expo template             | `@seamless-auth/react-native` ^0.2.2                           | `templates/mobile/expo/package.json`                    |
 
-Template paths are inside `fells-code/seamless-templates` at `v0.16.0`. A scaffolded project can
+Template paths are inside `fells-code/seamless-templates` at `v0.17.0`. A scaffolded project can
 move to newer SDKs by bumping the ranges in its own `package.json`.
 
 ### Keeping This Matrix Current

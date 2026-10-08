@@ -269,7 +269,6 @@ Current logout behavior:
 | ------------------------- | ----------------------------------------------- |
 | `DELETE /auth/logout`     | Revoke current session and clear auth cookies   |
 | `DELETE /auth/logout/all` | Revoke all user sessions and clear auth cookies |
-| `GET /auth/logout`        | Compatibility route for all-sessions logout     |
 
 Session revocation sets `revokedAt` and `revokedReason`. Admin session routes can revoke individual
 sessions or all sessions for a user.
