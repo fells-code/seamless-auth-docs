@@ -71,7 +71,7 @@ templates are shown but cannot be selected.
 
 ### Web example
 
-Every web and full-stack template in the registry. As of the pinned registry ref (`v0.16.0`) that is:
+Every web and full-stack template in the registry. As of the pinned registry ref (`v0.17.0`) that is:
 
 - React (Vite) - basic example
 - React (Vite) - OAuth example
@@ -84,7 +84,7 @@ on it has no `api/` layer and the backend question is skipped. See [Next.js](/bu
 
 ### Backend framework
 
-Every api template in the registry. As of `v0.16.0`:
+Every api template in the registry. As of `v0.17.0`:
 
 - Express
 - Fastify (beta)
@@ -130,8 +130,8 @@ rest of the stack (Postgres, your app) still runs on Docker Compose.
 - Separate container from the dashboard source, unpacked into `./admin` for modification
 - Don't include the admin console
 
-With a full-stack template such as Next.js, only two options apply. Starting with the seamless-cli release that includes [fells-code/seamless-cli#239](https://github.com/fells-code/seamless-cli/pull/239)
-(after 0.19.0), `api` (the default, and the default under `--yes`) has the web app serve the console
+With a full-stack template such as Next.js, only two options apply. Starting with seamless-cli 0.20.0 ([fells-code/seamless-cli#239](https://github.com/fells-code/seamless-cli/pull/239)),
+`api` (the default, and the default under `--yes`) has the web app serve the console
 at `http://localhost:5173/console` through `createSeamlessConsoleProxy`
 ([Next.js: Admin Console](/build/nextjs#admin-console)). The CLI writes `SERVE_ADMIN_CONSOLE=true`
 into `web/.env`, the same switch the Express and Fastify starters use, and sets
@@ -149,7 +149,7 @@ full-stack templates without asking.
 Every template can be selected on the command line, which answers that layer's prompt. The flags are
 registry-driven: each template answers to `--<id>`, and some also declare a shorter `--<alias>`.
 `seamless templates list` prints the id, kind, framework, flags, and status of every template the
-current registry offers, so treat it as the authoritative list. As of `v0.16.0`:
+current registry offers, so treat it as the authoritative list. As of `v0.17.0`:
 
 | Template                                    | Kind      | Flags                         | Status |
 | ------------------------------------------- | --------- | ----------------------------- | ------ |
@@ -213,8 +213,8 @@ The starters live in the
 `templates/web/react-oauth`) holds the starter source plus a `template.json` manifest.
 
 The CLI pins the repository to a tag, so a given CLI version always produces the same project. The
-current CLI pins
-[`v0.16.0`](https://github.com/fells-code/seamless-templates/tree/v0.16.0). `openTemplateSource()`
+current CLI (0.20.0) pins
+[`v0.17.0`](https://github.com/fells-code/seamless-templates/tree/v0.17.0). `openTemplateSource()`
 resolves where templates are read from:
 
 | Source                       | When                             | Behavior                                                                                    |
@@ -224,7 +224,10 @@ resolves where templates are read from:
 | Local checkout               | `SEAMLESS_TEMPLATES_DIR` is set  | Reads `registry.json` and the templates from that directory; takes precedence over the ref |
 
 Before anything is copied, the CLI reads each selected template's manifest and checks its
-`requires.cliMin`, failing with an upgrade message if your CLI is older. Each template is then
+`requires.cliMin`, failing with an upgrade message if your CLI is older. At `v0.17.0` the Express,
+Fastify, and Next.js starters require seamless-cli 0.19.0 (they read `{{authServerIssuer}}`), Expo
+requires 0.16.0, and the React (Vite) starters require 0.3.0. Pointing an older CLI at that tag
+with `SEAMLESS_TEMPLATES_REF` therefore fails for the server-side starters. Each template is then
 copied into the manifest's `targetDir` (`web`, `api`, or `mobile`). Build output and local-only
 files such as `node_modules`, `dist`, `.git`, and `.env` are never copied.
 

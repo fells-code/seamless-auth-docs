@@ -37,11 +37,15 @@ The steps are:
 | Enrollment prompt after that sign-in, retirement | `seamless-auth-api` 0.17.0, `@seamless-auth/express` 0.17.0 or `fastify` 0.8.0, `@seamless-auth/react` 0.14.0  |
 
 <Aside type="caution">
-  A project scaffolded by `seamless init` runs the auth API image pinned in `seamless-cli`
-  (`v0.13.1` as of `seamless-cli` 0.19.0, see
-  [What The CLI Scaffolds](/build/ecosystem#what-the-cli-scaffolds)), which has none of these
-  routes. Move the `auth` service to a `seamless-auth-api` 0.17.0 image before migrating into it.
-  Against an older server, `seamless migrate` stops with a message to upgrade.
+  A project scaffolded by `seamless init` runs the auth API image and dashboard pinned in the
+  `seamless-cli` release that created it (see
+  [What The CLI Scaffolds](/build/ecosystem#what-the-cli-scaffolds)). `seamless-cli` 0.20.0 is the
+  first to scaffold everything above: auth API `v0.17.0`, dashboard `v0.9.1`, and starters on
+  `@seamless-auth/express` ^0.19.1, `fastify` ^0.10.1, or `nextjs` ^0.3.1, which pass the
+  enrollment, coverage, and provider retirement routes through. A project from 0.19.0 runs API
+  `v0.13.1`, which has none of these routes. Move its `auth` service to a `seamless-auth-api`
+  0.17.0 image and bump its adapter before migrating into it. Against an older server,
+  `seamless migrate` stops with a message to upgrade.
 </Aside>
 
 `seamless migrate` has one source today, `csv`. A direct Microsoft Entra ID source is tracked in

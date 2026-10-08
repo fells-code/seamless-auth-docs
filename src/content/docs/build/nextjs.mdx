@@ -349,7 +349,7 @@ The Next.js starter ships this route at `src/app/console/[[...path]]/route.ts`, 
 `SERVE_ADMIN_CONSOLE`, the same switch the Express and Fastify starters use. With anything but
 `true`, `/console` answers `404` and nothing is requested upstream. `seamless init --nextjs
 --admin=api`, the default, writes `SERVE_ADMIN_CONSOLE=true` and serves the console at
-`http://localhost:5173/console`, starting with the seamless-cli release that includes [fells-code/seamless-cli#239](https://github.com/fells-code/seamless-cli/pull/239). The auth server needs
+`http://localhost:5173/console`, starting with seamless-cli 0.20.0 ([fells-code/seamless-cli#239](https://github.com/fells-code/seamless-cli/pull/239)). The auth server needs
 `SERVE_ADMIN_DASHBOARD=true`, and the app's origin must be in its `ORIGINS` for passkey ceremonies
 started in the console (the local stack already allows `http://localhost:5173`).
 
