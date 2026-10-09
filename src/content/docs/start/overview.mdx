@@ -1,6 +1,6 @@
 ---
 title: "What Is Seamless Auth?"
-description: "Seamless Auth is a passwordless authentication ecosystem designed to run as part of your own application infrastructure."
+description: "Seamless Auth is open source passwordless auth (passkeys, magic links, OTP) that you self-host or run as a managed service. Apache-2.0 licensed."
 sidebar:
   order: 1
 ---
@@ -10,8 +10,17 @@ import TopologyDiagram from '../../../components/TopologyDiagram.astro';
 
 ## Seamless Auth
 
-Seamless Auth is a passwordless authentication ecosystem. You can run it as a managed hosted service
-or self-host the whole stack inside your own infrastructure.
+Seamless Auth is open source passwordless auth (passkeys, magic links, OTP) that you self-host or
+run as a managed service. The server, SDKs, and CLI are licensed Apache-2.0.
+
+Scaffold a complete local stack (web app, API, auth server, and admin console) with no prompts:
+
+```bash
+npx seamless-cli init my-app --local --yes --email=you@example.com
+```
+
+Then `cd my-app && docker compose up`, and register in the browser with the email you passed, which
+becomes the first admin. The [Self-Hosted Quickstart](/start/quickstart) walks through each step.
 
 It combines a hosted or self-hostable auth server, official SDKs, a CLI for scaffolding a working
 stack, a developer portal for the managed offering, and an operator dashboard for managing users,

@@ -10,8 +10,24 @@ import Image from '../../../components/Image.astro';
 
 ## Self-Hosted Quickstart
 
+Scaffold the recommended local stack with no prompts (safe in CI, scripts, and agents, since it
+never waits for input):
+
+```bash
+npx seamless-cli init my-app --local --yes --email=you@example.com
+cd my-app
+docker compose up
+```
+
+`--local` scaffolds a self-hosted stack, `--yes` takes the recommended answer for every remaining
+question, and `--email` sets the owner address that becomes the first admin when you register with
+it. The result is a React web app, an Express API, the auth server as a Docker image, and the admin
+console served by the API at `/console`. The full flag list is in the
+[CLI Command Reference](/reference/cli-commands).
+
 This guide walks through the fastest supported way to run Seamless Auth yourself: scaffold a
-project with the CLI, start the stack locally, and sign in as the first admin.
+project with the CLI, start the stack locally, and sign in as the first admin. The steps below use
+the interactive form so you can see each choice.
 
 <Aside type="tip">
   Want authentication working without running a database or an auth server? Use the
@@ -135,7 +151,6 @@ my-app/
   admin/                 # only when admin source mode is selected
   docker-compose.yml
   seamless.config.json
-  README.md
 ```
 
 The exact shape depends on the options you selected, but the CLI always wires the generated pieces
