@@ -1,0 +1,176 @@
+---
+title: "Seamless Auth vs Better Auth"
+description: "Better Auth vs Seamless Auth for open source passkey auth in Next.js and other apps: an embedded TypeScript library with plugins compared to a self-hosted passwordless auth server, covering passkeys, magic links, SAML, SCIM, organizations, frameworks, data, and pricing, with sources."
+sidebar:
+  order: 2
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Better Auth and Seamless Auth are both open source, both keep user data in a database you control,
+and both support passkeys, magic links, one-time codes, OAuth login, and organizations. The core
+difference is architectural. Better Auth is a TypeScript authentication framework that you embed in
+your own application, adding capabilities through plugins. Seamless Auth is a separate,
+passwordless-only auth server that your backend talks to through thin adapters, in several
+languages.
+
+This page is for an engineer choosing between the two. Better Auth details were checked against its
+official docs, pricing page, and GitHub repository as of October 2026, and each one links to its
+source at the bottom. Seamless Auth details were checked against the source repositories.
+
+---
+
+## Choose Better Auth If
+
+- **Your app is TypeScript and you want auth in-process.** No extra service to deploy: Better Auth
+  runs inside your server, against your existing database, with integrations for Next.js, Nuxt,
+  SvelteKit, Astro, React Router, TanStack Start, Express, Fastify, Hono, NestJS, Expo, and others.
+- **You need password sign-in.** Email and password is built in. Seamless Auth has no password flow,
+  by design.
+- **You need SAML or SCIM.** Better Auth has an SSO plugin (`@better-auth/sso`) supporting SAML 2.0
+  and OIDC with per-organization providers, and a SCIM 2.0 plugin (`@better-auth/scim`). Seamless
+  Auth has neither.
+- **You want your app to be an OAuth or OIDC provider for other apps.** Better Auth has an
+  `oauth-provider` plugin. Seamless Auth is not an authorization server for third-party clients.
+- **You want a large ecosystem and a 1.x release line.** Better Auth is on its 1.7 release line, has
+  about 30,000 GitHub stars, and lists dozens of first-party and community plugins (payments,
+  API keys, multi-session, anonymous users, Sign-In With Ethereum, and more). Seamless Auth is 0.x
+  with a much smaller community.
+- **You want to customize schema and flows in code.** Plugins add tables, endpoints, and hooks
+  directly in your codebase.
+
+## Choose Seamless Auth If
+
+- **Your backends are not all TypeScript, or several apps share one auth service.** Seamless Auth
+  ships official adapters for Node.js (Express, Fastify, Next.js), Python (FastAPI, Django), Go
+  (`net/http`), and Rust (Axum), held to one conformance suite, all talking to the same auth API.
+  Better Auth is a TypeScript framework, so a Python, Go, or Rust backend cannot embed it.
+- **You want passwordless as a product decision, not a configuration.** There is no password code
+  path to secure or audit. The `phishing_resistant_only` system setting restricts sign-in to
+  passkeys. Sign-up verifies an email or phone and then registers a passkey without extra wiring;
+  in Better Auth, passkey-first registration is supported but requires configuring
+  `registration.requireSession: false` and resolving the user yourself.
+- **You want auth isolated from your application process.** Credentials, signing keys, and the auth
+  database sit behind a separate service; your app holds only a service token and verifies sessions
+  against the auth API's JWKS.
+- **You want an admin dashboard you run yourself, at no cost.** The Seamless Auth admin dashboard is
+  an Apache-2.0 app you host. Better Auth's `admin` plugin provides user-management APIs; its
+  management dashboard is part of Better Auth Infrastructure, a paid service with a free tier.
+- **You want a scaffolded stack.** `npx seamless-cli init` generates a web app, API, auth server in
+  Docker, and admin console that run with `docker compose up`.
+
+---
+
+## Feature Comparison
+
+Better Auth column as of October 2026.
+
+| | Seamless Auth | Better Auth |
+| --- | --- | --- |
+| License | Apache-2.0 | MIT |
+| What it is | Separate auth server plus thin SDKs and adapters | TypeScript library embedded in your app, extended by plugins |
+| Hosting | Self-host (Docker, Postgres) or Seamless Auth managed hosting | Runs inside your app wherever you deploy it; optional paid Better Auth Infrastructure adds a hosted dashboard and services |
+| Where user data lives | The auth API's Postgres (yours when self-hosted) | Your app's database (PostgreSQL, MySQL, SQLite, MSSQL via Kysely; Prisma, Drizzle, MongoDB adapters) |
+| Backend languages | Node.js, Python, Go, Rust | TypeScript / JavaScript runtimes |
+| Frontend support | React, Next.js, Angular, Vue, Svelte, React Native and Expo | Framework-agnostic client with React, Vue, Svelte and other bindings; many framework integrations including Expo |
+| Passkeys | Yes, primary sign-in method (WebAuthn via SimpleWebAuthn) | Yes, `@better-auth/passkey` plugin (SimpleWebAuthn); add to an existing account by default, passkey-first registration configurable |
+| Magic links | Yes | Yes, `magicLink` plugin; you supply the email sender |
+| Email OTP | Yes | Yes, `email-otp` plugin |
+| SMS OTP | Yes (Twilio or AWS) | Yes, `phone-number` plugin; you supply the SMS sender |
+| TOTP | Yes, as step-up / second factor | Yes, `twoFactor` plugin (TOTP, OTP, backup codes); passwordless users need `allowPasswordless: true` |
+| Passwords | No, by design | Yes, built in |
+| Social and OIDC login | Yes, instance-wide; CLI presets for Google, GitHub, Microsoft (Entra ID), GitLab | Yes, built-in social providers and a `generic-oauth` plugin |
+| SAML enterprise SSO | No | Yes, `@better-auth/sso` plugin |
+| SCIM directory sync | No | Yes, `@better-auth/scim` plugin |
+| Acts as an OAuth/OIDC provider | No | Yes, `oauth-provider` plugin |
+| Organizations | Yes: memberships, scoped roles, active organization on the session | Yes, `organization` plugin: roles, invitations, teams, custom access control |
+| Prebuilt UI | Built-in auth routes (`AuthRoutes` in React; equivalents in Angular, Vue, Svelte), or headless | No official components in the core docs; community projects such as Better Auth UI exist |
+| Admin dashboard | Yes, open source app you run | `admin` plugin APIs; dashboard via Better Auth Infrastructure (paid service, free Starter tier) |
+| Third-party compliance attestations | None for Seamless Auth itself | Not applicable to the library; it runs inside your own boundary |
+| Maturity | 0.x, small community | 1.x (1.7 line), large community |
+| Pricing model | Free to self-host; managed plans in the portal | Library is free; Infrastructure has a free Starter tier and paid tiers metered on audit logs, security detections, messaging, and SSO/SCIM connections, not per user |
+
+<Aside type="note">
+  Better Auth Infrastructure's pricing page, as of October 2026, lists a $0 Starter plan, a $20 per
+  month Pro plan, and custom Enterprise pricing. Check
+  [better-auth.com/pricing](https://better-auth.com/pricing) for current figures.
+</Aside>
+
+---
+
+## Architecture Difference
+
+**Better Auth** is a library. You call `betterAuth({ database, plugins: [...] })` in your server
+code, mount its handler on a route, and run its CLI to generate or migrate the tables it needs in
+your database. Each plugin adds endpoints and schema. Auth runs in the same process as your
+application, shares its database connection, and deploys with it. That is simple to start with and
+removes a network hop, but it also means auth code, credentials, and your application share a
+process and a deploy, and every backend that needs auth must be TypeScript or call into the one
+that is.
+
+**Seamless Auth** is a service:
+
+```txt
+browser or native app
+  -> your backend's /auth routes   (@seamless-auth/express, fastify, nextjs, or the Python/Go/Rust adapter)
+  -> seamless-auth-api             (your infrastructure, or Seamless Auth managed)
+  -> Postgres
+```
+
+Your backend mounts adapter routes, forwards auth calls with a service token, and verifies the
+resulting session locally (signed `httpOnly` cookies for browsers, bearer tokens for native apps,
+JWKS for verification). The auth API owns users, credentials, sessions, and signing keys in its own
+database. You operate one more service, in exchange for a clear boundary and the same auth across
+backends in different languages. See [What Is Seamless Auth?](/start/overview#how-the-pieces-connect).
+
+---
+
+## Migrating From Better Auth
+
+Because Better Auth stores users in your own database, you can export them with a SQL query. Seamless
+Auth does not import password hashes, because it has no password flow. A migration imports
+identities (email, external id, phone, roles, organization memberships) with `seamless migrate csv`,
+then gets each user onto a passkey through enrollment prompts and invites. Seamless Auth imports no
+credentials of any kind, so existing passkeys and two-factor secrets do not carry over; each user
+verifies their email once and enrolls a new passkey.
+
+Seamless Auth can sign users in through an existing OpenID Connect provider during cutover, linked
+by external id. If you already run Better Auth's OAuth 2.1 provider plugin with the `openid` scope,
+that is a candidate for this; test it against a staging instance first, since this specific pairing
+is not covered by the Seamless Auth docs. Follow
+[Migrate Users From Another Identity System](/operate/migrate-users); the
+[Auth0 migration guide](/operate/migrate-from-auth0) shows the full pattern for one provider.
+Fells Code, which maintains Seamless Auth, offers hands-on migration help (see the end of that
+guide).
+
+---
+
+## Sources
+
+Better Auth details checked October 2026:
+
+- [Better Auth introduction](https://www.better-auth.com/docs/introduction): TypeScript framework, plugin model
+- [better-auth/better-auth on GitHub](https://github.com/better-auth/better-auth): MIT license, star count
+- [Better Auth docs index (llms.txt)](https://better-auth.com/docs/llms.txt): current 1.7 release line, list of framework integrations and plugins
+- [Passkey plugin](https://better-auth.com/docs/plugins/passkey): `@better-auth/passkey`, SimpleWebAuthn, passkey-first registration
+- [Magic link plugin](https://www.better-auth.com/docs/plugins/magic-link)
+- [Email and password](https://www.better-auth.com/docs/authentication/email-password)
+- [Two-factor plugin](https://better-auth.com/docs/plugins/2fa): TOTP, OTP, backup codes, `allowPasswordless`
+- [Phone number plugin](https://better-auth.com/docs/plugins/phone-number): `sendOTP` callback
+- [OAuth 2.1 provider plugin](https://better-auth.com/docs/plugins/oauth-provider)
+- [SSO plugin](https://www.better-auth.com/docs/plugins/sso): SAML 2.0, OIDC, per-organization providers
+- [SCIM plugin](https://better-auth.com/docs/plugins/scim)
+- [Organization plugin](https://www.better-auth.com/docs/plugins/organization)
+- [Database concepts](https://www.better-auth.com/docs/concepts/database): supported databases and adapters, core tables
+- [Better Auth Infrastructure](https://better-auth.com/docs/infrastructure/introduction): paid dashboard, security, messaging, enterprise features
+- [Better Auth pricing](https://better-auth.com/pricing)
+- [Better Auth UI](https://better-auth-ui.com/): community UI components
+
+Seamless Auth details:
+
+- [What Is Seamless Auth?](/start/overview), including [When Seamless Auth Is Not The Right Choice](/start/overview#when-seamless-auth-is-not-the-right-choice)
+- [What You Give Up Or Must Plan For](/operate/migrate-from-auth0#what-you-give-up-or-must-plan-for)
+- [Server SDKs](/build/server-sdks) and [Next.js](/build/nextjs)
+- [Environment Variables](/reference/environment-variables) (`LOGIN_METHODS`, SMS providers)
+- [How To Use Organizations And Memberships](/build/organizations-memberships)
+- Source: [fells-code on GitHub](https://github.com/fells-code)

@@ -1,0 +1,159 @@
+---
+title: "Seamless Auth vs Clerk"
+description: "Looking for a self-hosted, open source Clerk alternative? An honest comparison of Seamless Auth and Clerk: licensing, hosting, passkeys, magic links, SAML, organizations, prebuilt UI, where user data lives, and pricing model, with sources."
+sidebar:
+  order: 1
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Seamless Auth and Clerk both handle sign-in, sessions, and user management for web and mobile
+apps, but they are built on different premises. Clerk is a hosted, proprietary authentication and
+user management service with polished prebuilt components and a broad feature set, including
+passwords and enterprise SSO. Seamless Auth is an open source (Apache-2.0), passwordless-only auth
+server that you self-host inside your own stack or run on the Seamless Auth managed service.
+
+This page is for an engineer deciding between the two. Competitor details were checked against
+Clerk's official docs, pricing page, and GitHub as of October 2026, and each one links to its
+source at the bottom of the page. Seamless Auth details were checked against the source
+repositories. Prices and plan contents change, so confirm them on Clerk's pricing page before you
+decide.
+
+---
+
+## Choose Clerk If
+
+- **You want no auth infrastructure to run at all.** Clerk operates the service, the database,
+  email and SMS delivery, and upgrades. Seamless Auth's managed path also removes this, but its
+  self-hosted path, the reason most people look at it, means you operate it.
+- **You need password sign-in.** Clerk supports passwords alongside passwordless methods. Seamless
+  Auth has no password flow, by design.
+- **You need SAML enterprise SSO or SCIM directory sync today.** Clerk offers SAML and OIDC
+  enterprise connections and Directory Sync on its paid plans. Seamless Auth has neither SAML nor
+  SCIM.
+- **You want the most complete drop-in UI.** Clerk ships prebuilt sign-in, sign-up, user profile,
+  and organization components across many SDKs, plus a hosted Account Portal.
+- **You need a vendor compliance report.** Clerk lists a SOC 2 report on its Business plan and HIPAA
+  with a BAA on Enterprise. Seamless Auth has no third-party compliance attestations of its own.
+- **You want a 1.0-grade, widely adopted product.** Clerk has a much larger user base, ecosystem, and
+  community than Seamless Auth, which is still 0.x.
+
+## Choose Seamless Auth If
+
+- **Users and sessions must stay inside your own boundary.** Self-hosted, the auth API and its
+  Postgres database run in your infrastructure. Clerk is hosted only: its SDKs are open source, but
+  the service is not, and Clerk documents no self-hosted deployment.
+- **You want the auth server's source under a permissive license.** The auth API, server adapters,
+  frontend SDKs, admin dashboard, and CLI are all Apache-2.0.
+- **You want passwordless as the only option, enforced.** There is no password to phish or reuse.
+  The `phishing_resistant_only` system setting can require passkeys for sign-in.
+- **You prefer not to pay per active user for auth.** Self-hosting has no per-user fee; you pay for
+  the infrastructure you run. Clerk bills per monthly retained user above its included allowance.
+- **You want sign-in rendered in your own app, on your own domain, with cookies your backend
+  controls.** The browser SDKs never see a token; your backend's adapter holds the session in
+  `httpOnly` cookies.
+
+---
+
+## Feature Comparison
+
+Clerk column as of October 2026. "Paid plan" means the feature is not on Clerk's free Hobby plan in
+production.
+
+| | Seamless Auth | Clerk |
+| --- | --- | --- |
+| License | Apache-2.0 for the server, SDKs, dashboard, and CLI | Proprietary service. SDKs in `clerk/javascript` are MIT |
+| Hosting | Self-host (Docker, Postgres) or Seamless Auth managed hosting | Hosted by Clerk only |
+| Where user data lives | Your Postgres when self-hosted; Fells Code's infrastructure on the managed path | Clerk's infrastructure (Google Cloud SQL, per Clerk's engineering blog) |
+| Backend support | Node.js (Express, Fastify, Next.js), Python (FastAPI, Django), Go (`net/http`), Rust (Axum) | Official backend SDKs including Express, Fastify, Go, Ruby on Rails, Python, Java, C#, PHP |
+| Frontend support | React, Next.js, Angular, Vue, Svelte, React Native and Expo | Next.js, React, Expo, Vue, Nuxt, Astro, iOS, Android, and more; some others community-maintained |
+| Passkeys | Yes, primary sign-in method (WebAuthn via SimpleWebAuthn) | Yes, paid plan. Added after sign-up, max 10 per account |
+| Magic links | Yes | Yes (email links) |
+| Email OTP | Yes | Yes |
+| SMS OTP | Yes (Twilio or AWS) | Yes, paid plan, US and Canada enabled by default |
+| TOTP | Yes, as step-up / second factor | Yes, MFA on a paid plan |
+| Passwords | No, by design | Yes |
+| Social and OIDC login | Yes, instance-wide; CLI presets for Google, GitHub, Microsoft (Entra ID), GitLab | Yes; free plan limited to 3 social connections |
+| SAML enterprise SSO | No | Yes, paid plan, per connection |
+| SCIM directory sync | No | Yes (Directory Sync), paid plan |
+| Organizations | Yes: memberships, scoped roles, active organization on the session | Yes: roles, permissions, invitations, verified domains; limits on the free tier |
+| Prebuilt UI | Built-in auth routes (`AuthRoutes` in React; equivalents in Angular, Vue, Svelte), or headless | Extensive components (sign-in, sign-up, user profile, organization switcher) and hosted Account Portal |
+| Admin dashboard | Yes, open source app you run (bundled on the managed path) | Yes, the Clerk Dashboard |
+| Third-party compliance attestations | None for Seamless Auth itself | SOC 2 report on Business plan; HIPAA BAA on Enterprise |
+| Maturity | 0.x, small community | Established commercial product, large community |
+| Pricing model | Free to self-host; managed plans in the portal | Free tier, then base fee plus per monthly retained user, with paid add-ons for SSO connections and organization features |
+
+<Aside type="note">
+  Clerk's pricing page bills on monthly retained users (a user who returns at least one day after
+  signing up), not monthly active users, and as of October 2026 lists the Hobby plan at $0 with
+  50,000 retained users per app. Check [clerk.com/pricing](https://clerk.com/pricing) for current
+  figures.
+</Aside>
+
+---
+
+## Architecture Difference
+
+**Clerk** is an external service. Your frontend talks to Clerk's Frontend API (on a domain you
+point at Clerk in production), Clerk issues the session, and your backend verifies Clerk's session
+tokens with a Clerk backend SDK. Users, credentials, and organizations live in Clerk's database,
+and you read them through Clerk's APIs and webhooks.
+
+**Seamless Auth** is a service you run next to your backend:
+
+```txt
+browser or native app
+  -> your backend's /auth routes   (@seamless-auth/express, fastify, nextjs, or the Python/Go/Rust adapter)
+  -> seamless-auth-api             (your infrastructure, or Seamless Auth managed)
+  -> Postgres
+```
+
+Clients never call the auth API directly. Your backend mounts the adapter routes, forwards calls
+with a service token, and keeps the session in signed `httpOnly` cookies on your domain (native
+apps use bearer tokens in the platform keystore). Your backend verifies sessions locally against the
+auth API's JWKS. Authorization stays in your own code. See
+[What Is Seamless Auth?](/start/overview#how-the-pieces-connect).
+
+The practical consequence: with Clerk you integrate a vendor and its UI; with Seamless Auth you
+add a service and an adapter to your own stack and own the sign-in pages.
+
+---
+
+## Migrating From Clerk
+
+Clerk's dashboard can export users to CSV, including password hashes. Seamless Auth does not
+import passwords, because it has no password flow. A migration imports identities (email, external
+id, phone, roles, organization memberships) with `seamless migrate csv`, then gets each user onto a
+passkey through enrollment prompts and invites. Plan for every user to verify their email once and
+enroll a new passkey. Seamless Auth imports no credentials of any kind, so passkeys and MFA factors
+registered with Clerk do not carry over.
+
+Follow [Migrate Users From Another Identity System](/operate/migrate-users). The
+[Auth0 migration guide](/operate/migrate-from-auth0) shows the same pattern end to end for one
+provider. Fells Code, which maintains Seamless Auth, offers hands-on migration help (see the end of
+that guide).
+
+---
+
+## Sources
+
+Clerk details checked October 2026:
+
+- [Clerk pricing](https://clerk.com/pricing): plans, monthly retained users, which features need a paid plan, SSO and organization add-ons, SOC 2 and HIPAA availability
+- [Clerk sign-up and sign-in options](https://clerk.com/docs/guides/configure/auth-strategies/sign-up-sign-in-options): passwords, email codes and links, SMS, passkeys and their limits, MFA
+- [Clerk enterprise connections](https://clerk.com/docs/guides/configure/auth-strategies/enterprise-connections/overview): SAML and OIDC, Directory Sync, plan requirements
+- [Clerk Organizations](https://clerk.com/docs/guides/organizations/overview): roles, permissions, invitations, verified domains
+- [Clerk docs home](https://clerk.com/docs): official and community SDKs
+- [Clerk components overview](https://clerk.com/docs/reference/components/overview): prebuilt UI components
+- [Clerk migration overview](https://clerk.com/docs/guides/development/migrating/overview): user export including hashed passwords
+- [How We Roll: Infrastructure](https://clerk.com/blog/how-we-roll-infrastructure): Clerk runs on Google Cloud Run and Cloud SQL
+- [clerk/javascript on GitHub](https://github.com/clerk/javascript): SDK monorepo, MIT license
+
+Seamless Auth details:
+
+- [What Is Seamless Auth?](/start/overview), including [When Seamless Auth Is Not The Right Choice](/start/overview#when-seamless-auth-is-not-the-right-choice)
+- [What You Give Up Or Must Plan For](/operate/migrate-from-auth0#what-you-give-up-or-must-plan-for)
+- [Environment Variables](/reference/environment-variables) (`LOGIN_METHODS`, SMS providers)
+- [How To Use Organizations And Memberships](/build/organizations-memberships)
+- [OAuth Login](/build/oauth-login)
+- Source: [fells-code on GitHub](https://github.com/fells-code)

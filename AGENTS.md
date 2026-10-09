@@ -155,7 +155,7 @@ sidebar:
 ```
 
 The section is determined by the directory the file lives in. Available
-sections are `start`, `build`, `understand`, `operate`, `troubleshooting`,
+sections are `start`, `build`, `understand`, `operate`, `compare`, `troubleshooting`,
 and `reference`, ordered by the sidebar groups in `astro.config.mjs`. Prefer
 placing new docs in the right section instead of overloading `start`.
 
