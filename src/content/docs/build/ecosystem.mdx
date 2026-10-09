@@ -24,7 +24,8 @@ seamless-auth-api
 @seamless-auth/express, @seamless-auth/fastify, @seamless-auth/nextjs, or @seamless-auth/core
   -> connects your backend to the auth engine
 
-@seamless-auth/react, @seamless-auth/angular, @seamless-auth/vue, or @seamless-auth/react-native
+@seamless-auth/react, @seamless-auth/angular, @seamless-auth/vue, @seamless-auth/svelte, or
+@seamless-auth/react-native
   -> connects your web or mobile frontend to the auth flow
 
 seamless-auth-admin-dashboard
@@ -46,6 +47,7 @@ seamless-auth-admin-dashboard
 | `@seamless-auth/react`          | React SDK and built-in auth screens             | Your frontend is React and you want a ready-to-use auth integration                                           |
 | `@seamless-auth/angular`        | Angular service, guards, and built-in screens   | Your frontend is Angular 20, 21, or 22 ([Angular SDK](/build/angular-sdk))                                    |
 | `@seamless-auth/vue` | Vue plugin, composable, guards, and built-in screens | Your frontend is Vue 3.5 or later ([Vue SDK](/build/vue-sdk)) |
+| `@seamless-auth/svelte` | Svelte session, SvelteKit guards, and built-in screens | Your frontend is Svelte 5 or SvelteKit ([Svelte SDK](/build/svelte-sdk)) |
 | `@seamless-auth/react-native`   | React Native SDK: provider, hooks, native ports | Your frontend is an Expo or React Native app ([React Native SDK](/build/react-native-sdk))                    |
 | `@seamless-auth/client`         | The framework-free client and sign-in flows the SDKs share | You are building a binding for another framework ([React SDK](/build/react-sdk#platform-ports-and-transport)) |
 | `seamless-auth-admin-dashboard` | Operator dashboard app                          | You want a UI for admins and support teams                                                                    |
@@ -118,6 +120,10 @@ match the React ones. See [Angular SDK](/build/angular-sdk).
 read-only refs, `vue-router` guards, and the same screens as named routes. See
 [Vue SDK](/build/vue-sdk).
 
+`@seamless-auth/svelte` gives a Svelte 5 application a session whose properties are runes,
+SvelteKit `load` guards, and the same screens as components you mount at your routes. See
+[Svelte SDK](/build/svelte-sdk).
+
 `@seamless-auth/react-native` gives an Expo or React Native app the same state and headless client
 over bearer transport, with native passkeys and the platform keystore behind ports. It ships no
 screens. See [React Native SDK](/build/react-native-sdk).
@@ -171,6 +177,7 @@ packages, which require Node.js 18 or later.
 | `@seamless-auth/react`            | 0.16.0         | `@seamless-auth/client` ^0.5.0, `@seamless-auth/types` ^0.28.0                       | `react` and `react-dom` 18 or 19, optional `react-router-dom` 6.4+ or 7.15.1+ |
 | `@seamless-auth/angular`          | 0.2.0          | `@seamless-auth/client` ^0.5.0                                                       | `@angular/core`, `common`, `router` 20, 21, or 22, and `rxjs` 7               |
 | `@seamless-auth/vue` | 0.1.0 | `@seamless-auth/client` ^0.5.0 | `vue` 3.5+, optional `vue-router` 4.4+ or 5 |
+| `@seamless-auth/svelte` | 0.1.0 | `@seamless-auth/client` ^0.5.0 | `svelte` 5, optional `@sveltejs/kit` 2.26+ or 3 |
 | `@seamless-auth/react-native`     | 0.3.0          | `@seamless-auth/client` ^0.5.0, `@seamless-auth/types` ^0.28.0                       | `react` 18 or 19                                                              |
 | `@seamless-auth/types`            | 0.28.0         | None                                                                                 | None                                                                          |
 | `@seamless-auth/messaging`        | 0.2.0          | None                                                                                 | None                                                                          |
