@@ -1,0 +1,269 @@
+---
+title: "Go: net/http, chi, Echo, and Gin"
+description: "Add passwordless auth (passkeys, magic links, email and SMS codes) to a Go net/http, chi, Echo, or Gin app without writing JWT code, with the official seamless-auth-go adapter: install, a complete app, configuration, and cookie and bearer transport."
+sidebar:
+  order: 3.2
+---
+
+`github.com/fells-code/seamless-auth-go` is the official Seamless Auth server adapter for Go. It is
+a plain `net/http` handler and middleware, so it works with the standard library mux, chi, Echo,
+and Gin. It mounts the `/auth` routes the frontend SDKs call, holds the session in signed
+`HttpOnly` cookies on your own domain, and gives you `RequireAuth` for your own routes. You do not
+write token parsing, JWKS fetching, cookie signing, or refresh logic, and the module has no
+dependencies outside the Go standard library.
+
+Use it when your backend is Go and you want passkeys, magic links, email or SMS codes, or OAuth
+sign-in against a Seamless Auth server (self-hosted `seamless-auth-api` or a managed instance). It
+is held to the same conformance suite as the Express, Fastify, Python, and Rust adapters. For other
+languages see [Server SDKs And Adapters](/build/server-sdks).
+
+Source: [fells-code/seamless-auth-go](https://github.com/fells-code/seamless-auth-go). Current
+release: `v0.2.0` (pre-1.0, so the public API may change between minor versions).
+
+---
+
+## Install
+
+```bash
+go get github.com/fells-code/seamless-auth-go@v0.2.0
+```
+
+It needs Go 1.22 or later. The package name is `seamlessauth`.
+
+---
+
+## A Complete App
+
+This mounts the auth routes at `/auth`, protects `/api/me`, and reads the current user. It follows
+the reference app the conformance suite drives (`conformance/refapp/main.go`).
+
+```go
+package main
+
+import (
+	"encoding/json"
+	"log"
+	"net/http"
+	"os"
+
+	seamlessauth "github.com/fells-code/seamless-auth-go"
+)
+
+func main() {
+	auth, err := seamlessauth.New(seamlessauth.Options{
+		AuthServerURL:    os.Getenv("AUTH_SERVER_URL"),
+		AuthServerIssuer: os.Getenv("AUTH_SERVER_ISSUER"), // empty means AuthServerURL
+		CookieSecret:     os.Getenv("COOKIE_SIGNING_KEY"), // 32 characters or more
+		ServiceSecret:    os.Getenv("API_SERVICE_TOKEN"),  // the auth API's API_SERVICE_TOKEN
+		JWKSKid:          os.Getenv("JWKS_KID"),
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	mux := http.NewServeMux()
+
+	// The auth routes, at /auth, which is where the frontend SDKs call.
+	mux.Handle("/auth/", http.StripPrefix("/auth", auth.Handler()))
+
+	// Your own route, behind the adapter's guard. RequireAuth answers 401 without a session.
+	mux.Handle("GET /api/me", auth.RequireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user, _ := seamlessauth.UserFromContext(r.Context())
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"id": user.ID, "roles": user.Roles})
+	})))
+
+	log.Fatal(http.ListenAndServe(":"+os.Getenv("PORT"), mux))
+}
+```
+
+- `seamlessauth.New(Options)` returns an `*Adapter`, or an error on a missing auth server URL or a secret shorter
+  than 32 characters, so a misconfigured app fails to boot.
+- `auth.Handler()` serves every auth route. Mount it under `/auth` with `http.StripPrefix`.
+- `auth.RequireAuth(next)` answers 401 unless the request carries a session, and puts a `*User`
+  on the request context. `seamlessauth.UserFromContext(ctx)` reads it.
+- `User` has `ID`, `Roles`, `Email`, `Phone`, and `Token` (the auth API access token). On a bearer
+  request `Email` and `Phone` are empty, because the access token does not carry them.
+
+There is no role middleware in the module. Check `user.Roles` in your handler or in middleware of
+your own placed after `RequireAuth`.
+
+For a web app on another origin, wrap the mux in credentialed CORS for that origin (the standard
+library has none; use the CORS middleware of your router or a package such as `rs/cors`).
+
+### chi, Echo, And Gin
+
+The handler and middleware are plain `net/http`, so each router wraps them:
+
+```go
+// chi
+r.Mount("/auth", http.StripPrefix("/auth", auth.Handler()))
+r.With(auth.RequireAuth).Get("/api/me", me)
+
+// Echo
+e.Any("/auth/*", echo.WrapHandler(http.StripPrefix("/auth", auth.Handler())))
+e.GET("/api/me", echo.WrapHandler(auth.RequireAuth(http.HandlerFunc(me))))
+
+// Gin
+g.Any("/auth/*path", gin.WrapH(http.StripPrefix("/auth", auth.Handler())))
+g.GET("/api/me", gin.WrapH(auth.RequireAuth(http.HandlerFunc(me))))
+```
+
+Here `me` is an `http.HandlerFunc` like the one above. In every case your handler reads the user
+with `seamlessauth.UserFromContext(r.Context())`.
+
+---
+
+## Configuration
+
+The adapter reads no environment variables itself. The names below are the ones the Seamless
+starters, the conformance reference app, and `seamless init` use, so a project the CLI wrote
+already has them in `.env`.
+
+| Variable             | Option             | Value                                                                                                              |
+| -------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `AUTH_SERVER_URL`    | `AuthServerURL`    | Where your server reaches the auth API, for example `http://localhost:5312`, or the Auth Server URL from the portal |
+| `AUTH_SERVER_ISSUER` | `AuthServerIssuer` | Only when the auth API signs as a different URL (the `seamless init --local` Docker stack signs as `http://auth:5312`) |
+| `COOKIE_SIGNING_KEY` | `CookieSecret`     | Any secret of 32 characters or more, for example `openssl rand -base64 48`                                          |
+| `API_SERVICE_TOKEN`  | `ServiceSecret`    | The auth API's `API_SERVICE_TOKEN` (self-hosted), or a service token generated in the portal (managed)              |
+| `JWKS_KID`           | `JWKSKid`          | The auth API's signing key id, `dev-main` on a local stack                                                          |
+
+`Options` also has:
+
+| Option                                        | Default                                  | Purpose                                                                                  |
+| --------------------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `Audience`                                    | `AuthServerIssuer`                       | Expected `aud` of the auth API's tokens                                                  |
+| `CookieDomain`                                | none                                     | Cookie `Domain`                                                                          |
+| `InsecureCookies`                             | `false`                                  | Drops `Secure`, for local development over plain HTTP on a host other than `localhost`  |
+| `CookieSameSite`                              | `None`, or `Lax` with `InsecureCookies`  | Cookie `SameSite`                                                                        |
+| `AllowedOrigins`                              | none                                     | The only cross-origin callers allowed to change state while cookies are `SameSite=None` |
+| `AccessCookieName`, `RefreshCookieName`       | `seamless-access`, `seamless-refresh`    | Session cookie names                                                                     |
+| `RegistrationCookieName`, `PreAuthCookieName` | `seamless-ephemeral`                     | Sign-in flow cookie names                                                                |
+| `Deliver`                                     | none                                     | Send OTP codes and magic links through your own transports                               |
+| `ResolveClientIP`                             | the connecting peer                      | The end user's address; use `seamlessauth.TrustedProxies("10.0.0.0/8")` behind a proxy   |
+| `DisableManifestFetch`                        | `false`                                  | Use only the manifest embedded in this version                                           |
+| `HTTPClient`, `Logf`                          | defaults                                 | Outbound client and logger                                                               |
+
+### Delivering codes yourself
+
+Without `Deliver`, the auth API sends OTP codes and magic links. With it, the adapter asks the API
+for the message and hands it to you as a `Delivery` (`Kind`, `To`, `Token`, `MagicLinkURL`,
+`SignInURL`). A returned error answers 502 `delivery_failed`.
+
+```go
+Deliver: func(ctx context.Context, d seamlessauth.Delivery) error {
+	return mailer.Send(ctx, d.To, d.Kind, d.Token, d.MagicLinkURL)
+},
+```
+
+### Serving the admin console
+
+`auth.ConsoleHandler()` serves the Seamless admin dashboard from your API, proxied from the auth
+API:
+
+```go
+mux.Handle("/console/", http.StripPrefix("/console", auth.ConsoleHandler()))
+```
+
+Add your API's origin to the auth server's `ORIGINS` so passkey ceremonies started in the console
+verify.
+
+---
+
+## Cookie And Bearer Transport
+
+The same `/auth` routes serve two contracts:
+
+- **Browsers** get cookies. The adapter keeps the auth API's tokens in signed `HttpOnly` cookies
+  and refreshes the session silently on the auth routes. Page scripts never see a token.
+- **Native clients** (mobile apps, CLIs) send `x-seamless-auth-transport: bearer`. Session-issuing
+  responses then return `token` and `refreshToken` in the body and set no cookie, and the client
+  refreshes with `POST /auth/refresh` and `Authorization: Bearer <refreshToken>`.
+
+`RequireAuth` accepts either the session cookie or an auth API access token in
+`Authorization: Bearer`, and the cookie wins when both are present. It reads the `Cookie` header
+itself, so it works on any route, and it does not refresh. `auth.Authenticate(r)` runs the same
+check without answering the request (and without the cross-site check below).
+
+While cookies are `SameSite=None`, a state-changing request `RequireAuth` admits on the cookie from
+another site (`Sec-Fetch-Site: cross-site`, or an `Origin` outside `AllowedOrigins`) answers 403
+`cross_site_request_blocked`. The auth routes only accept JSON request bodies (`application/json`
+or a `+json` type); anything else answers 415 `unsupported_media_type`. The frontend SDKs already
+send JSON.
+
+See [Bearer Transport For Native Clients](/build/server-sdks#bearer-transport-for-native-clients)
+for the full contract, which every adapter shares.
+
+---
+
+## How The Frontend Talks To It
+
+Every frontend SDK calls `${apiHost}/auth/...`, so point it at this server's origin, for example
+`<AuthProvider apiHost="http://localhost:3000">` in [React](/build/react-sdk). The same `apiHost`
+option exists in [Angular](/build/angular-sdk), [Vue](/build/vue-sdk), [Svelte](/build/svelte-sdk),
+and [React Native](/build/react-native-sdk). Browser requests to your own protected routes need
+`credentials: 'include'` when the web app runs on another origin.
+
+---
+
+## Version Compatibility
+
+| `seamless-auth-go` | Auth API         | Go    |
+| ------------------ | ---------------- | ----- |
+| v0.2.0             | v0.18.0 or later | 1.22+ |
+
+Which routes the adapter serves comes from the adapter manifest the auth API publishes at
+`/.well-known/seamless-adapter.json`, first served by auth API v0.18.0, so a new API route works
+without a new module release. The adapter fetches it on the first request and keeps it for the life
+of the process. If the API serves none, it falls back to the copy embedded in the module. Run auth
+API v0.18.0 or later: the adapter sends the OTP and magic-link send routes as `POST`, which v0.17.0
+answers with 404. `seamless-cli` 0.21.0 scaffolds v0.17.0, so in a project it generated, bump the
+`ghcr.io/fells-code/seamless-auth-api` image tag to `v0.18.0`.
+
+---
+
+## Conformance
+
+The adapter is held to the adapter conformance suite in `seamless-cli`
+([`verify/CONFORMANCE.md`](https://github.com/fells-code/seamless-cli/blob/main/verify/CONFORMANCE.md)),
+the same suite the Express and Fastify adapters pass, in CI on every change. To run it yourself you
+need Docker, a checkout of `seamless-auth-api`, and the `seamless` CLI:
+
+```bash
+PORT=8080 AUTH_SERVER_URL=http://localhost:5312 AUTH_SERVER_ISSUER=http://auth-api:5312 \
+  API_SERVICE_TOKEN=verify-dev-service-token-not-a-real-secret \
+  COOKIE_SIGNING_KEY=verify-dev-service-token-not-a-real-secret JWKS_KID=dev-main \
+  go run ./conformance/refapp &
+
+SEAMLESS_API_DIR=../seamless-auth-api seamless verify --adapter-url=http://localhost:8080
+```
+
+---
+
+## Starter Template
+
+`seamless-templates` has a Gin api starter (`templates/api/gin`, status beta) built on this
+adapter, which `seamless init` selects with `--gin` or `--api=gin`. It is on the templates `main`
+branch and is not in a release yet: the published `seamless-cli` 0.21.0 pins templates `v0.17.0`
+and scaffolds auth API v0.17.0, which this adapter does not support, so wait for the next CLI
+release rather than pointing 0.21.0 at templates `main`.
+
+---
+
+## Do Not Write Your Own Token Verification
+
+Use `RequireAuth` or `Authenticate` rather than decoding the session cookie or the access token
+yourself. They check the cookie signature, the auth API's JWKS signature, issuer, audience, expiry,
+and token type, and `RequireAuth` adds the cross-site rules above. A hand-rolled JWT check usually
+misses one of those, and the cookie format is internal to the adapter.
+
+---
+
+## Related Docs
+
+- [Server SDKs And Adapters](/build/server-sdks)
+- [Python: FastAPI And Django](/build/python-adapter)
+- [Rust: Axum](/build/rust-adapter)
+- [How To Secure Routes](/build/secure-routes)
+- [Cookie, Session, And Token Reference](/reference/cookies-sessions-tokens)
+- [Environment Variables](/reference/environment-variables)

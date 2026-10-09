@@ -22,6 +22,7 @@ seamless-auth-api
   -> runs the auth engine
 
 @seamless-auth/express, @seamless-auth/fastify, @seamless-auth/nextjs, or @seamless-auth/core
+(or seamless-auth for Python, seamless-auth-go for Go, seamless-auth for Rust)
   -> connects your backend to the auth engine
 
 @seamless-auth/react, @seamless-auth/angular, @seamless-auth/vue, @seamless-auth/svelte, or
@@ -44,6 +45,9 @@ seamless-auth-admin-dashboard
 | `@seamless-auth/express`        | Official Express adapter                        | Your backend is Express (the most mature adapter path)                                                        |
 | `@seamless-auth/fastify`        | Official Fastify adapter                        | Your backend is Fastify ([Server SDKs](/build/server-sdks#current-official-coverage))                         |
 | `@seamless-auth/nextjs`         | Official Next.js App Router adapter             | Your Next.js app is its own backend ([Next.js](/build/nextjs))                                                |
+| `seamless-auth` (PyPI)          | Official Python adapter                         | Your backend is FastAPI or Django ([Python](/build/python-adapter))                                           |
+| `seamless-auth-go`              | Official Go adapter                             | Your backend is Go `net/http`, chi, Echo, or Gin ([Go](/build/go-adapter))                                    |
+| `seamless-auth` (crates.io)     | Official Rust adapter                           | Your backend is Axum ([Rust](/build/rust-adapter))                                                            |
 | `@seamless-auth/react`          | React SDK and built-in auth screens             | Your frontend is React and you want a ready-to-use auth integration                                           |
 | `@seamless-auth/angular`        | Angular service, guards, and built-in screens   | Your frontend is Angular 20, 21, or 22 ([Angular SDK](/build/angular-sdk))                                    |
 | `@seamless-auth/vue` | Vue plugin, composable, guards, and built-in screens | Your frontend is Vue 3.5 or later ([Vue SDK](/build/vue-sdk)) |
@@ -90,8 +94,9 @@ That backend layer:
 - talks to the auth server using service-to-service credentials
 
 If you use Express, start with `@seamless-auth/express`; Fastify, `@seamless-auth/fastify`; a
-Next.js App Router application, `@seamless-auth/nextjs`. If you need a different runtime, start
-with `@seamless-auth/core`.
+Next.js App Router application, `@seamless-auth/nextjs`. For FastAPI or Django, Go, or Axum, use the
+[Python](/build/python-adapter), [Go](/build/go-adapter), or [Rust](/build/rust-adapter) adapter. If
+you need a different Node.js runtime, start with `@seamless-auth/core`.
 
 ---
 
@@ -200,6 +205,18 @@ How to read it:
   does not install them.
 - The auth API exposes an HTTP contract, not a package range. No package declares a range on
   `seamless-auth-api`, so pair the API and the server SDK from the same release window.
+
+### Python, Go, And Rust Adapters
+
+These are not npm packages, so they sit outside the table above and `npm run check:matrix`. Each
+declares no range on another Seamless package; it reads the auth API's adapter manifest at runtime
+instead.
+
+| Adapter                              | Latest release | Registry                                     | Needs                                               |
+| ------------------------------------ | -------------- | -------------------------------------------- | --------------------------------------------------- |
+| `seamless-auth` (Python)             | 0.2.0          | PyPI                                         | Python 3.11+, FastAPI 0.115+ or Django 5.2+, auth API v0.18.0+ |
+| `github.com/fells-code/seamless-auth-go` | v0.2.0     | Go module proxy (tag `v0.2.0`)               | Go 1.22+, auth API v0.18.0+                         |
+| `seamless-auth` (Rust)               | 0.2.0          | crates.io                                    | Rust 1.88+, Axum 0.8, auth API v0.18.0+             |
 
 ### What The CLI Scaffolds
 

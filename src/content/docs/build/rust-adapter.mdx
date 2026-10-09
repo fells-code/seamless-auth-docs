@@ -1,0 +1,260 @@
+---
+title: "Rust: Axum"
+description: "Add passwordless auth (passkeys, magic links, email and SMS codes) to a Rust Axum app without writing JWT code, with the official seamless-auth crate: install, a complete app, configuration, and cookie and bearer transport."
+sidebar:
+  order: 3.3
+---
+
+`seamless-auth` on crates.io is the official Seamless Auth server adapter for Rust and Axum. It
+gives you an Axum router for the `/auth` routes the frontend SDKs call, a `require_auth()` tower
+layer for your own routes, and a `User` extractor for the signed-in user. The session lives in
+signed `HttpOnly` cookies on your own domain. You do not write token parsing, JWKS fetching, cookie
+signing, or refresh logic.
+
+Use it when your backend is Axum and you want passkeys, magic links, email or SMS codes, or OAuth
+sign-in against a Seamless Auth server (self-hosted `seamless-auth-api` or a managed instance). It
+is held to the same conformance suite as the Express, Fastify, Go, and Python adapters. For other
+languages see [Server SDKs And Adapters](/build/server-sdks).
+
+Source: [fells-code/seamless-auth-rust](https://github.com/fells-code/seamless-auth-rust). Current
+release: `0.2.0` (pre-1.0, so the public API may change between minor versions).
+
+---
+
+## Install
+
+```bash
+cargo add seamless-auth
+cargo add axum@0.8 serde_json
+cargo add tokio@1 --features macros,rt-multi-thread,net
+```
+
+It needs Rust 1.88 or later and Axum 0.8. The crate name is `seamless_auth`.
+
+| Feature      | Default | Purpose                                              |
+| ------------ | ------- | ---------------------------------------------------- |
+| `rustls`     | yes     | TLS to the auth API with rustls                      |
+| `native-tls` | no      | TLS to the auth API with the platform's TLS library |
+
+With neither, the adapter reaches the auth API over plain HTTP only.
+
+---
+
+## A Complete App
+
+This mounts the auth routes at `/auth`, protects `/api/me`, and reads the current user. It follows
+the reference app the conformance suite drives (`conformance/refapp/main.rs`).
+
+```rust
+use std::net::SocketAddr;
+
+use axum::{Json, Router, routing::get};
+use seamless_auth::{Adapter, User};
+use serde_json::json;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut builder = Adapter::builder(std::env::var("AUTH_SERVER_URL")?)
+        .cookie_secret(std::env::var("COOKIE_SIGNING_KEY")?) // 32 bytes or more
+        .service_secret(std::env::var("API_SERVICE_TOKEN")?) // the auth API's API_SERVICE_TOKEN
+        .jwks_kid(std::env::var("JWKS_KID")?);
+    if let Ok(issuer) = std::env::var("AUTH_SERVER_ISSUER") {
+        builder = builder.auth_server_issuer(issuer);
+    }
+    let auth = builder.build()?;
+
+    let app = Router::new()
+        // Your own route, behind the adapter's guard. require_auth answers 401 without a session.
+        .route(
+            "/api/me",
+            get(|user: User| async move { Json(json!({ "id": user.id, "roles": user.roles })) })
+                .route_layer(auth.require_auth()),
+        )
+        // The auth routes, at /auth, which is where the frontend SDKs call.
+        .nest("/auth", auth.router());
+
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await?;
+    // Connect info gives the adapter the peer address to forward to the auth API.
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
+    Ok(())
+}
+```
+
+- `Adapter::builder(url)` takes the auth API URL; `.build()` returns a `BuildError` on an invalid
+  URL or a secret shorter than 32 bytes, so a misconfigured app fails to boot.
+- `auth.router()` serves every auth route. Nest it at `/auth`.
+- `auth.require_auth()` is a tower layer. It answers 401 `{"error":"unauthenticated"}` unless the
+  request carries a session, and puts a `User` in the request extensions, which handlers take as an
+  extractor.
+- `User` has `id`, `roles`, `email`, `phone` (both `Option<String>`), and `token` (the auth API
+  access token). On a bearer request `email` and `phone` are `None`, because the access token does
+  not carry them.
+- Serve with `into_make_service_with_connect_info::<SocketAddr>()`. Without it the adapter has no
+  peer address and forwards no client address to the auth API.
+
+There is no role layer in the crate. Check `user.roles` in your handler. For a web app on another
+origin, add credentialed CORS for that origin (for example `tower-http`'s `CorsLayer`).
+
+---
+
+## Configuration
+
+The adapter reads no environment variables itself. The names below are the ones the Seamless
+starters, the conformance reference app, and `seamless init` use, so a project the CLI wrote
+already has them in `.env`.
+
+| Variable             | Builder method          | Value                                                                                                              |
+| -------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `AUTH_SERVER_URL`    | `Adapter::builder(url)` | Where your server reaches the auth API, for example `http://localhost:5312`, or the Auth Server URL from the portal |
+| `AUTH_SERVER_ISSUER` | `auth_server_issuer`    | Only when the auth API signs as a different URL (the `seamless init --local` Docker stack signs as `http://auth:5312`) |
+| `COOKIE_SIGNING_KEY` | `cookie_secret`         | Any secret of 32 bytes or more, for example `openssl rand -base64 48`                                               |
+| `API_SERVICE_TOKEN`  | `service_secret`        | The auth API's `API_SERVICE_TOKEN` (self-hosted), or a service token generated in the portal (managed)              |
+| `JWKS_KID`           | `jwks_kid`              | The auth API's signing key id, `dev-main` on a local stack                                                          |
+
+The builder also has:
+
+| Builder method                         | Default                                  | Purpose                                                                                  |
+| -------------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `audience`                             | the issuer                               | Expected `aud` of the auth API's tokens                                                  |
+| `cookie_domain`                        | none                                     | Cookie `Domain`                                                                          |
+| `insecure_cookies`                     | `false`                                  | Drops `Secure`, for local development over plain HTTP on a host other than `localhost`  |
+| `same_site`                            | `None`, or `Lax` with `insecure_cookies` | Cookie `SameSite`                                                                        |
+| `allowed_origins`                      | none                                     | The only cross-origin callers allowed to change state while cookies are `SameSite=None` |
+| `session_cookie_names`                 | `seamless-access`, `seamless-refresh`    | Session cookie names                                                                     |
+| `flow_cookie_names`                    | `seamless-ephemeral`                     | Sign-in flow cookie names                                                                |
+| `deliver`                              | none                                     | Send OTP codes and magic links through your own transports                               |
+| `trusted_proxies`, `resolve_client_ip` | the connecting peer                      | The end user's address; use `TrustedProxies::new(["10.0.0.0/8"])?` behind a proxy       |
+| `disable_manifest_fetch`               | `false`                                  | Use only the manifest embedded in this version                                           |
+| `http_client`                          | 15 second timeout, no redirects          | Outbound `reqwest::Client`                                                               |
+
+### Delivering codes yourself
+
+Without `deliver`, the auth API sends OTP codes and magic links. With it, the adapter asks the API
+for the message and hands it to you as a `Delivery` (`kind`, `to`, and the optional `token`,
+`magic_link_url`, and `sign_in_url`). A returned error answers 502 `delivery_failed`.
+
+```rust
+.deliver(move |d: seamless_auth::Delivery| {
+    let mailer = mailer.clone();
+    async move { mailer.send(&d.to, &d.kind, d.token.as_deref(), d.magic_link_url.as_deref()).await }
+})
+```
+
+### Serving the admin console
+
+`auth.console_router()` serves the Seamless admin dashboard at `/console` from your API, proxied
+from the auth API. Merge it rather than nesting it, because a router nested at `/console` never sees
+`/console/`:
+
+```rust
+let app = Router::new()
+    .nest("/auth", auth.router())
+    .merge(auth.console_router());
+```
+
+Add your API's origin to the auth server's `ORIGINS` so passkey ceremonies started in the console
+verify.
+
+---
+
+## Cookie And Bearer Transport
+
+The same `/auth` routes serve two contracts:
+
+- **Browsers** get cookies. The adapter keeps the auth API's tokens in signed `HttpOnly` cookies
+  and refreshes the session silently on the auth routes. Page scripts never see a token.
+- **Native clients** (mobile apps, CLIs) send `x-seamless-auth-transport: bearer`. Session-issuing
+  responses then return `token` and `refreshToken` in the body and set no cookie, and the client
+  refreshes with `POST /auth/refresh` and `Authorization: Bearer <refreshToken>`.
+
+`require_auth()` accepts either the session cookie or an auth API access token in
+`Authorization: Bearer`, and the cookie wins when both are present. It reads the `Cookie` header
+itself, so it works on any route, and it does not refresh. `auth.authenticate(&headers)` runs the
+same check without answering the request.
+
+While cookies are `SameSite=None`, a state-changing request the guard admits on the cookie from
+another site (`Sec-Fetch-Site: cross-site`, or an `Origin` outside `allowed_origins`) answers 403
+`cross_site_request_blocked`. The auth routes only accept JSON request bodies (`application/json`
+or a `+json` type); anything else answers 415 `unsupported_media_type`. The frontend SDKs already
+send JSON.
+
+See [Bearer Transport For Native Clients](/build/server-sdks#bearer-transport-for-native-clients)
+for the full contract, which every adapter shares.
+
+---
+
+## How The Frontend Talks To It
+
+Every frontend SDK calls `${apiHost}/auth/...`, so point it at this server's origin, for example
+`<AuthProvider apiHost="http://localhost:8080">` in [React](/build/react-sdk). The same `apiHost`
+option exists in [Angular](/build/angular-sdk), [Vue](/build/vue-sdk), [Svelte](/build/svelte-sdk),
+and [React Native](/build/react-native-sdk). Browser requests to your own protected routes need
+`credentials: 'include'` when the web app runs on another origin.
+
+---
+
+## Version Compatibility
+
+| `seamless-auth` (crates.io) | Auth API         | Rust  | Axum |
+| --------------------------- | ---------------- | ----- | ---- |
+| 0.2.0                       | v0.18.0 or later | 1.88+ | 0.8  |
+
+Which routes the adapter serves comes from the adapter manifest the auth API publishes at
+`/.well-known/seamless-adapter.json`, first served by auth API v0.18.0, so a new API route works
+without a new crate release. The adapter fetches it on the first request and keeps it for the life
+of the process. If the API serves none, it falls back to the copy embedded in the crate. Run auth
+API v0.18.0 or later: the adapter sends the OTP and magic-link send routes as `POST`, which v0.17.0
+answers with 404. `seamless-cli` 0.21.0 scaffolds v0.17.0, so in a project it generated, bump the
+`ghcr.io/fells-code/seamless-auth-api` image tag to `v0.18.0`.
+
+---
+
+## Conformance
+
+The adapter is held to the adapter conformance suite in `seamless-cli`
+([`verify/CONFORMANCE.md`](https://github.com/fells-code/seamless-cli/blob/main/verify/CONFORMANCE.md)),
+the same suite the Express and Fastify adapters pass, in CI on every change. To run it yourself you
+need Docker, a checkout of `seamless-auth-api`, and the `seamless` CLI:
+
+```bash
+PORT=8080 AUTH_SERVER_URL=http://localhost:5312 AUTH_SERVER_ISSUER=http://auth-api:5312 \
+  API_SERVICE_TOKEN=verify-dev-service-token-not-a-real-secret \
+  COOKIE_SIGNING_KEY=verify-dev-service-token-not-a-real-secret JWKS_KID=dev-main \
+  cargo run --example refapp &
+
+SEAMLESS_API_DIR=../seamless-auth-api seamless verify --adapter-url=http://localhost:8080
+```
+
+---
+
+## Starter Template
+
+`seamless-templates` has an Axum api starter (`templates/api/axum`, status beta) built on this
+crate, which `seamless init` selects with `--axum` or `--api=axum`. It is on the templates `main`
+branch and is not in a release yet: the published `seamless-cli` 0.21.0 pins templates `v0.17.0`
+and scaffolds auth API v0.17.0, which this adapter does not support, so wait for the next CLI
+release rather than pointing 0.21.0 at templates `main`.
+
+---
+
+## Do Not Write Your Own Token Verification
+
+Use `require_auth()` or `authenticate` rather than decoding the session cookie or the access token
+yourself. They check the cookie signature, the auth API's JWKS signature, issuer, audience, expiry,
+and token type, and the layer adds the cross-site rules above. A hand-rolled `jsonwebtoken` check
+usually misses one of those, and the cookie format is internal to the adapter.
+
+---
+
+## Related Docs
+
+- [Server SDKs And Adapters](/build/server-sdks)
+- [Python: FastAPI And Django](/build/python-adapter)
+- [Go: net/http, chi, Echo, And Gin](/build/go-adapter)
+- [How To Secure Routes](/build/secure-routes)
+- [Cookie, Session, And Token Reference](/reference/cookies-sessions-tokens)
+- [Environment Variables](/reference/environment-variables)
