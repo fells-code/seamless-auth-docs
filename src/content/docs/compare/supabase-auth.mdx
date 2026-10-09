@@ -1,0 +1,169 @@
+---
+title: "Seamless Auth vs Supabase Auth"
+description: "Supabase Auth alternative for passkey-first apps? An honest comparison of Seamless Auth and Supabase Auth (GoTrue): self-hosting, passkey status, magic links, OTP, SAML, organizations, Postgres and RLS coupling, prebuilt UI, and pricing model, with sources."
+sidebar:
+  order: 3
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Supabase Auth and Seamless Auth are both open source auth servers backed by Postgres, and both can
+be self-hosted or used as a hosted service. They are aimed at different shapes of application.
+Supabase Auth (the Go server formerly called GoTrue) is one part of the Supabase platform: it stores
+users in your Supabase Postgres database and issues JWTs that Supabase's APIs and Postgres Row Level
+Security (RLS) policies consume. Seamless Auth is a standalone, passwordless-only auth server that
+sits behind your own backend, built around passkeys.
+
+This page is for an engineer choosing between the two. Supabase details were checked against
+Supabase's official docs, pricing page, changelog, and GitHub as of October 2026, and each one links
+to its source at the bottom. Seamless Auth details were checked against the source repositories.
+Supabase's passkey support in particular has changed during 2026, so check its docs for the current
+status.
+
+---
+
+## Choose Supabase Auth If
+
+- **You are building on Supabase.** If your data already lives in Supabase Postgres and you use its
+  client libraries and RLS, Supabase Auth is the integrated choice: `auth.uid()` in an RLS policy,
+  the user in the same database, one client, one dashboard. Seamless Auth does not integrate with
+  RLS.
+- **You need password sign-in.** Supabase Auth supports passwords. Seamless Auth has no password
+  flow, by design.
+- **You need SAML enterprise SSO.** Supabase Auth supports SAML 2.0 on the Pro plan and above, with
+  one connection per customer organization, and documents a self-hosted SAML setup. Seamless Auth
+  has no SAML.
+- **You want a large, established platform and ecosystem.** Supabase has official clients for
+  JavaScript, Flutter, Swift, and Python, a large community, and a SOC 2 Type 2 report and HIPAA BAA
+  on its Team and Enterprise plans. Seamless Auth is 0.x, with a smaller community and no
+  third-party attestations.
+- **You want a long list of social providers out of the box.** Supabase lists about twenty social
+  providers, plus custom OAuth and OIDC providers. Seamless Auth has CLI presets for four and manual
+  configuration for others.
+
+## Choose Seamless Auth If
+
+- **Passkeys are your primary sign-in method and you want them out of beta.** As of October 2026
+  Supabase documents passkey support as experimental: the JavaScript client needs
+  `experimental: { passkey: true }`, the API may change without notice, and a user must already have
+  a confirmed account and be signed in to register a passkey. In Seamless Auth passkeys are the core
+  flow, and the `phishing_resistant_only` setting can make them the only way to sign in.
+- **Your data does not live in Supabase.** Supabase Auth is designed around Supabase Postgres and
+  its API gateway. Seamless Auth stores its own data in its own Postgres and works with whatever
+  database and backend your app already uses.
+- **You need organizations and memberships as a built-in model.** Seamless Auth ships organizations,
+  memberships, scoped roles, and an active organization on the session. In Supabase you model tenants
+  yourself in tables and enforce them with RLS (Supabase's own "organizations" are for billing your
+  Supabase account, not for your end users).
+- **You want sign-in to go through your backend.** Seamless Auth clients call your backend's `/auth`
+  routes, and browsers hold the session only in `httpOnly` cookies. Supabase clients typically talk
+  to Supabase directly from the browser or app with a public key.
+
+---
+
+## Feature Comparison
+
+Supabase column as of October 2026.
+
+| | Seamless Auth | Supabase Auth |
+| --- | --- | --- |
+| License | Apache-2.0 | `supabase/auth` is MIT; the wider `supabase/supabase` repository is Apache-2.0 |
+| Hosting | Self-host (Docker, Postgres) or Seamless managed hosting | Supabase hosted platform, or self-host the Supabase stack with Docker Compose |
+| Where user data lives | The auth API's Postgres (yours when self-hosted) | A dedicated `auth` schema in your Supabase project's Postgres |
+| Backend support | Node.js (Express, Fastify, Next.js), Python (FastAPI, Django), Go (`net/http`), Rust (Axum) | Any backend that verifies Supabase JWTs; official clients for JavaScript, Flutter, Swift, Python |
+| Frontend support | React, Next.js, Angular, Vue, Svelte, React Native and Expo | `supabase-js` in any JavaScript framework, plus Flutter and Swift |
+| Passkeys | Yes, primary sign-in method (WebAuthn via SimpleWebAuthn) | Experimental (beta since May 2026): registered by a signed-in user; JS needs an opt-in flag; Flutter and Swift also experimental |
+| Magic links | Yes | Yes |
+| Email OTP | Yes | Yes |
+| SMS OTP | Yes (Twilio or AWS) | Yes (Twilio, MessageBird, Vonage) |
+| TOTP | Yes, as step-up / second factor | Yes, TOTP MFA; phone MFA is a paid add-on |
+| Passwords | No, by design | Yes |
+| Social and OIDC login | Yes, instance-wide; CLI presets for Google, GitHub, Microsoft (Entra ID), GitLab | Yes, about 20 providers plus custom OAuth2 and OIDC |
+| SAML enterprise SSO | No | Yes, Pro plan and above; self-hosted setup documented |
+| SCIM directory sync | No | Not documented |
+| Organizations for your end users | Yes: memberships, scoped roles, active organization on the session | No built-in model; build with tables and RLS (SAML connections carry an `sso_provider_id` usable in RLS) |
+| Prebuilt UI | Built-in auth routes (`AuthRoutes` in React; equivalents in Angular, Vue, Svelte), or headless | Copy-in auth blocks from the shadcn-based Supabase UI Library; the older `auth-ui-react` package is archived |
+| Admin dashboard | Yes, open source app you run (bundled on the managed path) | Supabase Studio (hosted dashboard; self-hosted Studio runs a single project) |
+| Third-party compliance attestations | None for Seamless Auth itself | SOC 2 Type 2 and HIPAA for the hosted platform, reports and BAA on Team and Enterprise |
+| Maturity | 0.x, small community | Mature platform; passkeys specifically are experimental |
+| Pricing model | Free to self-host; managed plans in the portal | Free tier, then per-organization plans with monthly active users (MAU) included and per-MAU overage; SAML SSO users and phone MFA billed separately |
+
+<Aside type="note">
+  As of October 2026, Supabase's pricing page lists a Free plan with 50,000 MAU and a Pro plan from
+  $25 per month with 100,000 MAU included. Check [supabase.com/pricing](https://supabase.com/pricing)
+  for current figures.
+</Aside>
+
+---
+
+## Architecture Difference
+
+**Supabase Auth** is one service in the Supabase stack. Clients call it (usually through
+`supabase-js`) via the Supabase API gateway, it writes users and sessions to the `auth` schema of
+the project's Postgres, and it issues JWTs that Supabase's data APIs pass through to Postgres, where
+RLS policies read the user's id and claims. The auth server is open source and can run on its
+own, but its design, docs, and dashboard assume the rest of Supabase. Self-hosting means running the
+Supabase stack with Docker Compose, without some hosted features such as the Management API.
+
+**Seamless Auth** is a standalone service your backend fronts:
+
+```txt
+browser or native app
+  -> your backend's /auth routes   (@seamless-auth/express, fastify, nextjs, or the Python/Go/Rust adapter)
+  -> seamless-auth-api             (your infrastructure, or Seamless managed)
+  -> Postgres (auth data only)
+```
+
+Your backend mounts adapter routes, forwards calls with a service token, keeps browser sessions in
+signed `httpOnly` cookies, and verifies sessions against the auth API's JWKS. Authorization is
+enforced in your application code, not in database policies. Your application data can live in any
+database. See [What Is Seamless Auth?](/start/overview#how-the-pieces-connect).
+
+If you use Supabase for your database but want Seamless Auth for sign-in, note that Supabase's RLS
+helpers expect Supabase-issued JWTs; you would enforce access in your backend instead, or do the
+integration work to map Seamless Auth sessions into your database policies yourself.
+
+---
+
+## Migrating From Supabase Auth
+
+Supabase stores users in the `auth.users` table of your own Postgres, so you can export them with a
+SQL query. Seamless Auth does not import password hashes, because it has no password flow. A
+migration imports identities (email, external id, phone, roles, organization memberships) with
+`seamless migrate csv`, then gets each user onto a passkey through enrollment prompts and invites.
+Seamless Auth imports no credentials of any kind, so existing passkeys and MFA factors do not carry
+over; each user verifies their email once and enrolls a new passkey.
+
+Follow [Migrate Users From Another Identity System](/operate/migrate-users); the
+[Auth0 migration guide](/operate/migrate-from-auth0) shows the full pattern for one provider.
+Fells Code, which maintains Seamless Auth, offers hands-on migration help (see the end of that
+guide).
+
+---
+
+## Sources
+
+Supabase details checked October 2026:
+
+- [Supabase Auth overview](https://supabase.com/docs/guides/auth): methods, MFA, user data in a dedicated schema
+- [Passkeys (Supabase docs)](https://supabase.com/docs/guides/auth/passkeys): experimental status, client opt-in, registration requires a signed-in user, SDK versions
+- [Passkeys for Supabase Auth (Beta) changelog](https://supabase.com/changelog/46458-passkeys-for-supabase-auth-beta), May 28, 2026
+- [Passkeys beta discussion](https://github.com/orgs/supabase/discussions/46458)
+- [Self-hosted passkeys](https://supabase.com/docs/guides/self-hosting/self-hosted-passkeys): `GOTRUE_PASSKEY_ENABLED` and WebAuthn settings
+- [SAML 2.0 SSO](https://supabase.com/docs/guides/auth/enterprise-sso/auth-sso-saml): Pro plan and above, multi-tenant connections, `sso_provider_id`
+- [Self-hosted SAML SSO](https://supabase.com/docs/guides/self-hosting/self-hosted-saml-sso)
+- [Self-hosting Supabase](https://supabase.com/docs/guides/self-hosting): Docker Compose, features not available when self-hosted
+- [Supabase pricing](https://supabase.com/pricing): plans, MAU, SAML and phone MFA billing
+- [Supabase security](https://supabase.com/security): SOC 2 Type 2, HIPAA
+- [supabase/auth on GitHub](https://github.com/supabase/auth): Go auth server, MIT license
+- [supabase/supabase on GitHub](https://github.com/supabase/supabase): Apache-2.0, official client libraries
+- [Supabase UI Library](https://supabase.com/ui): shadcn-based auth blocks
+- [supabase-community/auth-ui](https://github.com/supabase-community/auth-ui): archived Auth UI repository
+
+Seamless Auth details:
+
+- [What Is Seamless Auth?](/start/overview), including [When Seamless Auth Is Not The Right Choice](/start/overview#when-seamless-auth-is-not-the-right-choice)
+- [What You Give Up Or Must Plan For](/operate/migrate-from-auth0#what-you-give-up-or-must-plan-for)
+- [Environment Variables](/reference/environment-variables) (`LOGIN_METHODS`, SMS providers)
+- [How To Use Organizations And Memberships](/build/organizations-memberships)
+- Source: [fells-code on GitHub](https://github.com/fells-code)

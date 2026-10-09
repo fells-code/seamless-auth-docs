@@ -11,6 +11,7 @@ const sections = [
   { label: 'Build', directory: 'build' },
   { label: 'Understand', directory: 'understand' },
   { label: 'Operate', directory: 'operate' },
+  { label: 'Compare', directory: 'compare' },
   { label: 'Troubleshooting', directory: 'troubleshooting' },
   { label: 'Reference', directory: 'reference' },
 ]
