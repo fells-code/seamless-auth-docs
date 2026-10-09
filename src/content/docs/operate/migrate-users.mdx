@@ -255,10 +255,10 @@ of them to that passkey, ideally two, so losing one device does not lock them ou
 Turn on `prompt_passkey_enrollment` (API 0.17.0). With it on, an email code, phone code, or magic
 link sign-in by a user with no passkey carries `nextStep: 'enroll_passkey'` in the response, so your
 sign-in UI can send them straight to passkey enrollment. Set it from the System page of the admin
-dashboard ("Prompt for passkey enrollment", dashboard 0.8.0), with `PATCH /system-config/admin`, or
-with `PROMPT_PASSKEY_ENROLLMENT=true` (see
+dashboard ("Prompt for passkey enrollment", dashboard 0.8.0), with
+`seamless config set prompt_passkey_enrollment true` (CLI 0.21.0), with
+`PATCH /system-config/admin`, or with `PROMPT_PASSKEY_ENROLLMENT=true` (see
 [How System Config Is Loaded](/reference/system-config#how-system-config-is-loaded)).
-`seamless config set` does not accept this key.
 
 ### Track enrollment
 
