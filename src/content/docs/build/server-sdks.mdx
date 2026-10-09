@@ -1,11 +1,11 @@
 ---
 title: "Server SDKs and Adapters"
-description: "The official Seamless Auth server packages: the Express, Fastify, and Next.js adapters and the framework-agnostic core, with Express options, mounted routes, and middleware."
+description: "The official Seamless Auth server packages: the Express, Fastify, and Next.js adapters, the framework-agnostic core, and the Python, Go, and Rust adapters, with Express options, mounted routes, and middleware."
 sidebar:
   order: 3
 ---
 
-Seamless Auth currently ships four official server-side packages:
+Seamless Auth currently ships four official Node.js server-side packages:
 
 - `@seamless-auth/core`
 - `@seamless-auth/express`
@@ -14,6 +14,13 @@ Seamless Auth currently ships four official server-side packages:
 
 These packages help your backend become the browser-facing security boundary between your app and
 the private auth server.
+
+Backends in other languages have official adapters too, each with its own page:
+
+- Python: `seamless-auth` on PyPI, for FastAPI and Django ([Python](/build/python-adapter))
+- Go: `github.com/fells-code/seamless-auth-go`, for `net/http`, chi, Echo, and Gin
+  ([Go](/build/go-adapter))
+- Rust: `seamless-auth` on crates.io, for Axum ([Rust](/build/rust-adapter))
 
 ---
 
@@ -25,6 +32,9 @@ the private auth server.
 | `@seamless-auth/fastify` | Your backend is Fastify                            | The Express adapter's routes and cookies as a Fastify plugin                                                          |
 | `@seamless-auth/nextjs`  | Your Next.js App Router app is its own backend     | Serves `/auth` from a route handler, reads the session in server components and `proxy.ts` ([Next.js](/build/nextjs)) |
 | `@seamless-auth/core`    | You need a custom adapter or framework integration | Framework-agnostic auth, cookie, OAuth, and role primitives                                                           |
+| `seamless-auth` (PyPI)   | Your backend is FastAPI or Django                  | Auth router or URLconf, `RequireUser` and `require_auth` guards ([Python](/build/python-adapter))                     |
+| `seamless-auth-go`       | Your backend is Go: `net/http`, chi, Echo, or Gin  | `Handler()` for `/auth`, `RequireAuth` middleware ([Go](/build/go-adapter))                                           |
+| `seamless-auth` (crates) | Your backend is Axum                               | `router()` for `/auth`, `require_auth()` layer, `User` extractor ([Rust](/build/rust-adapter))                        |
 
 If you already run Express, start with `@seamless-auth/express`. For Next.js, follow the
 [Next.js](/build/nextjs) guide.
@@ -400,6 +410,12 @@ starter templates in `seamless-templates`, not to the adapter packages:
 Current versions and the ranges each adapter declares on `@seamless-auth/core` are in the
 [Compatibility Matrix](/build/ecosystem#compatibility-matrix).
 
+The Python, Go, and Rust adapters are separate repositories (`seamless-auth-python`,
+`seamless-auth-go`, `seamless-auth-rust`), released at 0.2.0 and also pre-1.0. They take their route
+list from the adapter manifest the auth API serves from v0.18.0, and each runs the same conformance
+suite in CI. Their api starters (`gin`, `axum`, `fastapi`) are on `seamless-templates` `main` and not
+yet in a templates release the CLI pins.
+
 Express is the most mature path. It is the reference adapter: the Fastify and Next.js adapters'
 tests hold them to the Express adapter's responses. It is also the only adapter released in lockstep
 with `@seamless-auth/core` (their linked Changesets group), and its starter template is the only
@@ -422,12 +438,16 @@ The Fastify adapter, `@seamless-auth/fastify`, mirrors the Express one as a Fast
 transport included. A Next.js App Router application uses `@seamless-auth/nextjs` instead of a
 separate backend: it serves `/auth` from a route handler and reads the session in server components
 and `proxy.ts` ([Next.js](/build/nextjs)). Use `@seamless-auth/core` when none of the three fits
-your runtime or you are building an adapter.
+your Node.js runtime or you are building an adapter. For Python, Go, and Rust backends, use the
+[Python](/build/python-adapter), [Go](/build/go-adapter), or [Rust](/build/rust-adapter) adapter.
 
 ---
 
 ## Related Docs
 
+- [Python: FastAPI And Django](/build/python-adapter)
+- [Go: net/http, chi, Echo, And Gin](/build/go-adapter)
+- [Rust: Axum](/build/rust-adapter)
 - [How To Secure Routes](/build/secure-routes)
 - [How To Build Your Own Auth UI](/build/custom-auth-ui)
 - [How To Add OAuth Login](/build/oauth-login)

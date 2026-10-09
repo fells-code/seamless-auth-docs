@@ -184,10 +184,10 @@ requirements for you:
   application and can use OAuth and OIDC providers as a login source. It does not speak SAML and it
   is not an OAuth or OIDC authorization server for third-party clients.
 - **Your backend has no official adapter.** Official server adapters exist for Node.js 22 or later
-  (`core`, `express`, `fastify`, `nextjs`), Python (FastAPI and Django, `pip install seamless-auth`),
-  Go (`net/http`, so chi, Echo and Gin, `github.com/fells-code/seamless-auth-go`), and Rust (Axum,
-  `cargo add seamless-auth`), all held to the same conformance suite. A backend in another language
-  has to implement the adapter contract against the auth API itself.
+  (`core`, `express`, `fastify`, `nextjs`), [Python](/build/python-adapter) (FastAPI and Django,
+  `pip install "seamless-auth[fastapi]"`), [Go](/build/go-adapter) (`net/http`, so chi, Echo and
+  Gin), and [Rust](/build/rust-adapter) (Axum), all held to the same conformance suite. A backend in
+  another language has to implement the adapter contract against the auth API itself.
 - **Your frontend has no backend.** Both the browser and the native SDK call `/auth` adapter routes
   on your own server, which hold the service token and, for browsers, the cookies. A static site with
   no server of its own needs one added (a Next.js app can be its own).

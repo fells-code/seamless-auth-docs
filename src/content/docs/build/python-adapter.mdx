@@ -1,0 +1,311 @@
+---
+title: "Python: FastAPI and Django"
+description: "Add passwordless auth (passkeys, magic links, email and SMS codes) to a FastAPI or Django app without writing JWT code, with the official seamless-auth Python adapter: install, a complete app, configuration, and cookie and bearer transport."
+sidebar:
+  order: 3.1
+---
+
+`seamless-auth` on PyPI is the official Seamless Auth server adapter for Python, with bindings for
+FastAPI and Django. It mounts the `/auth` routes the frontend SDKs call, holds the session in
+signed `HttpOnly` cookies on your own domain, and gives you a guard for your own routes that hands
+you the signed-in user. You do not write token parsing, JWKS fetching, cookie signing, or refresh
+logic: the adapter does all of it, and it is held to the same conformance suite as the Express,
+Fastify, Go, and Rust adapters.
+
+Use it when your backend is FastAPI or Django and you want passkeys, magic links, email or SMS
+codes, or OAuth sign-in against a Seamless Auth server (self-hosted `seamless-auth-api` or a
+managed instance). For Node.js backends see [Server SDKs And Adapters](/build/server-sdks); for Go
+and Rust see [Go](/build/go-adapter) and [Rust](/build/rust-adapter).
+
+Source: [fells-code/seamless-auth-python](https://github.com/fells-code/seamless-auth-python).
+Current release: `0.2.0` (pre-1.0, so the public API may change between minor versions).
+
+---
+
+## Install
+
+```bash
+pip install "seamless-auth[fastapi]"   # or "seamless-auth[django]"
+```
+
+With uv: `uv add "seamless-auth[fastapi]"`. It needs Python 3.11 or later, and Django 5.2 or later
+for the Django binding. The import name is `seamless_auth`.
+
+---
+
+## FastAPI: A Complete App
+
+This mounts the auth routes at `/auth`, protects `/api/me`, and reads the current user. It
+follows the FastAPI reference app the conformance suite drives
+(`conformance/fastapi_app.py`).
+
+```python
+# main.py
+import os
+
+from fastapi import Depends, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from seamless_auth import Adapter, User
+from seamless_auth.fastapi import RequireUser, auth_router
+
+auth = Adapter(
+    auth_server_url=os.environ["AUTH_SERVER_URL"],
+    auth_server_issuer=os.environ.get("AUTH_SERVER_ISSUER") or None,
+    cookie_secret=os.environ["COOKIE_SIGNING_KEY"],  # 32 bytes or more
+    service_secret=os.environ["API_SERVICE_TOKEN"],  # the auth API's API_SERVICE_TOKEN
+    jwks_kid=os.environ["JWKS_KID"],
+)
+current_user = RequireUser(auth)
+
+app = FastAPI()
+
+# The web app calls /auth on this server with cookies, so it needs credentialed CORS.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=os.environ.get("UI_ORIGINS", "http://localhost:5173").split(","),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# The auth routes, at /auth, which is where the frontend SDKs call.
+app.include_router(auth_router(auth))
+
+
+# Your own route, behind the adapter's guard. RequireUser answers 401 without a session.
+@app.get("/api/me")
+def me(user: User = Depends(current_user)) -> dict[str, object]:
+    return {"id": user.id, "roles": list(user.roles)}
+```
+
+Run it with `uvicorn main:app --port 3000`.
+
+- `auth_router(adapter, prefix="/auth")` returns an `APIRouter` with every auth route.
+- `RequireUser(adapter)` is a dependency. It answers 401 `unauthenticated` unless the request
+  carries a session, and returns a `User`.
+- `User` has `id`, `roles` (a tuple), `email`, `phone`, and `token` (the auth API access token, for
+  calling the auth API on the user's behalf). On a bearer request `email` and `phone` are `None`,
+  because the access token does not carry them.
+
+There is no role guard in the package. Check `user.roles` in your route or in a dependency of your
+own that wraps `RequireUser`.
+
+---
+
+## Django: A Complete App
+
+Configure the adapter in settings, include its URLs at `auth/`, and decorate your views. This
+follows the Django reference app the conformance suite drives (`conformance/django_app.py`).
+
+```python
+# settings.py
+import os
+
+SEAMLESS_AUTH = {
+    "auth_server_url": os.environ["AUTH_SERVER_URL"],
+    "auth_server_issuer": os.environ.get("AUTH_SERVER_ISSUER") or None,
+    "cookie_secret": os.environ["COOKIE_SIGNING_KEY"],
+    "service_secret": os.environ["API_SERVICE_TOKEN"],
+    "jwks_kid": os.environ["JWKS_KID"],
+}
+```
+
+```python
+# urls.py
+from django.urls import include, path
+
+from . import views
+
+urlpatterns = [
+    path("auth/", include("seamless_auth.django")),
+    path("api/me", views.me),
+]
+```
+
+```python
+# views.py
+from django.http import JsonResponse
+from seamless_auth.django import require_auth, user_of
+
+
+@require_auth
+def me(request):
+    user = user_of(request)
+    return JsonResponse({"id": user.id, "roles": list(user.roles)})
+```
+
+- `SEAMLESS_AUTH` takes the keyword arguments of `Adapter` (see [Configuration](#configuration)).
+  `deliver` and `resolve_client_ip` may be dotted paths to callables.
+- `require_auth` works on sync and async views, answers 401 without a session, and
+  `user_of(request)` returns the `User`.
+- The auth routes are exempt from Django's CSRF middleware: the adapter does its own cross-site
+  checks, and the frontend SDKs send no CSRF token. The adapter runs in the request thread, on
+  WSGI or ASGI.
+- For a cross-origin web app, add credentialed CORS for its origin (for example with
+  `django-cors-headers`).
+
+---
+
+## Configuration
+
+The adapter reads no environment variables itself. The names below are the ones the Seamless
+starters, the conformance reference apps, and `seamless init` use, so a project the CLI wrote
+already has them in `.env`.
+
+| Variable             | Passed as            | Value                                                                                                              |
+| -------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `AUTH_SERVER_URL`    | `auth_server_url`    | Where your server reaches the auth API, for example `http://localhost:5312`, or the Auth Server URL from the portal |
+| `AUTH_SERVER_ISSUER` | `auth_server_issuer` | Only when the auth API signs as a different URL (the `seamless init --local` Docker stack signs as `http://auth:5312`) |
+| `COOKIE_SIGNING_KEY` | `cookie_secret`      | Any secret of 32 bytes or more, for example `openssl rand -base64 48`                                                |
+| `API_SERVICE_TOKEN`  | `service_secret`     | The auth API's `API_SERVICE_TOKEN` (self-hosted), or a service token generated in the portal (managed)              |
+| `JWKS_KID`           | `jwks_kid`           | The auth API's signing key id, `dev-main` on a local stack                                                          |
+
+`Adapter` also takes:
+
+| Argument                                           | Default                                   | Purpose                                                                                  |
+| -------------------------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `audience`                                         | the issuer                                | Expected `aud` of the auth API's tokens                                                  |
+| `cookie_domain`                                    | none                                      | Cookie `Domain`                                                                          |
+| `insecure_cookies`                                 | `False`                                   | Drops `Secure`, for local development over plain HTTP on a host other than `localhost`  |
+| `same_site`                                        | `None`, or `Lax` with `insecure_cookies`  | Cookie `SameSite`                                                                        |
+| `allowed_origins`                                  | none                                      | The only cross-origin callers allowed to change state while cookies are `SameSite=None` |
+| `access_cookie_name`, `refresh_cookie_name`        | `seamless-access`, `seamless-refresh`     | Session cookie names                                                                     |
+| `registration_cookie_name`, `pre_auth_cookie_name` | `seamless-ephemeral`                      | Sign-in flow cookie names                                                                |
+| `deliver`                                          | none                                      | Send OTP codes and magic links through your own transports                               |
+| `resolve_client_ip`                                | the connecting peer                       | The end user's address; pass `TrustedProxies(["10.0.0.0/8"])` behind a proxy             |
+| `disable_manifest_fetch`                           | `False`                                   | Use only the manifest bundled with this version                                          |
+| `http_client`                                      | 15 second timeout, no redirects           | Outbound `httpx2.Client`                                                                 |
+
+`Adapter` raises `ValueError` at startup on a bad URL or a secret shorter than 32 bytes, so a
+misconfigured app fails to boot instead of failing on the first sign-in.
+
+### Delivering codes yourself
+
+Without `deliver`, the auth API sends OTP codes and magic links. With it, the adapter asks the API
+for the message and hands it to you as a `Delivery` (`kind`, `to`, `token`, `magic_link_url`,
+`sign_in_url`). An `async def` callback works too. A delivery error answers 502
+`delivery_failed`.
+
+```python
+from seamless_auth import Delivery
+
+
+def deliver(d: Delivery) -> None:
+    mailer.send(d.to, d.kind, d.token, d.magic_link_url)
+
+
+auth = Adapter(..., deliver=deliver)
+```
+
+### Serving the admin console
+
+`console_router(auth)` (FastAPI) and `console_urlpatterns` (Django, included at `console/`)
+serve the Seamless admin dashboard at `/console` from your API, proxied from the auth API. Add
+your API's origin to the auth server's `ORIGINS` so passkey ceremonies started in the console
+verify.
+
+---
+
+## Cookie And Bearer Transport
+
+The same `/auth` routes serve two contracts:
+
+- **Browsers** get cookies. The adapter keeps the auth API's tokens in signed `HttpOnly` cookies
+  and refreshes the session silently on the auth routes. Page scripts never see a token.
+- **Native clients** (mobile apps, CLIs) send `x-seamless-auth-transport: bearer`. Session-issuing
+  responses then return `token` and `refreshToken` in the body and set no cookie, and the client
+  refreshes with `POST /auth/refresh` and `Authorization: Bearer <refreshToken>`.
+
+The guard (`RequireUser`, `require_auth`) accepts either the session cookie or an auth API access
+token in `Authorization: Bearer`, and the cookie wins when both are present. It does not refresh.
+`Adapter.authenticate(headers)` runs the same check anywhere else.
+
+While cookies are `SameSite=None`, a state-changing request admitted on the cookie from another
+site (`Sec-Fetch-Site: cross-site`, or an `Origin` outside `allowed_origins`) answers 403. The
+auth routes only accept JSON request bodies (`application/json` or a `+json` type); anything else
+answers 415 `unsupported_media_type`. The frontend SDKs already send JSON.
+
+See [Bearer Transport For Native Clients](/build/server-sdks#bearer-transport-for-native-clients)
+for the full contract, which every adapter shares.
+
+---
+
+## How The Frontend Talks To It
+
+Every frontend SDK calls `${apiHost}/auth/...`, so point it at this server's origin:
+
+```tsx
+<AuthProvider apiHost="http://localhost:3000">
+```
+
+That is the same for [React](/build/react-sdk), [Angular](/build/angular-sdk),
+[Vue](/build/vue-sdk), [Svelte](/build/svelte-sdk), and
+[React Native](/build/react-native-sdk). Browser requests to your own protected routes need
+`credentials: 'include'` when the web app runs on another origin.
+
+---
+
+## Version Compatibility
+
+| `seamless-auth` (PyPI) | Auth API              | Python | Frameworks                          |
+| ---------------------- | --------------------- | ------ | ----------------------------------- |
+| 0.2.0                  | v0.18.0 or later      | 3.11+  | FastAPI 0.115+, Django 5.2+         |
+
+Which routes the adapter serves comes from the adapter manifest the auth API publishes at
+`/.well-known/seamless-adapter.json`, first served by auth API v0.18.0, so a new API route works
+without a new adapter release. The adapter fetches it on the first request and keeps it for the
+life of the process. If the API serves none, it falls back to the copy bundled with the package,
+which already lists routes added in v0.18.0 (such as `POST /magic-link`). Run auth API v0.18.0 or
+later: v0.17.0 answers the `POST` forms of the OTP and magic-link send routes with 404.
+`seamless-cli` 0.21.0 scaffolds v0.17.0, so in a project it generated, bump the
+`ghcr.io/fells-code/seamless-auth-api` image tag to `v0.18.0`.
+
+---
+
+## Conformance
+
+The adapter is held to the adapter conformance suite in `seamless-cli`
+([`verify/CONFORMANCE.md`](https://github.com/fells-code/seamless-cli/blob/main/verify/CONFORMANCE.md)),
+the same suite the Express and Fastify adapters pass. CI runs it on every change against both
+reference apps. To run it yourself you need Docker, a checkout of `seamless-auth-api`, and the
+`seamless` CLI:
+
+```bash
+PORT=8080 AUTH_SERVER_URL=http://localhost:5312 AUTH_SERVER_ISSUER=http://auth-api:5312 \
+  API_SERVICE_TOKEN=verify-dev-service-token-not-a-real-secret \
+  COOKIE_SIGNING_KEY=verify-dev-service-token-not-a-real-secret JWKS_KID=dev-main \
+  uv run python conformance/fastapi_app.py &   # or conformance/django_app.py
+
+SEAMLESS_API_DIR=../seamless-auth-api seamless verify --adapter-url=http://localhost:8080
+```
+
+---
+
+## Starter Template
+
+`seamless-templates` has a FastAPI api starter (`templates/api/fastapi`, status beta) built on this
+adapter, which `seamless init` selects with `--fastapi` or `--api=fastapi`. It is on the templates
+`main` branch and is not in a release yet: the published `seamless-cli` 0.21.0 pins templates
+`v0.17.0` and scaffolds auth API v0.17.0, which this adapter does not support, so wait for the next
+CLI release rather than pointing 0.21.0 at templates `main`. There is no Django
+starter.
+
+---
+
+## Do Not Write Your Own Token Verification
+
+Use the guard rather than decoding the session cookie or the access token yourself. It checks the
+cookie signature, the auth API's JWKS signature, issuer, audience, expiry, and token type, and the
+cross-site rules above. A hand-rolled `jwt.decode` call usually misses one of those, and the cookie
+format is internal to the adapter.
+
+---
+
+## Related Docs
+
+- [Server SDKs And Adapters](/build/server-sdks)
+- [Go: net/http, chi, Echo, And Gin](/build/go-adapter)
+- [Rust: Axum](/build/rust-adapter)
+- [How To Secure Routes](/build/secure-routes)
+- [Cookie, Session, And Token Reference](/reference/cookies-sessions-tokens)
+- [Environment Variables](/reference/environment-variables)
