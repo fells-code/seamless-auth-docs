@@ -1,0 +1,271 @@
+---
+title: "Angular SDK"
+description: "@seamless-auth/angular adds Seamless Auth to an Angular 20, 21, or 22 application: a signal-based service, functional route guards, an HttpClient interceptor, and optional sign-in screens."
+sidebar:
+  order: 4.7
+---
+
+`@seamless-auth/angular` is the official Angular integration for Seamless Auth. It gives a
+standalone Angular application the same session state, auth actions, and optional sign-in screens
+the [React SDK](/build/react-sdk) gives a React app, in Angular's own idioms: an injectable service
+with signals and observables, a `provideSeamlessAuth()` provider, and functional route guards.
+
+It is a thin binding over `@seamless-auth/client`, the framework-free core the React and React
+Native SDKs also build on, so sign-in behaves the same in every binding. The Angular screens keep
+the React screens' accessible names, and `seamless verify` runs the same browser specs against both.
+
+---
+
+## How It Fits
+
+```txt
+Angular app (browser)
+  -> your backend's /auth adapter routes, with signed httpOnly cookies
+  -> Seamless Auth API
+```
+
+The browser model is the same as React's: the [server adapter](/build/server-sdks) keeps the auth
+API's tokens and the browser holds only `httpOnly` cookies on your domain. The Angular SDK has no
+bearer mode at all. Its configuration has no transport option, so no token can reach page scripts,
+and nothing it writes to browser storage is a credential. See
+[Cookie, Session, And Token Reference](/reference/cookies-sessions-tokens).
+
+---
+
+## Requirements
+
+- Angular 20, 21, or 22 (`@angular/core`, `@angular/common`, `@angular/router`) and `rxjs` 7
+- A standalone application. Zoneless and zone-based change detection both work, because state is
+  held in signals
+- A backend mounting the Seamless Auth adapter routes at `/auth`, for example `@seamless-auth/express`
+
+---
+
+## Installation
+
+```bash
+npm install @seamless-auth/angular
+```
+
+`@seamless-auth/client` comes with it.
+
+---
+
+## Configure The Application
+
+```ts
+// app.config.ts
+import { ApplicationConfig } from '@angular/core'
+import { provideHttpClient, withInterceptors } from '@angular/common/http'
+import { provideRouter } from '@angular/router'
+import { provideSeamlessAuth, seamlessAuthInterceptor } from '@seamless-auth/angular'
+
+import { routes } from './app.routes'
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideRouter(routes),
+    provideSeamlessAuth({ apiHost: 'https://app.example.com' }),
+    // Optional: sends the session cookies with HttpClient calls to apiHost, and nowhere else.
+    provideHttpClient(withInterceptors([seamlessAuthInterceptor])),
+  ],
+}
+```
+
+`apiHost` is the origin your backend serves `/auth` on. The session is read as soon as the
+application starts in the browser.
+
+`provideSeamlessAuth` also takes a factory, which runs in an injection context. Use it to read
+configuration at runtime, for example from a `config.js` your container writes at startup:
+
+```ts
+provideSeamlessAuth(() => ({ apiHost: window.__APP_CONFIG__.apiUrl }))
+```
+
+| Option                     | Default          | Purpose                                                             |
+| -------------------------- | ---------------- | ------------------------------------------------------------------- |
+| `apiHost`                  | required         | Origin of the server adapter                                        |
+| `basePath`                 | `/auth`          | Where the adapter is mounted on `apiHost`                           |
+| `magicLinkRedirectUri`     | the deployment's | Where an emailed magic link lands                                   |
+| `autoDetectPreviousSignIn` | `true`           | Open the login screen on Sign In for a browser that signed in before |
+| `initialSession`           | none             | A session your server already resolved, for server rendering        |
+| `ports`                    | browser          | `passkeys` and `oauthRedirect` ports                                |
+| `fetch`                    | global `fetch`   | The fetch auth requests go through                                  |
+| `signedInPath`             | `/`              | Where the bundled screens go after sign-in                          |
+| `loginPath`                | `/login`         | Where `requireAuth` sends someone who is signed out                 |
+
+---
+
+## Protect Routes And Mount The Screens
+
+```ts
+// app.routes.ts
+import { Routes } from '@angular/router'
+import { authGuard, requireAuth } from '@seamless-auth/angular'
+
+export const routes: Routes = [
+  { path: '', component: HomePage, canActivate: [authGuard] },
+  { path: 'admin', component: AdminPage, canActivate: [requireAuth({ roles: 'org:admin' })] },
+  {
+    path: '',
+    loadChildren: () => import('@seamless-auth/angular/routes').then((m) => m.seamlessAuthRoutes),
+  },
+]
+```
+
+| Guard                                   | Admits                                     | Otherwise                                                                                          |
+| --------------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| `authGuard` / `requireAuth(options?)`   | A signed-in user, with `roles` when given  | `redirectTo` (default `loginPath`). A missing role goes to `forbiddenRedirectTo`, or is refused     |
+| `guestGuard` / `requireGuest(options?)` | Someone signed out                         | `redirectTo` (default `signedInPath`)                                                              |
+
+The guards work as `canActivate`, `canActivateChild`, and `canMatch`. They wait for the session to
+be read before deciding, so reloading a protected page does not bounce a signed-in user to the login
+screen. During a server render without `initialSession` they admit, and the browser runs them again
+when the application boots there.
+
+`roles` uses the same matching as the auth API, scoped roles such as `org:admin` included. A guard
+decides what to render; it is not access control. Your backend still checks every request with
+`requireAuth`. See [Secure Routes](/build/secure-routes).
+
+Do not put `guestGuard` on `register-passkey`, `oauth/callback`, or `verify-magiclink`. A user can
+already have a session by the time those render, and the guard would send them on before they
+finish.
+
+---
+
+## The `SeamlessAuth` Service
+
+```ts
+import { Component, inject } from '@angular/core'
+import { Router } from '@angular/router'
+import { SeamlessAuth } from '@seamless-auth/angular'
+
+@Component({
+  selector: 'app-account-menu',
+  template: `
+    @if (auth.user(); as user) {
+      <span>{{ user.email }}</span>
+      <button type="button" (click)="signOut()">Logout</button>
+    }
+  `,
+})
+export class AccountMenu {
+  protected readonly auth = inject(SeamlessAuth)
+  private readonly router = inject(Router)
+
+  async signOut() {
+    await this.auth.logout()
+    await this.router.navigateByUrl('/login')
+  }
+}
+```
+
+- **Signals:** `state`, `user`, `isAuthenticated`, `loading`, `credentials`, `organizations`,
+  `activeOrganization`, `stepUpStatus`, `hasSignedInBefore`, plus `loginMethods`,
+  `loginMethodsLoading`, `passkeySupported`, and `passkeySupportLoading`.
+- **Observables:** `state$`, `user$`, `isAuthenticated$`. Each emits the current value on subscribe.
+- **Actions:** `login`, `handlePasskeyLogin`, `registerPasskey`, `refreshSession`, `logout`,
+  `logoutAllSessions`, `deleteUser`, `updateCredential`, `deleteCredential`, `switchOrganization`,
+  `listOAuthProviders`, `startOAuthLogin`, `finishOAuthLogin`, `refreshStepUpStatus`,
+  `verifyStepUpWithPasskey`, `verifyStepUpWithPasskeyPrf`, and `verifyStepUpWithTotp`.
+- **Also:** `hasRole`, `hasScopedRole`, `markSignedIn`, `whenSettled()`, `loadLoginMethods()` and
+  `checkPasskeySupport()` (each read once and cached), `authorizedFetch`, `client` (the headless
+  client for OTP, magic link, organization, and TOTP calls), and `ports`.
+
+Every request action resolves to a `SeamlessAuthResult<T>`, `{ data, error }`, and does not throw
+for an HTTP or network failure, the same convention as the React SDK.
+
+---
+
+## Built-In Screens
+
+`@seamless-auth/angular/routes` exports `seamlessAuthRoutes` and the standalone components behind
+them. The screens move between each other relative to their parent route, so they work at the root
+or under a path such as `{ path: 'account', children: seamlessAuthRoutes }`. The array has no
+wildcard route, so mounting it at the root does not swallow your own unknown paths.
+
+| Path               | Component           | Purpose                                                       |
+| ------------------ | ------------------- | ------------------------------------------------------------- |
+| `login`            | `SaLogin`           | Sign in with an email or phone number, or create an account   |
+| `passkey-login`    | `SaPasskeyLogin`    | Sign in with a passkey alone                                  |
+| `verify-email-otp` | `SaVerifyOtp`       | Check an email code                                           |
+| `verify-phone-otp` | `SaVerifyOtp`       | Check a text message code                                     |
+| `magic-link-sent`  | `SaMagicLinkSent`   | Wait for an emailed link to be used                           |
+| `verify-magiclink` | `SaVerifyMagicLink` | Where the emailed link lands. The auth API builds this URL    |
+| `oauth/callback`   | `SaOAuthCallback`   | The OAuth redirect URI to register with your providers        |
+| `register-passkey` | `SaRegisterPasskey` | Offer passkey enrolment after sign-up                         |
+
+The building blocks are exported too: `SaOtpInput` (bind it with `[(value)]`), `SaFallbackOptions`,
+`SaOAuthProviderButtons`, `SaAuthLayout`, `authRoutePaths`, and `injectAuthNavigation`.
+
+The magic link and OAuth callback screens remove the token or code from the address bar once they
+have read it, so a single-use secret does not stay in history or travel in a `Referer`.
+
+### Styling
+
+The screens render inside `.sa-auth` with plain `.sa-*` classes and one unencapsulated stylesheet,
+so your global styles can override any rule. Colors come from the same `--seamless-*` custom
+properties the React screens read, so one theme covers both:
+
+```css
+:root {
+  --seamless-accent: #1f3a34;
+  --seamless-accent-hover: #16302b;
+  --seamless-surface: #f7f5f0;
+  --seamless-surface-raised: #ffffff;
+  --seamless-text: #1a1a1a;
+  --seamless-text-muted: #4b5563;
+}
+```
+
+The full token list is in the
+[`@seamless-auth/react` README](https://github.com/fells-code/seamless-auth-react/tree/main/packages/react#theming-the-built-in-ui). The stylesheet also
+ships as `@seamless-auth/angular/seamless-auth.css` if you want a copy to start from.
+
+---
+
+## Custom Screens
+
+Every bundled screen is a thin view over a flow in `@seamless-auth/client`: `beginSignIn`,
+`registerWithEmail`, `requestOtp` and `verifyOtp`, `watchMagicLink` and `finishMagicLinkSignIn`,
+`startOAuthSignIn` and `completeOAuthCallback`, `enrollPasskey`, plus helpers such as
+`loadLoginMethods`, `fallbackSignInOptions`, and `safeReturnPath`. A custom screen calls the same
+flows, passing the service as its actions:
+
+```ts
+import { beginSignIn } from '@seamless-auth/client'
+
+const step = await beginSignIn(auth, {
+  identifier: email,
+  passkeySupported: await auth.checkPasskeySupport(),
+  configuredMethods: await auth.loadLoginMethods(),
+})
+
+if (step.kind === 'signed_in') await router.navigateByUrl('/')
+if (step.kind === 'choose_method') showOtherMethods(step.loginMethods)
+if (step.kind === 'error') showError(step.message)
+```
+
+[How To Build Your Own Auth UI](/build/custom-auth-ui) walks through the flows in order. Its
+examples use React hooks, but the client calls are the same.
+
+---
+
+## Server Rendering
+
+On the server the service does not read the session or browser storage, and the screens start no
+requests: a server render has none of the browser's cookies, and a magic link or OAuth code is
+single use. `loading` stays true unless you pass `initialSession`. To render a known session on the
+first paint, resolve it on your server through your adapter and hand it over as `initialSession`;
+the browser then revalidates it in the background. Do not forward the browser's cookies to the
+adapter's `/auth/users/me` from a server.
+
+---
+
+## Related Docs
+
+- [React SDK](/build/react-sdk)
+- [Server SDKs](/build/server-sdks)
+- [OAuth Login](/build/oauth-login)
+- [Secure Routes](/build/secure-routes)
+- [Ecosystem Overview](/build/ecosystem#compatibility-matrix)
