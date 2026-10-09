@@ -115,6 +115,8 @@ running JavaScript.
 - `src/content.config.ts`: the Starlight `docs` content collection (loader plus schema)
 - `astro.config.mjs`: Starlight integration, sidebar groups, `site`, redirects, and the sitemap integration
 - `src/components/Image.astro`: caption-aware screenshot component used from MDX
+- `src/llms.mjs`: builds the page index and getting-started notes for `/llms.txt` (the `starlight-llms-txt` plugin also emits `/llms-full.txt` and `/llms-small.txt`)
+- `src/pages/[...slug].md.ts`: serves a Markdown copy of every page at its URL plus `.md`
 - `src/styles/custom.css`: brand accent layered on Starlight's theme
 - `public/`: static images and `robots.txt`
 - `dist/`: build output (deployed as static)
@@ -140,7 +142,8 @@ When changing routing:
 ## MDX Conventions
 
 Each doc uses Starlight frontmatter. `title` is required; `description` feeds
-the meta description and social preview, so keep it accurate.
+the meta description, the social preview, and the page's one-line entry in
+`/llms.txt`, so keep it accurate and specific (one sentence, single line).
 
 ```mdx
 ---
