@@ -140,7 +140,9 @@ device can use passkeys, through the passkey port.
 ## Calling Your Own API
 
 `useAuthorizedFetch()` returns a fetch that carries the access token and refreshes it once on a
-401. A path resolves on `apiHost`:
+401. A path resolves on `apiHost`. Since 0.3.0 the token goes only to `apiHost` and the origins in
+the provider's `trustedOrigins` prop; any other origin rejects with `UntrustedOriginError` before
+anything is sent:
 
 ```tsx
 const authorizedFetch = useAuthorizedFetch()
