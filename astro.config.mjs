@@ -1,10 +1,23 @@
 import { defineConfig } from 'astro/config'
 import starlight from '@astrojs/starlight'
 import sitemap from '@astrojs/sitemap'
+import starlightLlmsTxt from 'starlight-llms-txt'
+import { llmsDetails, pagesBySection } from './src/llms.mjs'
+
+const site = 'https://docs.seamlessauth.com'
+
+const sections = [
+  { label: 'Start', directory: 'start' },
+  { label: 'Build', directory: 'build' },
+  { label: 'Understand', directory: 'understand' },
+  { label: 'Operate', directory: 'operate' },
+  { label: 'Troubleshooting', directory: 'troubleshooting' },
+  { label: 'Reference', directory: 'reference' },
+]
 
 // https://astro.build/config
 export default defineConfig({
-  site: 'https://docs.seamlessauth.com',
+  site,
   trailingSlash: 'ignore',
   redirects: {
     // The site used to be served under /docs/*. Preserve those deep links.
@@ -37,14 +50,22 @@ export default defineConfig({
         baseUrl: 'https://github.com/fells-code/seamless-auth-docs/edit/main/',
       },
       customCss: ['./src/styles/custom.css'],
-      sidebar: [
-        { label: 'Start', items: [{ autogenerate: { directory: 'start' } }] },
-        { label: 'Build', items: [{ autogenerate: { directory: 'build' } }] },
-        { label: 'Understand', items: [{ autogenerate: { directory: 'understand' } }] },
-        { label: 'Operate', items: [{ autogenerate: { directory: 'operate' } }] },
-        { label: 'Troubleshooting', items: [{ autogenerate: { directory: 'troubleshooting' } }] },
-        { label: 'Reference', items: [{ autogenerate: { directory: 'reference' } }] },
+      plugins: [
+        starlightLlmsTxt({
+          projectName: 'Seamless Auth',
+          description:
+            'Seamless Auth is open source passwordless auth (passkeys, magic links, OTP) you self-host. Apache-2.0.',
+          details: llmsDetails(sections, site),
+          // Exact ids, most important first, so llms-full.txt follows the sidebar order.
+          // Starlight's per-heading "Section titled" links are noise outside the HTML page.
+          customSelectors: { all: ['.sl-anchor-link'] },
+          promote: pagesBySection(sections).flatMap(({ pages }) => pages.map((page) => page.id)),
+        }),
       ],
+      sidebar: sections.map(({ label, directory }) => ({
+        label,
+        items: [{ autogenerate: { directory } }],
+      })),
     }),
     sitemap(),
   ],
