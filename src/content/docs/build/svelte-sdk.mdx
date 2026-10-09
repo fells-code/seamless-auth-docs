@@ -1,0 +1,280 @@
+---
+title: "Svelte SDK"
+description: "@seamless-auth/svelte adds Seamless Auth to a Svelte 5 application: a rune-based session, SvelteKit load guards, and optional sign-in screens."
+sidebar:
+  order: 4.9
+---
+
+`@seamless-auth/svelte` is the official Svelte integration for Seamless Auth. It gives a Svelte 5
+application the same session state, auth actions, and optional sign-in screens the
+[React SDK](/build/react-sdk) gives a React app, in Svelte's own idioms: a session whose properties
+are runes, Svelte context to share it, and SvelteKit `load` functions as guards.
+
+It is a thin binding over `@seamless-auth/client`, the framework-free core the React, React Native,
+[Angular](/build/angular-sdk), and [Vue](/build/vue-sdk) SDKs also build on, so sign-in behaves the
+same in every binding. The Svelte screens keep the React screens' accessible names, and
+`seamless verify` runs the same browser specs against both.
+
+---
+
+## How It Fits
+
+```txt
+Svelte app (browser)
+  -> your backend's /auth adapter routes, with signed httpOnly cookies
+  -> Seamless Auth API
+```
+
+The browser model is the same as React's: the [server adapter](/build/server-sdks) keeps the auth
+API's tokens and the browser holds only `httpOnly` cookies on your domain. The Svelte SDK has no
+bearer mode. Its configuration has no transport option, so no token can reach page scripts, and
+nothing it writes to browser storage is a credential. See
+[Cookie, Session, And Token Reference](/reference/cookies-sessions-tokens).
+
+---
+
+## Requirements
+
+- Svelte 5
+- For the guards and the SvelteKit navigator in `@seamless-auth/svelte/kit`: SvelteKit 2.26 or later,
+  or SvelteKit 3. The root entry works in any Svelte 5 application
+- A backend mounting the Seamless Auth adapter routes at `/auth`, for example `@seamless-auth/express`
+
+---
+
+## Installation
+
+```bash
+npm install @seamless-auth/svelte
+```
+
+`@seamless-auth/client` comes with it.
+
+---
+
+## Configure A SvelteKit Application
+
+The examples import from `$lib`, as SvelteKit 2 does. SvelteKit 3 renamed it to `#lib`.
+
+Create the session once:
+
+```ts
+// src/lib/auth.ts
+import { createSeamlessAuth } from '@seamless-auth/svelte'
+
+export const auth = createSeamlessAuth({ apiHost: 'https://app.example.com' })
+```
+
+The session lives in the browser, so render the application there. A backend-for-frontend app usually
+ships as a single-page app (`adapter-static` with a fallback page):
+
+```ts
+// src/routes/+layout.ts
+export const ssr = false
+```
+
+Hand the session and a navigator to everything below the root layout:
+
+```svelte
+<!-- src/routes/+layout.svelte -->
+<script lang="ts">
+  import { setAuthNavigator, setSeamlessAuth } from '@seamless-auth/svelte'
+  import { createKitNavigator } from '@seamless-auth/svelte/kit'
+  import { auth } from '$lib/auth'
+
+  let { children } = $props()
+
+  setSeamlessAuth(auth)
+  setAuthNavigator(createKitNavigator(auth))
+</script>
+
+{@render children()}
+```
+
+| Option                     | Default          | Purpose                                                              |
+| -------------------------- | ---------------- | -------------------------------------------------------------------- |
+| `apiHost`                  | required         | Origin of the server adapter                                         |
+| `basePath`                 | `/auth`          | Where the adapter is mounted on `apiHost`                            |
+| `magicLinkRedirectUri`     | the deployment's | Where an emailed magic link lands                                    |
+| `autoDetectPreviousSignIn` | `true`           | Open the login screen on Sign In for a browser that signed in before |
+| `initialSession`           | none             | A session your server already resolved                               |
+| `ports`                    | browser          | `passkeys` and `oauthRedirect` ports                                 |
+| `fetch`                    | global `fetch`   | The fetch auth requests go through                                   |
+| `trustedOrigins`           | none             | Other origins of yours that may receive the session cookies          |
+| `injectStyles`             | `true`           | Whether the built-in screens add their stylesheet to the page        |
+| `cspNonce`                 | none             | A CSP nonce for that stylesheet                                      |
+| `signedInPath`             | `/`              | Where the built-in screens go after sign-in                          |
+| `loginPath`                | `/login`         | Where `requireAuth` sends someone who is signed out                  |
+
+---
+
+## Guards
+
+Guard a route with a `load` function:
+
+```ts
+// src/routes/(app)/+layout.ts
+import { requireAuth } from '@seamless-auth/svelte/kit'
+import { auth } from '$lib/auth'
+
+export const load = requireAuth(auth)
+```
+
+| Guard                          | Admits                                    | Otherwise                                                                                                    |
+| ------------------------------ | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `requireAuth(auth, options?)`  | A signed-in user, with `roles` when given | Redirects to `redirectTo` (default `loginPath`), or `forbiddenRedirectTo` (default `signedInPath`) for a missing role |
+| `requireGuest(auth, options?)` | Someone signed out                        | Redirects to `redirectTo` (default `signedInPath`)                                                           |
+
+They wait for the session to be read before deciding, so reloading a protected page does not bounce a
+signed-in user to the login screen. They run again on every navigation and whenever the session
+changes (a sign-out in another tab, an expired session, a switched organization), as long as the
+navigator from `createKitNavigator` is set in the root layout. A server render that was not handed an
+`initialSession` cannot see the session, so `requireAuth` treats it as signed out and redirects.
+
+`roles` uses the same matching as the auth API, scoped roles such as `org:admin` included. A guard
+decides what to render; it is not access control. Your backend still checks every request with
+`requireAuth`. See [Secure Routes](/build/secure-routes).
+
+Put `requireGuest` only on the screens that start a sign-in (`login`, `passkey-login`,
+`magic-link-sent`). A user can already have a session when `register-passkey`, `oauth/callback`, or
+`verify-magiclink` renders.
+
+---
+
+## Reading Session State
+
+Every property of the session is reactive, so read it straight in markup or an `$effect`:
+
+```svelte
+<script lang="ts">
+  import { goto } from '$app/navigation'
+  import { getSeamlessAuth } from '@seamless-auth/svelte'
+
+  const auth = getSeamlessAuth()
+
+  async function signOut() {
+    await auth.logout()
+    await goto('/login')
+  }
+</script>
+
+{#if auth.user}
+  <span>{auth.user.email}</span>
+  <button type="button" onclick={signOut}>Logout</button>
+{/if}
+```
+
+- **Properties:** `state`, `user`, `isAuthenticated`, `loading`, `credentials`, `organizations`,
+  `activeOrganization`, `stepUpStatus`, `hasSignedInBefore`, plus `loginMethods`,
+  `loginMethodsLoading`, `passkeySupported`, and `passkeySupportLoading`.
+- **Actions:** `login`, `handlePasskeyLogin`, `registerPasskey`, `refreshSession`, `logout`,
+  `logoutAllSessions`, `deleteUser`, `updateCredential`, `deleteCredential`, `switchOrganization`,
+  `listOAuthProviders`, `startOAuthLogin`, `finishOAuthLogin`, `refreshStepUpStatus`,
+  `verifyStepUpWithPasskey`, `verifyStepUpWithPasskeyPrf`, and `verifyStepUpWithTotp`.
+- **Also:** `hasRole`, `hasScopedRole`, `markSignedIn`, `whenSettled()`, `loadLoginMethods()` and
+  `checkPasskeySupport()` (each read once and cached), `authorizedFetch`, `client` (the headless
+  client for OTP, magic link, organization, and TOTP calls), `ports`, and `destroy()`.
+
+Every request action resolves to a `SeamlessAuthResult<T>`, `{ data, error }`, and does not throw
+for an HTTP or network failure, the same convention as the React SDK. `authorizedFetch` sends the
+session only to `apiHost` and `trustedOrigins`; see
+[Calling Your Own API](/build/react-sdk#calling-your-own-api).
+
+---
+
+## Built-In Screens
+
+A SvelteKit library cannot add routes to your application, so mount each screen in its own
+`+page.svelte`:
+
+```svelte
+<!-- src/routes/login/+page.svelte -->
+<script lang="ts">
+  import { SaLogin } from '@seamless-auth/svelte'
+</script>
+
+<SaLogin />
+```
+
+| Default path        | Component                     | Purpose                                                     |
+| ------------------- | ----------------------------- | ----------------------------------------------------------- |
+| `/login`            | `SaLogin`                     | Sign in with an email or phone number, or create an account |
+| `/passkey-login`    | `SaPasskeyLogin`              | Sign in with a passkey alone                                |
+| `/verify-email-otp` | `SaVerifyOtp channel="email"` | Check an email code                                         |
+| `/verify-phone-otp` | `SaVerifyOtp channel="phone"` | Check a text message code                                   |
+| `/magic-link-sent`  | `SaMagicLinkSent`             | Wait for an emailed link to be used                         |
+| `/verify-magiclink` | `SaVerifyMagicLink`           | Where the emailed link lands. The auth API builds this URL  |
+| `/oauth/callback`   | `SaOAuthCallback`             | The OAuth redirect URI to register with your providers      |
+| `/register-passkey` | `SaRegisterPasskey`           | Offer passkey enrolment after sign-up                       |
+
+The screens navigate between those paths; pass `paths` to `createKitNavigator` if you mount them
+elsewhere. The building blocks are exported too: `SaOtpInput` (bind it with `bind:value`),
+`SaFallbackOptions`, `SaOAuthProviderButtons`, `SaAuthLayout`, and `authRoutePaths`.
+
+The magic link and OAuth callback screens remove the token or code from the URL and from history once
+they have read it, and will not send one a second time. Serve those routes with
+`Referrer-Policy: no-referrer` (or `same-origin`) so the secret does not leave in a `Referer` before
+then.
+
+### Without SvelteKit
+
+The screens never import a router. They navigate through an `AuthNavigator` set with
+`setAuthNavigator`, so any router can drive them: implement its seven methods (`toScreen`, `toApp`,
+`toLocation`, `state`, `query`, `dropQuery`, `absoluteUrl`) on top of your router.
+`createKitNavigator` is the SvelteKit one.
+
+### Styling
+
+The screens render inside `.sa-auth` with plain `.sa-*` classes. The first screen to mount adds the
+stylesheet to the top of `<head>`, so your own styles override it. Colors come from the same
+`--seamless-*` custom properties the other bindings' screens read, so one theme covers every binding.
+Under a Content Security Policy, pass `cspNonce`, or set `injectStyles: false` and link
+`@seamless-auth/svelte/seamless-auth.css` yourself. The full token list is in the
+[`@seamless-auth/react` README](https://github.com/fells-code/seamless-auth-react/tree/main/packages/react#theming-the-built-in-ui).
+
+---
+
+## Custom Screens
+
+Every built-in screen is a thin view over a flow in `@seamless-auth/client`: `beginSignIn`,
+`registerWithEmail`, `requestOtp` and `verifyOtp`, `watchMagicLink` and `finishMagicLinkSignIn`,
+`startOAuthSignIn` and `completeOAuthCallback`, `enrollPasskey`, plus helpers such as
+`loadLoginMethods`, `fallbackSignInOptions`, and `safeReturnPath`. A custom screen calls the same
+flows, passing the session as its actions:
+
+```ts
+import { beginSignIn } from '@seamless-auth/client'
+
+const step = await beginSignIn(auth, {
+  identifier: email,
+  passkeySupported: await auth.checkPasskeySupport(),
+  configuredMethods: await auth.loadLoginMethods(),
+})
+
+if (step.kind === 'signed_in') await goto('/')
+if (step.kind === 'choose_method') showOtherMethods(step.loginMethods)
+if (step.kind === 'error') showError(step.message)
+```
+
+[How To Build Your Own Auth UI](/build/custom-auth-ui) walks through the flows in order. Its
+examples use React hooks, but the client calls are the same.
+
+---
+
+## Server Rendering
+
+The session is meant for the browser. On a server it does not read the session or browser storage,
+the screens start no requests, and `requireAuth` redirects unless it was handed an `initialSession`.
+If you do render on a server, create the session per request (never in a module shared between
+requests) and pass `initialSession` from your adapter. Do not forward the browser's cookies to the
+adapter's `/auth/users/me` from a server.
+
+---
+
+## Related Docs
+
+- [Vue SDK](/build/vue-sdk)
+- [Angular SDK](/build/angular-sdk)
+- [React SDK](/build/react-sdk)
+- [Server SDKs](/build/server-sdks)
+- [Ecosystem Overview](/build/ecosystem#compatibility-matrix)
