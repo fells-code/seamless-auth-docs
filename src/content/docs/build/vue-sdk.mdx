@@ -1,0 +1,257 @@
+---
+title: "Vue SDK"
+description: "@seamless-auth/vue adds Seamless Auth to a Vue 3.5 application: a plugin and useSeamlessAuth() composable, vue-router guards, and optional sign-in screens."
+sidebar:
+  order: 4.8
+---
+
+`@seamless-auth/vue` is the official Vue integration for Seamless Auth. It gives a Vue application
+the same session state, auth actions, and optional sign-in screens the [React SDK](/build/react-sdk)
+gives a React app, in Vue's own idioms: a plugin, a `useSeamlessAuth()` composable that returns
+read-only refs, and `vue-router` guards.
+
+It is a thin binding over `@seamless-auth/client`, the framework-free core the React, React Native,
+and [Angular](/build/angular-sdk) SDKs also build on, so sign-in behaves the same in every binding.
+The Vue screens keep the React screens' accessible names, and `seamless verify` runs the same browser
+specs against both.
+
+---
+
+## How It Fits
+
+```txt
+Vue app (browser)
+  -> your backend's /auth adapter routes, with signed httpOnly cookies
+  -> Seamless Auth API
+```
+
+The browser model is the same as React's: the [server adapter](/build/server-sdks) keeps the auth
+API's tokens and the browser holds only `httpOnly` cookies on your domain. The Vue SDK has no bearer
+mode. Its configuration has no transport option, so no token can reach page scripts, and nothing it
+writes to browser storage is a credential. See
+[Cookie, Session, And Token Reference](/reference/cookies-sessions-tokens).
+
+---
+
+## Requirements
+
+- Vue 3.5 or later
+- `vue-router` 4.4 or later (5 included) for the guards and screens in `@seamless-auth/vue/router`.
+  The root entry does not need it
+- A backend mounting the Seamless Auth adapter routes at `/auth`, for example `@seamless-auth/express`
+
+---
+
+## Installation
+
+```bash
+npm install @seamless-auth/vue
+```
+
+`@seamless-auth/client` comes with it.
+
+---
+
+## Configure The Application
+
+```ts
+// main.ts
+import { createApp } from 'vue'
+import { createRouter, createWebHistory } from 'vue-router'
+import { createSeamlessAuth } from '@seamless-auth/vue'
+import { authGuard, createSeamlessAuthRoutes, guestGuard } from '@seamless-auth/vue/router'
+
+import App from './App.vue'
+import HomePage from './HomePage.vue'
+
+const router = createRouter({
+  history: createWebHistory(),
+  routes: [
+    { path: '/', component: HomePage, beforeEnter: authGuard },
+    ...createSeamlessAuthRoutes(),
+  ],
+})
+
+createApp(App)
+  .use(router)
+  .use(createSeamlessAuth({ apiHost: 'https://app.example.com' }))
+  .mount('#app')
+```
+
+`apiHost` is the origin your backend serves `/auth` on. Each application the plugin is installed in
+gets its own session, and the session is read as soon as the application starts in the browser.
+
+| Option                     | Default          | Purpose                                                              |
+| -------------------------- | ---------------- | -------------------------------------------------------------------- |
+| `apiHost`                  | required         | Origin of the server adapter                                         |
+| `basePath`                 | `/auth`          | Where the adapter is mounted on `apiHost`                            |
+| `magicLinkRedirectUri`     | the deployment's | Where an emailed magic link lands                                    |
+| `autoDetectPreviousSignIn` | `true`           | Open the login screen on Sign In for a browser that signed in before |
+| `initialSession`           | none             | A session your server already resolved, for server rendering         |
+| `ports`                    | browser          | `passkeys` and `oauthRedirect` ports                                 |
+| `fetch`                    | global `fetch`   | The fetch auth requests go through                                   |
+| `trustedOrigins`           | none             | Other origins of yours that may receive the session cookies          |
+| `injectStyles`             | `true`           | Whether the built-in screens add their stylesheet to the page        |
+| `cspNonce`                 | none             | A CSP nonce for that stylesheet                                      |
+| `signedInPath`             | `/`              | Where the built-in screens go after sign-in                          |
+| `loginPath`                | `/login`         | Where `requireAuth` sends someone who is signed out                  |
+
+---
+
+## Guards
+
+| Guard                                   | Admits                                    | Otherwise                                                                                      |
+| --------------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `authGuard` / `requireAuth(options?)`   | A signed-in user, with `roles` when given | `redirectTo` (default `loginPath`). A missing role goes to `forbiddenRedirectTo`, or is refused |
+| `guestGuard` / `requireGuest(options?)` | Someone signed out                        | `redirectTo` (default `signedInPath`)                                                          |
+
+Use them as `beforeEnter`, or call one from `router.beforeEach`. They wait for the session to be read
+before deciding, so reloading a protected page does not bounce a signed-in user to the login screen.
+
+`roles` uses the same matching as the auth API, scoped roles such as `org:admin` included. A guard
+decides what to render; it is not access control. Your backend still checks every request with
+`requireAuth`. See [Secure Routes](/build/secure-routes).
+
+Put `guestGuard` only on the screens that start a sign-in (`login`, `passkey-login`,
+`magic-link-sent`). A user can already have a session when `register-passkey`, `oauth/callback`, or
+`verify-magiclink` renders, and the guard would send them on before they finish.
+
+---
+
+## The `useSeamlessAuth()` Composable
+
+```vue
+<script setup lang="ts">
+import { useRouter } from 'vue-router'
+import { useSeamlessAuth } from '@seamless-auth/vue'
+
+const auth = useSeamlessAuth()
+const router = useRouter()
+
+async function signOut() {
+  await auth.logout()
+  await router.push('/login')
+}
+</script>
+
+<template>
+  <span v-if="auth.user.value">{{ auth.user.value.email }}</span>
+  <button v-if="auth.isAuthenticated.value" type="button" @click="signOut">Logout</button>
+</template>
+```
+
+- **Read-only refs:** `state`, `user`, `isAuthenticated`, `loading`, `credentials`, `organizations`,
+  `activeOrganization`, `stepUpStatus`, `hasSignedInBefore`, plus `loginMethods`,
+  `loginMethodsLoading`, `passkeySupported`, and `passkeySupportLoading`.
+- **Actions:** `login`, `handlePasskeyLogin`, `registerPasskey`, `refreshSession`, `logout`,
+  `logoutAllSessions`, `deleteUser`, `updateCredential`, `deleteCredential`, `switchOrganization`,
+  `listOAuthProviders`, `startOAuthLogin`, `finishOAuthLogin`, `refreshStepUpStatus`,
+  `verifyStepUpWithPasskey`, `verifyStepUpWithPasskeyPrf`, and `verifyStepUpWithTotp`.
+- **Also:** `hasRole`, `hasScopedRole`, `markSignedIn`, `whenSettled()`, `loadLoginMethods()` and
+  `checkPasskeySupport()` (each read once and cached), `authorizedFetch`, `client` (the headless
+  client for OTP, magic link, organization, and TOTP calls), and `ports`.
+
+Every request action resolves to a `SeamlessAuthResult<T>`, `{ data, error }`, and does not throw
+for an HTTP or network failure, the same convention as the React SDK. `authorizedFetch` sends the
+session only to `apiHost` and `trustedOrigins`; see
+[Calling Your Own API](/build/react-sdk#calling-your-own-api).
+
+---
+
+## Built-In Screens
+
+`createSeamlessAuthRoutes({ basePath? })` returns the screens as named routes
+(`seamless-auth-login` and so on) to spread into your router. They reach each other by name, so any
+`basePath` works. There is no catch-all among them, so they never swallow your own unknown paths.
+
+| Path               | Component           | Purpose                                                     |
+| ------------------ | ------------------- | ----------------------------------------------------------- |
+| `login`            | `SaLogin`           | Sign in with an email or phone number, or create an account |
+| `passkey-login`    | `SaPasskeyLogin`    | Sign in with a passkey alone                                |
+| `verify-email-otp` | `SaVerifyOtp`       | Check an email code                                         |
+| `verify-phone-otp` | `SaVerifyOtp`       | Check a text message code                                   |
+| `magic-link-sent`  | `SaMagicLinkSent`   | Wait for an emailed link to be used                         |
+| `verify-magiclink` | `SaVerifyMagicLink` | Where the emailed link lands. The auth API builds this URL  |
+| `oauth/callback`   | `SaOAuthCallback`   | The OAuth redirect URI to register with your providers      |
+| `register-passkey` | `SaRegisterPasskey` | Offer passkey enrolment after sign-up                       |
+
+The building blocks are exported too: `SaOtpInput` (bind it with `v-model`), `SaFallbackOptions`,
+`SaOAuthProviderButtons`, `SaAuthLayout`, `authRoutePaths`, `authRouteName`, and
+`useAuthNavigation`.
+
+The magic link and OAuth callback screens remove the token or code from the address bar once they
+have read it. Serve those routes with `Referrer-Policy: no-referrer` (or `same-origin`) so the
+secret does not leave in a `Referer` before then.
+
+### Styling
+
+The screens render inside `.sa-auth` with plain `.sa-*` classes. The first screen to mount adds the
+stylesheet to the top of `<head>`, so your own styles override it. Colors come from the same
+`--seamless-*` custom properties the React and Angular screens read, so one theme covers every
+binding:
+
+```css
+:root {
+  --seamless-accent: #1f3a34;
+  --seamless-accent-hover: #16302b;
+  --seamless-surface: #f7f5f0;
+  --seamless-surface-raised: #ffffff;
+  --seamless-text: #1a1a1a;
+  --seamless-text-muted: #4b5563;
+}
+```
+
+Under a Content Security Policy, pass `cspNonce`, or set `injectStyles: false` and link
+`@seamless-auth/vue/seamless-auth.css` yourself. The full token list is in the
+[`@seamless-auth/react` README](https://github.com/fells-code/seamless-auth-react/tree/main/packages/react#theming-the-built-in-ui).
+
+---
+
+## Custom Screens
+
+Every built-in screen is a thin view over a flow in `@seamless-auth/client`: `beginSignIn`,
+`registerWithEmail`, `requestOtp` and `verifyOtp`, `watchMagicLink` and `finishMagicLinkSignIn`,
+`startOAuthSignIn` and `completeOAuthCallback`, `enrollPasskey`, plus helpers such as
+`loadLoginMethods`, `fallbackSignInOptions`, and `safeReturnPath`. A custom screen calls the same
+flows, passing the session as its actions:
+
+```ts
+import { beginSignIn } from '@seamless-auth/client'
+
+const step = await beginSignIn(auth, {
+  identifier: email.value,
+  passkeySupported: await auth.checkPasskeySupport(),
+  configuredMethods: await auth.loadLoginMethods(),
+})
+
+if (step.kind === 'signed_in') await router.push('/')
+if (step.kind === 'choose_method') showOtherMethods(step.loginMethods)
+if (step.kind === 'error') showError(step.message)
+```
+
+[How To Build Your Own Auth UI](/build/custom-auth-ui) walks through the flows in order. Its
+examples use React hooks, but the client calls are the same.
+
+---
+
+## Server Rendering
+
+On the server the session is not read and no screen starts a request: a server render has none of the
+browser's cookies, and a magic link or OAuth code is single use. `loading` stays true unless you pass
+`initialSession`. Without it, `requireAuth` treats the request as signed out and redirects to
+`loginPath`, so a protected page's data never renders into a response for someone the server could
+not identify; the browser decides again when the application boots.
+
+To render a known session on the first paint, resolve it on your server through your adapter and pass
+it as `initialSession`, building the plugin's config per request so one visitor's session is never
+another's. Do not forward the browser's cookies to the adapter's `/auth/users/me` from a server.
+
+---
+
+## Related Docs
+
+- [Angular SDK](/build/angular-sdk)
+- [React SDK](/build/react-sdk)
+- [Server SDKs](/build/server-sdks)
+- [OAuth Login](/build/oauth-login)
+- [Ecosystem Overview](/build/ecosystem#compatibility-matrix)

@@ -50,7 +50,7 @@ Every client talks to your backend, never straight to the auth API. Your backend
 
 - **The auth API owns the session.** It creates, rotates, and revokes sessions, stores them in
   Postgres, signs the access tokens, and publishes the keys at `/.well-known/jwks.json`.
-- **Browser (cookie transport).** `@seamless-auth/react` and `@seamless-auth/angular` never see a
+- **Browser (cookie transport).** `@seamless-auth/react`, `@seamless-auth/angular`, and `@seamless-auth/vue` never see a
   token. The adapter keeps the
   auth API's tokens inside signed `httpOnly` cookies on your domain and unwraps them when it
   forwards a request.
@@ -125,6 +125,7 @@ Seamless Auth is made up of a few focused projects.
 | `@seamless-auth/nextjs`         | Official Next.js App Router integration                       |
 | `@seamless-auth/react`          | React auth provider and built-in auth routes                  |
 | `@seamless-auth/angular`        | Angular service, route guards, and built-in auth routes       |
+| `@seamless-auth/vue` | Vue plugin, composable, router guards, and built-in auth routes |
 | `@seamless-auth/react-native`   | React Native and Expo SDK over bearer transport               |
 | `@seamless-auth/client`         | Framework-free client shared by the React, Angular, and native SDKs |
 | `seamless-auth-admin-dashboard` | Operator UI for users, sessions, events, security, and config |
@@ -178,8 +179,8 @@ requirements for you:
 - **Your frontend has no backend.** Both the browser and the native SDK call `/auth` adapter routes
   on your own server, which hold the service token and, for browsers, the cookies. A static site with
   no server of its own needs one added (a Next.js app can be its own).
-- **Your frontend is not React, Angular, or React Native.** `@seamless-auth/client` is
-  framework-free, but there are no shipped bindings for Vue, Svelte, or others yet.
+- **Your frontend is not React, Angular, Vue, or React Native.** `@seamless-auth/client` is
+  framework-free, but there are no shipped bindings for Svelte or others yet.
 - **You want to self-host without operating anything.** Self-hosting means you run the auth API,
   Postgres, signing keys, migrations, and backups, and the CLI does not deploy them for you. The
   managed path exists for exactly this.

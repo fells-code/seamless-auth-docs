@@ -120,8 +120,10 @@ export const routes: Routes = [
 
 The guards work as `canActivate`, `canActivateChild`, and `canMatch`. They wait for the session to
 be read before deciding, so reloading a protected page does not bounce a signed-in user to the login
-screen. During a server render without `initialSession` they admit, and the browser runs them again
-when the application boots there.
+screen. During a server render without `initialSession`, `requireAuth` treats the request as signed
+out and redirects to `loginPath` (since 0.2.0), so a protected page's data never renders into a
+response for someone the server could not identify. The browser runs the guards again when the
+application boots there.
 
 `roles` uses the same matching as the auth API, scoped roles such as `org:admin` included. A guard
 decides what to render; it is not access control. Your backend still checks every request with

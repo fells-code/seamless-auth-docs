@@ -279,6 +279,8 @@ port out in tests. The same ports are what
 should use, or `bearer`, where the client holds the auth API's tokens through a `tokenStorage`
 port and speaks the adapter's bearer contract. Leave it alone on the web.
 
+### Calling Your Own API
+
 `useAuthorizedFetch()` (or `client.authorizedFetch`) is a fetch for your own API that carries the
 session the way the transport does: `credentials: 'include'` on the web, the access token with
 one refresh-and-retry on native. A path resolves on `apiHost`:
@@ -287,6 +289,21 @@ one refresh-and-retry on native. A path resolves on `apiHost`:
 const authorizedFetch = useAuthorizedFetch()
 const plan = await authorizedFetch('/api/plan/mine').then(r => r.json())
 ```
+
+Since `@seamless-auth/client` 0.5.0 (`@seamless-auth/react` 0.16.0), it sends the session only to
+`apiHost` and the origins you list in `transport.trustedOrigins`. A URL on any other origin rejects
+with `UntrustedOriginError` before anything is sent, and so does a relative URL that does not start
+with `/`. If your API is served from another origin of your own, list it. Each entry must be a bare
+`https` origin (`http` only on localhost):
+
+```tsx
+<AuthProvider
+  apiHost="https://auth.example.com"
+  transport={{ trustedOrigins: ['https://api.example.com'] }}
+>
+```
+
+For any other origin, use plain `fetch`.
 
 ---
 
