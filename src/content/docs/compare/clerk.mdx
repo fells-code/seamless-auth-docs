@@ -11,7 +11,7 @@ Seamless Auth and Clerk both handle sign-in, sessions, and user management for w
 apps, but they are built on different premises. Clerk is a hosted, proprietary authentication and
 user management service with polished prebuilt components and a broad feature set, including
 passwords and enterprise SSO. Seamless Auth is an open source (Apache-2.0), passwordless-only auth
-server that you self-host inside your own stack or run on Seamless's managed offering.
+server that you self-host inside your own stack or run on the Seamless Auth managed service.
 
 This page is for an engineer deciding between the two. Competitor details were checked against
 Clerk's official docs, pricing page, and GitHub as of October 2026, and each one links to its
@@ -63,8 +63,8 @@ production.
 | | Seamless Auth | Clerk |
 | --- | --- | --- |
 | License | Apache-2.0 for the server, SDKs, dashboard, and CLI | Proprietary service. SDKs in `clerk/javascript` are MIT |
-| Hosting | Self-host (Docker, Postgres) or Seamless managed hosting | Hosted by Clerk only |
-| Where user data lives | Your Postgres when self-hosted; Seamless's infrastructure on the managed path | Clerk's infrastructure (Google Cloud SQL, per Clerk's engineering blog) |
+| Hosting | Self-host (Docker, Postgres) or Seamless Auth managed hosting | Hosted by Clerk only |
+| Where user data lives | Your Postgres when self-hosted; Fells Code's infrastructure on the managed path | Clerk's infrastructure (Google Cloud SQL, per Clerk's engineering blog) |
 | Backend support | Node.js (Express, Fastify, Next.js), Python (FastAPI, Django), Go (`net/http`), Rust (Axum) | Official backend SDKs including Express, Fastify, Go, Ruby on Rails, Python, Java, C#, PHP |
 | Frontend support | React, Next.js, Angular, Vue, Svelte, React Native and Expo | Next.js, React, Expo, Vue, Nuxt, Astro, iOS, Android, and more; some others community-maintained |
 | Passkeys | Yes, primary sign-in method (WebAuthn via SimpleWebAuthn) | Yes, paid plan. Added after sign-up, max 10 per account |
@@ -104,7 +104,7 @@ and you read them through Clerk's APIs and webhooks.
 ```txt
 browser or native app
   -> your backend's /auth routes   (@seamless-auth/express, fastify, nextjs, or the Python/Go/Rust adapter)
-  -> seamless-auth-api             (your infrastructure, or Seamless managed)
+  -> seamless-auth-api             (your infrastructure, or Seamless Auth managed)
   -> Postgres
 ```
 

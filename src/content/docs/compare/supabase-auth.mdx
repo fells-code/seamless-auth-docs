@@ -68,7 +68,7 @@ Supabase column as of October 2026.
 | | Seamless Auth | Supabase Auth |
 | --- | --- | --- |
 | License | Apache-2.0 | `supabase/auth` is MIT; the wider `supabase/supabase` repository is Apache-2.0 |
-| Hosting | Self-host (Docker, Postgres) or Seamless managed hosting | Supabase hosted platform, or self-host the Supabase stack with Docker Compose |
+| Hosting | Self-host (Docker, Postgres) or Seamless Auth managed hosting | Supabase hosted platform, or self-host the Supabase stack with Docker Compose |
 | Where user data lives | The auth API's Postgres (yours when self-hosted) | A dedicated `auth` schema in your Supabase project's Postgres |
 | Backend support | Node.js (Express, Fastify, Next.js), Python (FastAPI, Django), Go (`net/http`), Rust (Axum) | Any backend that verifies Supabase JWTs; official clients for JavaScript, Flutter, Swift, Python |
 | Frontend support | React, Next.js, Angular, Vue, Svelte, React Native and Expo | `supabase-js` in any JavaScript framework, plus Flutter and Swift |
@@ -110,7 +110,7 @@ Supabase stack with Docker Compose, without some hosted features such as the Man
 ```txt
 browser or native app
   -> your backend's /auth routes   (@seamless-auth/express, fastify, nextjs, or the Python/Go/Rust adapter)
-  -> seamless-auth-api             (your infrastructure, or Seamless managed)
+  -> seamless-auth-api             (your infrastructure, or Seamless Auth managed)
   -> Postgres (auth data only)
 ```
 

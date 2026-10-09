@@ -69,7 +69,7 @@ Better Auth column as of October 2026.
 | --- | --- | --- |
 | License | Apache-2.0 | MIT |
 | What it is | Separate auth server plus thin SDKs and adapters | TypeScript library embedded in your app, extended by plugins |
-| Hosting | Self-host (Docker, Postgres) or Seamless managed hosting | Runs inside your app wherever you deploy it; optional paid Better Auth Infrastructure adds a hosted dashboard and services |
+| Hosting | Self-host (Docker, Postgres) or Seamless Auth managed hosting | Runs inside your app wherever you deploy it; optional paid Better Auth Infrastructure adds a hosted dashboard and services |
 | Where user data lives | The auth API's Postgres (yours when self-hosted) | Your app's database (PostgreSQL, MySQL, SQLite, MSSQL via Kysely; Prisma, Drizzle, MongoDB adapters) |
 | Backend languages | Node.js, Python, Go, Rust | TypeScript / JavaScript runtimes |
 | Frontend support | React, Next.js, Angular, Vue, Svelte, React Native and Expo | Framework-agnostic client with React, Vue, Svelte and other bindings; many framework integrations including Expo |
@@ -113,7 +113,7 @@ that is.
 ```txt
 browser or native app
   -> your backend's /auth routes   (@seamless-auth/express, fastify, nextjs, or the Python/Go/Rust adapter)
-  -> seamless-auth-api             (your infrastructure, or Seamless managed)
+  -> seamless-auth-api             (your infrastructure, or Seamless Auth managed)
   -> Postgres
 ```
 
