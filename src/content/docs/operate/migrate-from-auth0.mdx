@@ -1,0 +1,403 @@
+---
+title: "Migrating Off Auth0 To Passwordless With Seamless Auth"
+description: "Move users from Auth0 to Seamless Auth, the open source (Apache-2.0), self-hosted passwordless auth server: export users with the Auth0 Management API, convert the export with jq, import with seamless migrate, keep Auth0 sign-in working through OpenID Connect during cutover, then move everyone to passkeys and switch Auth0 off."
+sidebar:
+  order: 6
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+This guide moves an application's users from Auth0 to Seamless Auth, an open source (Apache-2.0)
+passwordless authentication server you run yourself, with passkeys (WebAuthn), magic links, and
+one-time codes. It covers exporting users from Auth0, converting the export into the CSV that
+`seamless migrate` imports, keeping Auth0 sign-in working while users move, getting everyone onto a
+passkey, and switching Auth0 off. It also lists what Auth0 does that Seamless Auth does not, so you
+can decide whether the move fits before starting.
+
+It is written for two readers:
+
+- **A developer or coding agent doing the migration.** The commands, field mappings, and config
+  below are exact and were checked against the `seamless-cli` and `seamless-auth-api` source.
+- **A technical lead deciding whether to move.** Typically at a software company whose government
+  or regulated customers now ask for phishing-resistant MFA, or one reconsidering its Auth0 spend.
+  Start with [What Changes](#what-changes) and [What You Give Up](#what-you-give-up-or-must-plan-for).
+
+This page is the Auth0-specific path through the general
+[Migrate Users From Another Identity System](/operate/migrate-users) guide, which has the full
+reference for the import report, rejection reasons, and enrollment APIs.
+
+---
+
+## What Changes
+
+Seamless Auth has no password sign-in, so there are no passwords to migrate. A migration off Auth0
+is two things:
+
+1. **An identity import.** Each user's email, Auth0 `user_id`, and optionally phone, roles, and
+   organization memberships become Seamless Auth accounts. No credential of any kind is imported:
+   no password hash, no MFA secret, no session.
+2. **A passkey enrollment campaign.** Each imported user proves control of their email once, then
+   enrolls a passkey. You track coverage and invite whoever has not enrolled.
+
+That is deliberate. The password hash export is the slowest and most sensitive part of a typical
+Auth0 migration: it is not part of the self-service export, it goes through an Auth0 support
+request, and Auth0 gives no delivery date (see
+[Export Password Hashes and MFA Secrets](https://auth0.com/docs/manage-users/user-migration/export-password-hashes-and-mfa-secrets)).
+Moving to passkeys means you never request it, and you do not carry the old system's weakest
+credential into the new one.
+
+Passkeys and any MFA factors users registered with Auth0 are not carried across either. Every user
+enrolls a new passkey with Seamless Auth.
+
+### Versions
+
+Everything on this page is released:
+
+| Capability                                                                    | Needs                                             |
+| ----------------------------------------------------------------------------- | ------------------------------------------------- |
+| `seamless migrate csv` and bulk import (`POST /admin/users/import`)           | `seamless-cli` 0.18.0, `seamless-auth-api` 0.16.0 |
+| Sign in through Auth0 as an OpenID Connect provider, linked by id             | `seamless-auth-api` 0.16.0                        |
+| Enrollment prompts, directory, invites, coverage report, provider retirement | `seamless-auth-api` 0.17.0                        |
+| `seamless config set prompt_passkey_enrollment`                               | `seamless-cli` 0.21.0                             |
+
+The full version table for the dashboard and server adapters is in
+[What Each Step Needs](/operate/migrate-users#what-each-step-needs). A project scaffolded by an older
+`seamless init` may pin an older auth API image; check it before migrating.
+
+---
+
+## Step 1: Export Users From Auth0
+
+Use the Management API's export job,
+[`POST /api/v2/jobs/users-exports`](https://auth0.com/docs/api/management/v2/jobs/post-users-exports),
+with a Management API token that has the `read:users` scope. Auth0 documents the flow in
+[Bulk User Exports](https://auth0.com/docs/manage-users/user-migration/bulk-user-exports). The
+feature is not available on Auth0's Free plan.
+
+Request **JSON**, not CSV. Auth0 escapes every string in a CSV export against CSV injection by
+prefixing it with a single quote, so `ada@example.com` arrives as `'ada@example.com`. That is a
+syntactically valid email address, so it would import without an error and match nobody. The JSON
+export is NDJSON: one user object per line.
+
+```bash
+curl -s -X POST "https://$AUTH0_DOMAIN/api/v2/jobs/users-exports" \
+  -H "Authorization: Bearer $AUTH0_MGMT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "format": "json",
+    "fields": [
+      { "name": "user_id" },
+      { "name": "email" },
+      { "name": "email_verified" },
+      { "name": "phone_number" },
+      { "name": "blocked" },
+      { "name": "app_metadata" }
+    ]
+  }'
+```
+
+- Leave out `connection_id` to export users from every connection in the tenant, including social
+  and enterprise connections. That matters for cutover: whichever connection a user signs in with,
+  their Auth0 `user_id` is what you import as the external id.
+- `limit` caps the number of records. Use a small value for a trial run, and check the API reference
+  for its current default before the full export.
+
+The response has a job `id`. Poll
+[`GET /api/v2/jobs/{id}`](https://auth0.com/docs/api/management/v2/jobs/get-jobs-by-id) until the
+job completes, then download the file from its `location` URL. Auth0 notes the download link is
+short-lived and the job's data is deleted after 24 hours. The file is gzip-compressed
+([Auth0 support article](https://support.auth0.com/center/s/article/User-Export-Get-users)):
+
+```bash
+gunzip -c export.json.gz > auth0-users.json
+```
+
+The fields that matter, from Auth0's
+[user profile structure](https://auth0.com/docs/manage-users/user-accounts/user-profiles/user-profile-structure):
+
+| Auth0 field    | Use                                                                                              |
+| -------------- | ------------------------------------------------------------------------------------------------ |
+| `user_id`      | The external id. Of the form `<connection>\|<id>`, such as `auth0\|65f1...` or `google-oauth2\|1048...` |
+| `email`        | Required by the import                                                                           |
+| `phone_number` | Only set for users of an Auth0 SMS connection                                                    |
+| `blocked`      | Skip blocked users rather than recreating them                                                   |
+| `app_metadata` | Where many tenants keep roles or a customer or team id                                           |
+
+**Roles.** Auth0's RBAC role assignments are stored apart from the user profile, and the export
+job reads profile fields. If you use Auth0 RBAC, list each role's members with
+[`GET /api/v2/roles/{id}/users`](https://auth0.com/docs/api/management/v2/roles/get-role-user) and
+merge them in, or keep roles in `app_metadata` as the example below assumes.
+
+---
+
+## Step 2: Convert The Export To The Import CSV
+
+`seamless migrate csv` reads a CSV with up to five fields. With these exact headers it needs no
+mapping file:
+
+```csv
+externalId,email,phone,roles,organizations
+```
+
+- `email` is required. `externalId` is the Auth0 `user_id`.
+- `roles` and `organizations` take several values separated by `;`. Organizations are referenced by
+  slug or id and must already exist, and roles must be in the instance's `available_roles`. The
+  import never grants `admin` or an `admin:*` role.
+- Every other column is ignored.
+
+First, find what the import cannot take as-is. A user with no email (an Auth0 SMS connection user)
+cannot be imported, and two Auth0 users with the same email (a database user and a social user, for
+example) become one Seamless Auth account, so the import rejects the second row:
+
+```bash
+# Users with no email
+jq -r 'select(.email == null) | .user_id' auth0-users.json
+
+# Emails held by more than one Auth0 user (compared case-insensitively, as the import does)
+jq -s -r 'map(select(.email)) | group_by(.email | ascii_downcase)
+  | map(select(length > 1)) | .[][] | [.email, .user_id] | @tsv' auth0-users.json
+```
+
+For each duplicate, keep the row whose `user_id` the person actually signs in with, since that is
+the id the cutover links on. Then convert, skipping blocked users and users without an email:
+
+```bash
+jq -r -s '
+  ["externalId", "email", "phone", "roles", "organizations"],
+  (.[]
+    | select(.email != null and .blocked != true)
+    | [ .user_id,
+        .email,
+        (.phone_number // ""),
+        ((.app_metadata.roles // []) | join(";")),
+        (.app_metadata.org // "") ])
+  | @csv' auth0-users.json > users.csv
+```
+
+Change the `app_metadata` paths to wherever your tenant keeps roles and team or customer
+membership, or drop those two columns. For three sample users the output is:
+
+```csv
+"externalId","email","phone","roles","organizations"
+"auth0|65f1a2b3c4d5e6f7a8b9c0d1","ada@example.com","","staff","engineering"
+"google-oauth2|104857600123456789012","grace@example.com","","staff;manager","platform"
+"sms|65f1a2b3c4d5e6f7a8b9c0d9","lin@example.com","+15555550101","",""
+```
+
+The CLI reads quoted RFC 4180 CSV, so `@csv` output is accepted as-is.
+
+---
+
+## Step 3: Import
+
+Sign in to the target instance as an admin, create any roles and organizations the CSV refers to,
+then dry run. Use `--source auth0` on every run, because external ids are matched within a source
+and the cutover provider below refers to it:
+
+```bash
+seamless profile login production
+seamless org create "Engineering" --slug engineering
+seamless migrate csv users.csv --source auth0
+```
+
+The dry run writes nothing but sends every valid row to the instance with `dryRun` set, so the plan
+reflects real data. It writes `users.migrate-plan.csv` and `.json`, with a status per row
+(`created`, `updated`, `unchanged`, `rejected`, `invalid`) and a reason for each problem row, and
+exits 1 if any row is rejected or invalid. Fix the data and repeat until the plan is right, then:
+
+```bash
+seamless migrate csv users.csv --source auth0 --apply
+```
+
+Keep `users.migrate-result.csv`: its `userId` column maps each Auth0 user to their Seamless Auth
+account. Re-running is safe; a row matches on its external id first, then on email, and only ever
+adds roles and memberships. Rejection reasons and the rest of the report are described in
+[Dry Run And Read The Plan](/operate/migrate-users#step-3-dry-run-and-read-the-plan).
+
+An imported user is unverified until they prove control of the email, either by registering with it
+(an email code) or by signing in through Auth0 as set up in the next step.
+
+---
+
+## Step 4: Run Both During Cutover
+
+You can let users keep signing in with Auth0 while they move. Seamless Auth treats Auth0 as an
+OpenID Connect provider: the user signs in on Auth0, Seamless Auth verifies the ID token, and the
+token's `sub` claim (which carries the Auth0 `user_id`, per
+[Auth0 support](https://support.auth0.com/center/s/article/User-ID-listed-as-SUB)) links the sign-in
+to the account you imported. The link is by id, not by email.
+
+1. **In Auth0, create a Regular Web Application** for Seamless Auth. Add your Seamless Auth OAuth
+   callback URL (for example `https://app.example.com/oauth/callback`) to its Allowed Callback URLs,
+   and keep the ID token signing algorithm on RS256, which Auth0 recommends
+   ([Signing Algorithms](https://auth0.com/docs/get-started/applications/signing-algorithms)).
+   Seamless Auth accepts only asymmetrically signed ID tokens, so HS256 will not work.
+
+2. **Set the client secret** in the auth API's environment, for example `AUTH0_CLIENT_SECRET`. The
+   provider config names the variable; the secret never goes in config.
+
+3. **Add Auth0 as a provider.** The endpoints come from your tenant's discovery document,
+   `https://<your-domain>/.well-known/openid-configuration`
+   ([OIDC discovery](https://auth0.com/docs/get-started/applications/configure-applications-with-oidc-discovery)).
+   The issuer ends in a slash. Save as `auth0-provider.json`:
+
+   ```json
+   {
+     "id": "auth0",
+     "name": "Your existing account",
+     "clientId": "<auth0-client-id>",
+     "clientSecretEnv": "AUTH0_CLIENT_SECRET",
+     "authorizationUrl": "https://<your-domain>/authorize",
+     "tokenUrl": "https://<your-domain>/oauth/token",
+     "userInfoUrl": "https://<your-domain>/userinfo",
+     "issuer": "https://<your-domain>/",
+     "jwksUri": "https://<your-domain>/.well-known/jwks.json",
+     "scopes": ["openid", "email", "profile"],
+     "redirectUris": ["https://app.example.com/oauth/callback"],
+     "externalIdSource": "auth0",
+     "externalIdJsonPath": "sub",
+     "allowSignup": false,
+     "accountLinking": "disabled",
+     "promptPasskeyEnrollment": true
+   }
+   ```
+
+   ```bash
+   seamless config oauth-providers add --file auth0-provider.json
+   ```
+
+   - `externalIdSource` must equal the `--source` you imported with, and `externalIdJsonPath: "sub"`
+     reads the Auth0 `user_id` from the verified ID token.
+   - `allowSignup: false` and `accountLinking: "disabled"` mean Auth0 can only sign in accounts you
+     imported. It cannot create new accounts or attach itself to other accounts by email.
+   - `promptPasskeyEnrollment: true` makes the callback answer `nextStep: 'enroll_passkey'` for a
+     user without a passkey. `AuthRoutes` in `@seamless-auth/react` 0.14.0 and later sends them
+     straight to enrollment.
+
+   `oauth` must be in the instance's login methods. See
+   [How To Add OAuth Login](/build/oauth-login) for that and for rendering the provider button.
+
+The first Auth0 sign-in by an imported user marks the account claimed and links the Auth0 identity.
+The session is a full Seamless Auth session; Auth0 is only proving who the user is.
+
+---
+
+## Step 5: Invite And Track Enrollment
+
+Users who do not sign in through Auth0 register with their imported email: an email code proves the
+address, then they enroll a passkey. To send code and magic link sign-ins without a passkey straight
+to enrollment:
+
+```bash
+seamless config set prompt_passkey_enrollment true
+```
+
+Then track and chase coverage:
+
+- `GET /admin/enrollment` lists users with their passkey status (`none`, `one`, `two_or_more`),
+  filterable by organization and by `imported=true`. The admin dashboard shows it on the **Passkey
+  enrollment** screen.
+- `POST /admin/enrollment/invites` emails unenrolled users a notice to sign in and add a passkey. The
+  email links to your sign-in page and carries no credential. Repeat calls skip anyone invited in
+  the last 24 hours.
+- `GET /admin/reports/authentication-coverage` reports passkey coverage overall, per organization,
+  and over time, with `format=csv` for a spreadsheet. This is the figure to hand a customer's
+  security questionnaire.
+
+Encourage two passkeys per person, so a lost device is not a lockout. Request bodies and filters are
+in [Get Users Onto Passkeys](/operate/migrate-users#step-5-get-users-onto-passkeys).
+
+---
+
+## Step 6: Turn Off Auth0
+
+Retire Auth0 sign-in per organization once its members are enrolled, or all at once.
+
+- **Per organization:**
+  `PUT /admin/organizations/:organizationId/oauth-providers/auth0/retirement` refuses Auth0
+  sign-in for that organization's members and revokes their live sessions, so they sign in again
+  with a passkey or another enabled method. `DELETE` on the same path rolls it back. Details are in
+  [Sign In Through The Old Provider](/operate/migrate-users#step-6-optional-sign-in-through-the-old-provider-during-cutover).
+- **Everyone:** disable the provider with
+  `seamless config oauth-providers update auth0 '{"enabled": false}'`, or remove it with
+  `seamless config oauth-providers remove auth0`. This does not revoke sessions.
+
+Check the enrollment directory first. A user with no passkey needs another enabled method, such as
+an email code, to get back in.
+
+When coverage is where you need it, `phishing_resistant_only: true` accepts only passkeys to start a
+session. It also switches off every OAuth provider, so Auth0 sign-in must already be retired. See
+[Finishing The Migration](/operate/migrate-users#finishing-the-migration).
+
+After that, nothing calls Auth0. Delete the Seamless Auth application in Auth0, and wind down the
+tenant on your own schedule; keep the export and the import result report as the record of the
+migration.
+
+---
+
+## What You Give Up Or Must Plan For
+
+Seamless Auth is narrower than Auth0. Check this list against what your application uses before you
+start.
+
+| Auth0 has                                                                                                                         | Seamless Auth today                                                                                                                                                                       |
+| --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Password sign-in                                                                                                                  | None, by design. Passkeys, magic links, email and SMS codes, TOTP for step-up, and OAuth providers                                                                                        |
+| [Enterprise connections](https://auth0.com/docs/authenticate/enterprise-connections), including SAML, per customer               | No SAML. OpenID Connect and OAuth providers only, configured instance-wide rather than per customer organization. A customer that requires SAML SSO into your app is not served today       |
+| A large catalog of social connections                                                                                             | CLI presets for Google, GitHub, Microsoft (Entra ID), and GitLab. Other providers can be configured by hand if they report a verified email                                              |
+| [Actions](https://auth0.com/docs/customize/actions) to run code during login and add custom token claims                          | No equivalent. Put that logic in your own backend, behind the server adapter                                                                                                              |
+| Acting as an OAuth 2.0 / OpenID Connect authorization server for other apps, and machine-to-machine (client credentials) tokens | Not provided. Seamless Auth signs in users of your application; it does not issue tokens to third-party apps or services                                                                  |
+| [Universal Login](https://auth0.com/docs/authenticate/login/auth0-universal-login), a hosted sign-in page                       | Sign-in renders in your app, with `AuthRoutes` from `@seamless-auth/react` or your own UI. See [How To Build Your Own Auth UI](/build/custom-auth-ui)                                     |
+| Directory sync (SCIM)                                                                                                             | Not provided. Use the CSV import for bulk changes                                                                                                                                         |
+| Third-party [compliance attestations](https://auth0.com/docs/secure/data-privacy-and-compliance) such as SOC 2 Type 2            | None for Seamless Auth itself. Self-hosted, it runs inside your own boundary and is covered by your own controls and audits. Fells Code publishes its [compliance status](https://fellscode.com/compliance) |
+| A vendor operating the service                                                                                                    | You run it (or use the [managed option](/start/managed-quickstart)). You own patching, Postgres, signing keys, and email and SMS delivery                                                 |
+
+What Seamless Auth adds for this kind of buyer: passkey-only enforcement (`phishing_resistant_only`),
+a passkey coverage report you can export, organizations and memberships, and an append-only,
+hash-chained audit trail of auth events (see [Auth Events and Auditing](/understand/authevents)).
+
+---
+
+## FAQ
+
+**Do users have to reset a password?**
+No. There is no password. Each user proves their email once, or signs in through Auth0 during
+cutover, and enrolls a passkey.
+
+**Do we need Auth0 to export password hashes?**
+No. The import has no field for them and ignores any password column.
+
+**Can a user who signed in to Auth0 with Google still sign in?**
+During cutover, yes: they sign in through Auth0 as before, and their Auth0 `user_id`
+(`google-oauth2|...`) links them. After cutover they use a passkey, an email code or link, or a
+Google provider configured directly in Seamless Auth.
+
+**What happens to users with no email?**
+The import requires an email. Users of an Auth0 SMS connection need an email added before export, or
+they sign up again by phone if phone codes are enabled.
+
+**Can we run the import more than once?**
+Yes. Rows match on the Auth0 `user_id` within source `auth0`, then on email, so re-running after
+fixing data updates rather than duplicates. Access is only ever added.
+
+**What is the license, and does it affect our code?**
+Seamless Auth (`seamless-auth-api`, the SDKs, the CLI, and the admin dashboard) is Apache-2.0. It is
+a permissive license: you can use, modify, and self-host it commercially, and it places no license
+obligations on your application code. Keep the license and notices if you redistribute Seamless Auth
+itself.
+
+**Is passkey sign-in phishing-resistant?**
+Yes. A passkey is bound to your site's domain, so a look-alike site cannot use it. With
+`phishing_resistant_only: true`, passkeys are the only way to start a session.
+
+---
+
+Fells Code, which maintains Seamless Auth, offers hands-on migration help: [fellscode.com](https://fellscode.com).
+
+## Related Docs
+
+- [Migrate Users From Another Identity System](/operate/migrate-users)
+- [CLI Commands: `migrate`](/reference/cli-commands#migrate)
+- [How To Add OAuth Login](/build/oauth-login)
+- [System Config](/reference/system-config)
+- [Managed or Self-Hosted](/start/choose-your-path)
