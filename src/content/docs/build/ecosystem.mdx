@@ -235,6 +235,9 @@ template tag it scaffolds, so a given CLI version always produces the same proje
 | Angular, Vue, Svelte web templates | `@seamless-auth/angular` ^0.2.0, `@seamless-auth/vue` ^0.1.0, `@seamless-auth/svelte` ^0.1.0 | `templates/web/angular`, `templates/web/vue`, `templates/web/svelte` |
 | Gin, Axum, FastAPI API templates | `seamless-auth-go` v0.2.0, `seamless-auth` crate 0.2, `seamless-auth[fastapi]` `>=0.2,<0.3` | `templates/api/gin/go.mod`, `templates/api/axum/Cargo.toml`, `templates/api/fastapi/pyproject.toml` |
 | Expo template             | `@seamless-auth/react-native` ^0.2.2                           | `templates/mobile/expo/package.json`                    |
+| Gin API template          | `github.com/fells-code/seamless-auth-go` v0.2.0                | `templates/api/gin/go.mod`                              |
+| Axum API template         | `seamless-auth` 0.2                                            | `templates/api/axum/Cargo.toml`                         |
+| FastAPI API template      | `seamless-auth[fastapi]>=0.2,<0.3`                           | `templates/api/fastapi/pyproject.toml`                  |
 
 Template paths are inside `fells-code/seamless-templates` at `v0.19.0`. A scaffolded project can
 move to newer SDKs by bumping the ranges in its own `package.json`.
