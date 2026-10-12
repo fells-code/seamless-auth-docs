@@ -1,0 +1,296 @@
+---
+title: "Add Passwordless Auth To An Express API Without Writing JWT Code"
+description: "Add passwordless auth (passkeys, magic links, email and SMS one-time codes) to an Express API without writing JWT, cookie, or refresh code: one install, one middleware line, a complete working server, and the React sign-in component."
+sidebar:
+  order: 1.1
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+This page is for an Express API that needs sign-in and is about to grow a hand-written JWT helper.
+`@seamless-auth/express` replaces that helper. It mounts the `/auth` routes the frontend SDKs call,
+keeps the session in signed `HttpOnly` cookies on your own domain, and gives you `requireAuth`, a
+middleware that answers `401` without a session and puts the signed-in user on `req.user`. Sign-in
+itself (passkeys, magic links, email and SMS one-time codes, OAuth) runs on a Seamless Auth server:
+self-hosted [`seamless-auth-api`](/build/auth-api) or a managed instance.
+
+**Why not write the 40 lines yourself?** Signing a token is the easy part. The work is everywhere
+around it: where the token lives in the browser so a script cannot read it, refresh that rotates
+without logging people out across tabs, revoking a session that has been stolen, and the passkey
+(WebAuthn) ceremonies, which no JWT helper covers. The adapter and the auth server do all of that.
+The Express adapter is the reference implementation: the other adapters are tested against its
+responses.
+
+Versions on this page: `@seamless-auth/express` 0.20.0 (Express 5), `@seamless-auth/react` 0.16.0,
+`seamless-cli` 0.22.0. All are pre-1.0.
+
+---
+
+## Fastest Path: A New Project
+
+One command, no prompts, safe for scripts and agents:
+
+```bash
+npx seamless-cli init my-app --local --yes --email=you@example.com
+cd my-app
+docker compose up
+```
+
+This scaffolds a React web app on `http://localhost:5173`, an Express API on
+`http://localhost:3000` with this adapter already wired in, the auth server in Docker, and the
+admin console at `http://localhost:3000/console`. Register with the email you passed and that
+account becomes the first admin. The [Self-Hosted Quickstart](/start/quickstart) walks through it.
+
+---
+
+## Add It To An Existing Express App
+
+<Aside type="tip">
+  `npx seamless-cli add --local --email=you@example.com`, run in your project, does steps 1 and 3
+  for you: it finds your Express app (at the root or in `api/`, `server/`, `backend/`, `apps/*`,
+  or `packages/*`), writes a local auth server to `seamless/`, writes the values below into your
+  `.env` without touching ones you already have, and prints the code to paste. It never edits
+  your source files. Use `--app <id>` instead of `--local` for a managed application.
+</Aside>
+
+### 1. Have An Auth Server
+
+Either run one locally (`seamless add --local` above writes `seamless/docker-compose.yml`; start
+it with `docker compose -f seamless/docker-compose.yml up -d`), or create a managed application in
+the portal ([Managed Quickstart](/start/managed-quickstart)). You need its URL and its service
+token.
+
+### 2. Install
+
+```bash
+npm install @seamless-auth/express cookie-parser cors
+npm install -D @types/cookie-parser @types/cors
+```
+
+`@seamless-auth/express` needs Express 5 and Node.js 22 or later.
+
+### 3. The Server
+
+This is a complete server: it mounts `/auth`, protects three routes, and reads the user. It is
+the shape the Express starter in `seamless-templates` uses, trimmed to the auth parts.
+
+```ts
+// server.ts
+import express from 'express'
+import cookieParser from 'cookie-parser'
+import cors from 'cors'
+import createSeamlessAuthServer, {
+  getSeamlessUser,
+  requireAuth,
+  requireRole,
+  type SeamlessAuthMessagingOptions,
+  type SeamlessAuthServerOptions,
+  type SeamlessAuthUser,
+} from '@seamless-auth/express'
+
+declare global {
+  namespace Express {
+    interface Request {
+      user?: SeamlessAuthUser
+    }
+  }
+}
+
+// Development only: print one-time codes and magic links to this console instead
+// of sending them, so you can sign in with no mail or SMS provider.
+const devMessaging: SeamlessAuthMessagingOptions = {
+  handlers: {
+    sendOtpEmail: async ({ to, token }) => {
+      console.log(`Dev code for ${to}: ${token}`)
+      return { accepted: true, provider: 'console', channel: 'email' }
+    },
+    sendOtpSms: async ({ to, token }) => {
+      console.log(`Dev code for ${to}: ${token}`)
+      return { accepted: true, provider: 'console', channel: 'sms' }
+    },
+    sendMagicLinkEmail: async ({ to, magicLinkUrl }) => {
+      console.log(`Dev magic link for ${to}: ${magicLinkUrl}`)
+      return { accepted: true, provider: 'console', channel: 'email' }
+    },
+  },
+}
+
+// Set AUTH_SERVER_ISSUER only when the auth server signs as a different URL from
+// the one this API calls, as the local Docker stack does (http://auth:5312).
+const issuer = process.env.AUTH_SERVER_ISSUER || undefined
+
+const auth: SeamlessAuthServerOptions = {
+  authServerUrl: process.env.AUTH_SERVER_URL!,
+  authServerIssuer: issuer,
+  audience: issuer ?? process.env.AUTH_SERVER_URL!,
+  cookieSecret: process.env.COOKIE_SIGNING_KEY!,
+  serviceSecret: process.env.API_SERVICE_TOKEN!,
+  jwksKid: process.env.JWKS_KID,
+  messaging: process.env.NODE_ENV === 'production' ? undefined : devMessaging,
+}
+
+const app = express()
+
+// The web app calls /auth on this server with cookies, so CORS must allow credentials.
+app.use(cors({ origin: process.env.UI_ORIGINS?.split(','), credentials: true }))
+app.use(express.json())
+app.use(cookieParser())
+
+// Every route the frontend SDK calls: passkeys, magic links, OTP, refresh, logout.
+app.use('/auth', createSeamlessAuthServer(auth))
+
+// requireAuth answers 401 unless the request carries a valid session cookie.
+const signedIn = requireAuth({ cookieSecret: auth.cookieSecret })
+
+app.get('/api/me', signedIn, (req, res) => {
+  res.json({ id: req.user!.id, roles: req.user!.roles })
+})
+
+// The full profile (email, phone, last login) comes from the auth server.
+app.get('/api/profile', signedIn, async (req, res) => {
+  res.json(await getSeamlessUser(req, auth))
+})
+
+app.get('/api/admin', signedIn, requireRole('admin'), (_req, res) => {
+  res.json({ ok: true })
+})
+
+app.listen(Number(process.env.PORT ?? 3000))
+```
+
+Run it with `npx tsx --env-file=.env server.ts`. In plain JavaScript, drop the `declare global`
+block and the type imports; nothing else changes.
+
+- The one line that adds auth is `app.use('/auth', createSeamlessAuthServer(auth))`. The one
+  line that protects a route is `requireAuth({ cookieSecret })`.
+- Without a session, `requireAuth` answers `401 { "error": "Failed to find authentication token
+  required" }`, and `401 { "error": "Invalid or expired session" }` for a cookie that does not
+  verify. `requireRole` answers `403` when the user lacks the role. Scoped roles work as described
+  in [How To Secure Routes](/build/secure-routes).
+- `req.user` is what the session cookie carries: `id`, `roles`, and usually `email` and `phone`.
+  It is read locally, with no network call. `getSeamlessUser(req, auth)` asks the auth server for
+  the full profile.
+- `requireAuth` never refreshes. An expired access cookie is renewed by the frontend SDK through
+  `/auth`, which the adapter handles.
+- To accept the auth server's access token as `Authorization: Bearer` too (for a native app), pass
+  `authServerUrl` and `audience` to `requireAuth`; see
+  [Bearer Transport](/build/server-sdks#bearer-transport-for-native-clients).
+
+### 4. Environment Variables
+
+For an API run on the host against the local Docker stack:
+
+```bash
+# .env
+AUTH_SERVER_URL=http://localhost:5312
+AUTH_SERVER_ISSUER=http://auth:5312
+API_SERVICE_TOKEN=the-auth-servers-API_SERVICE_TOKEN
+COOKIE_SIGNING_KEY=output-of-openssl-rand-base64-48
+JWKS_KID=dev-main
+UI_ORIGINS=http://localhost:5173
+```
+
+| Variable             | What it is                                                                                                                                                        |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AUTH_SERVER_URL`    | The Seamless Auth server this API calls. For a managed application, the Auth Server URL from the portal                                                           |
+| `AUTH_SERVER_ISSUER` | Only for an API run on the host against the local Docker stack, which signs as `http://auth:5312`. Leave it unset otherwise                                        |
+| `API_SERVICE_TOKEN`  | The secret shared with the auth server, 32 characters or more. Locally, the auth server's `API_SERVICE_TOKEN`; managed, a service token generated in the portal     |
+| `COOKIE_SIGNING_KEY` | Signs the session cookies, 32 characters or more. Generate it with `openssl rand -base64 48`                                                                      |
+| `JWKS_KID`           | Key id on the service tokens the adapter signs. The local stack uses `dev-main`; the adapter warns while it is `dev-main`, so set your own in production          |
+| `UI_ORIGINS`         | Comma-separated web origins allowed by CORS                                                                                                                        |
+
+The adapter refuses to start when either secret is shorter than 32 characters. Cookie options
+(`cookieDomain`, `cookieSecure`, `cookieSameSite`, custom cookie names) are in
+[Server SDKs](/build/server-sdks#required-options), and the starter's variables in
+[Environment Variables](/reference/environment-variables#starter-environment).
+
+### 5. The Frontend
+
+The React SDK talks to `/auth` on your API and ships the sign-in screens:
+
+```bash
+npm install @seamless-auth/react react-router-dom
+```
+
+```tsx
+// src/App.tsx
+import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { AuthProvider, useAuth, useAuthorizedFetch } from '@seamless-auth/react'
+import { AuthRoutes } from '@seamless-auth/react/routes'
+
+function Home() {
+  const { user, logout } = useAuth()
+  const authorizedFetch = useAuthorizedFetch()
+
+  // A path starting with / goes to apiHost, with the session cookies attached.
+  const loadMe = async () => console.log(await (await authorizedFetch('/api/me')).json())
+
+  return (
+    <main>
+      <p>Signed in as {user?.email}</p>
+      <button onClick={() => void loadMe()}>Call /api/me</button>
+      <button onClick={() => void logout()}>Sign out</button>
+    </main>
+  )
+}
+
+function AppRoutes() {
+  const { isAuthenticated, loading } = useAuth()
+  if (loading) return null
+
+  return (
+    <Routes>
+      <Route path="*" element={isAuthenticated ? <Home /> : <AuthRoutes />} />
+    </Routes>
+  )
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider apiHost={import.meta.env.VITE_API_URL}>
+        <AppRoutes />
+      </AuthProvider>
+    </BrowserRouter>
+  )
+}
+```
+
+Set `VITE_API_URL=http://localhost:3000` in the web app's `.env`. `AuthRoutes` renders the
+sign-in, registration, passkey, one-time code, and magic link screens, including the
+`/verify-magiclink` page the emailed link opens. To build your own screens instead, see
+[How To Build Your Own Auth UI](/build/custom-auth-ui). Vue, Svelte, Angular, and React Native have
+their own SDKs ([Ecosystem](/build/ecosystem)).
+
+The web app's origin also has to be in the auth server's `ORIGINS`, or passkey ceremonies fail.
+The local stack already allows `http://localhost:5173`.
+
+---
+
+## What Not To Write Yourself
+
+With the adapter mounted, delete or never write:
+
+- JWT signing, verification, or a `jsonwebtoken` helper for sessions
+- a `/login`, `/logout`, `/refresh`, or `/me` route of your own
+- code that sets or clears auth cookies, or stores tokens in `localStorage`
+- refresh-token rotation, reuse detection, or session revocation
+- password hashing, reset emails, or a users table column for passwords
+- WebAuthn challenge and attestation handling for passkeys
+- one-time code or magic link generation, expiry, and rate limiting
+
+Keep your own users table if you want one, keyed by `req.user.id`. The Express starter does this
+with a `findOrCreate` on the first authenticated request.
+
+---
+
+## Related Docs
+
+- [Server SDKs And Adapters](/build/server-sdks): every Express option, the mounted routes, bearer
+  transport, and messaging delivery
+- [React SDK](/build/react-sdk): `AuthProvider`, `useAuth()`, and the headless client
+- [How To Secure Routes](/build/secure-routes): roles, scoped roles, and route guards
+- [Add Passwordless Auth To A Next.js App](/build/nextjs-without-jwt): the same, when Next.js is
+  the backend
+- [Cookie, Session, And Token Reference](/reference/cookies-sessions-tokens)
+- [CLI Command Reference](/reference/cli-commands)
