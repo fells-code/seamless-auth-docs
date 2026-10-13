@@ -158,7 +158,7 @@ already has them in `.env`.
 | `AUTH_SERVER_ISSUER` | `auth_server_issuer` | Only when the auth API signs as a different URL (the `seamless init --local` Docker stack signs as `http://auth:5312`) |
 | `COOKIE_SIGNING_KEY` | `cookie_secret`      | Any secret of 32 bytes or more, for example `openssl rand -base64 48`                                                |
 | `API_SERVICE_TOKEN`  | `service_secret`     | The auth API's `API_SERVICE_TOKEN` (self-hosted), or a service token generated in the portal (managed)              |
-| `JWKS_KID`           | `jwks_kid`           | The auth API's signing key id, `dev-main` on a local stack                                                          |
+| `JWKS_KID`           | `jwks_kid`           | `kid` header on the service tokens the adapter signs, not the auth API's signing key id; `dev-main` on a local stack |
 
 `Adapter` also takes:
 

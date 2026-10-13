@@ -183,7 +183,7 @@ server.
   local when you are not signed in.
 - `--local` forces the self-hosted stack without contacting the control plane.
 - `init` issues the application's service token and writes it, the managed auth server URL, and the
-  JWKS key id into the `.env` of the project that serves `/auth`: `api/.env` for an api template,
+  `JWKS_KID` into the `.env` of the project that serves `/auth`: `api/.env` for an api template,
   or `web/.env` for a full-stack web template (`nextjs`), which has no api layer. Issuing a token
   invalidates any earlier one, so `init` asks first.
 - The Express and Fastify starters also get `DATABASE_URL` in `api/.env`, pointing at the
@@ -442,7 +442,7 @@ The stack runs with fixed development values, which these environment variables 
 | -------------------- | -------------------------------------------- | ----------------------------------------------------------------------- |
 | `API_SERVICE_TOKEN`  | `verify-dev-service-token-not-a-real-secret` | The service token shared by the auth API and the adapter apps           |
 | `OWNER_EMAIL`        | `owner@verify.local`                         | The owner address; the harness registers it and asserts the admin grant |
-| `JWKS_KID`           | `dev-main`                                   | The key id the adapters expect; it must match the auth API's active kid |
+| `JWKS_KID`           | `dev-main`                                   | `kid` header on the adapters' service tokens; the auth API does not check it |
 
 The adapters reuse the service token as their cookie signing key, which `@seamless-auth/express`
 requires to be at least 32 characters, so keep an override at that length or longer.

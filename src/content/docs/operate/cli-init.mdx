@@ -249,7 +249,7 @@ It then always writes `docker-compose.yml`. The file defines:
 - an admin dashboard container, in the image and source admin modes
 
 Ports are published on `127.0.0.1` only. This step also produces the shared values the next step
-needs: the API service token and the JWKS key id.
+needs: the API service token and the service token `kid` (`JWKS_KID`).
 
 ---
 
@@ -286,7 +286,7 @@ For example, the Express template's manifest sets:
 | `{{authServerIssuer}}`  | `http://auth:5312`, the issuer the local auth container signs with (seamless-cli 0.19.0 or later; the instance URL on a managed instance) |
 | `{{apiUrl}}`            | `http://localhost:3000`                                           |
 | `{{apiToken}}`          | The service token shared with the auth server                     |
-| `{{jwksKid}}`           | The auth server's signing key id                                  |
+| `{{jwksKid}}`           | The `kid` header on the adapter's service tokens (`JWKS_KID`), not the auth server's signing key id |
 | `{{serveAdminConsole}}` | `true` when the admin console is served by the API, else `false`  |
 | `{{databaseUrl}}`       | Empty; the local starter uses its discrete `DB_*` values          |
 | `{{secret:N}}`          | A freshly generated secret: `N` random bytes, hex-encoded         |

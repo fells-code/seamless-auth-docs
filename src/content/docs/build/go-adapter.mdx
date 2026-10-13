@@ -126,7 +126,7 @@ already has them in `.env`.
 | `AUTH_SERVER_ISSUER` | `AuthServerIssuer` | Only when the auth API signs as a different URL (the `seamless init --local` Docker stack signs as `http://auth:5312`) |
 | `COOKIE_SIGNING_KEY` | `CookieSecret`     | Any secret of 32 characters or more, for example `openssl rand -base64 48`                                          |
 | `API_SERVICE_TOKEN`  | `ServiceSecret`    | The auth API's `API_SERVICE_TOKEN` (self-hosted), or a service token generated in the portal (managed)              |
-| `JWKS_KID`           | `JWKSKid`          | The auth API's signing key id, `dev-main` on a local stack                                                          |
+| `JWKS_KID`           | `JWKSKid`          | `kid` header on the service tokens the adapter signs, not the auth API's signing key id; `dev-main` on a local stack |
 
 `Options` also has:
 
