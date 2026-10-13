@@ -74,6 +74,15 @@ Choose self-hosted when you want:
 
 ---
 
+## Already have an app?
+
+Both paths work for an existing project. `seamless add`, run at the root of your repository, finds
+your backend and web app, connects them to a local auth server (`--local`) or a managed application
+(`--app <id>`), writes the environment values, installs the packages, and prints the code to add.
+See [Add Seamless Auth To An Existing App](/operate/add-to-existing-app).
+
+---
+
 ## Which SDK values change
 
 The only integration values that differ between the two paths are the auth server URL and the source
@@ -95,3 +104,5 @@ middleware, and route protection) is the same.
 
 - New and want the fastest working app? Go to [Managed Quickstart](/start/managed-quickstart).
 - Want to run everything yourself? Go to [Self-Hosted Quickstart](/start/quickstart).
+- Adding auth to an app you already have? Go to
+  [Add Seamless Auth To An Existing App](/operate/add-to-existing-app).

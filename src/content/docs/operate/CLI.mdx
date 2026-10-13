@@ -1,6 +1,6 @@
 ---
 title: "Seamless Auth CLI"
-description: "The Seamless Auth CLI (npm package seamless-cli, binary seamless): installation, init, check, verify, account and instance commands, and the files init generates."
+description: "The Seamless Auth CLI (npm package seamless-cli, binary seamless): installation, init, add, check, verify, account and instance commands, and the files init generates."
 sidebar:
   order: 1
 ---
@@ -16,6 +16,7 @@ Current commands cover:
 
 - scaffold a Seamless Auth project from the starter template registry (React, Next.js, Express,
   Fastify, Expo)
+- add Seamless Auth to an existing project with `seamless add`
 - configure the auth server in Docker or local-source mode
 - optionally include the admin dashboard
 - validate generated config, Docker Compose, containers, and local health endpoints
@@ -82,6 +83,21 @@ which becomes the owner: registering with that address makes you the first admin
 Template flags such as `--oauth` (the OAuth example, which also prompts for Google, GitHub,
 Microsoft, and GitLab providers) skip a layer's prompt. Run `seamless templates list` to see them,
 and see the [CLI Init Flow](/operate/cli-init#template-flags) for what each step does.
+
+---
+
+### add
+
+```bash
+npx seamless-cli add --local --email=you@example.com
+npx seamless-cli add --app <application-id>
+```
+
+Adds Seamless Auth to a project you already have. It finds an Express, Fastify, Go, Axum, FastAPI,
+or Django backend and a React, Angular, Vue, or SvelteKit web app, connects a local auth server
+(written to `seamless/`) or a managed application, writes the backend's `.env` and the web app's
+API URL, installs the packages, and prints the code to add. It never edits your source files.
+Next.js is not wired. See [Add Seamless Auth To An Existing App](/operate/add-to-existing-app).
 
 ---
 
@@ -228,7 +244,9 @@ The CLI is built to be:
 
 ## Current Boundaries
 
-The CLI still does not provide a polished "attach Seamless Auth to an existing application" flow.
+`seamless add` wires an existing project's environment and packages and prints the code, but does
+not edit source files, and does not support Next.js. See
+[Add Seamless Auth To An Existing App](/operate/add-to-existing-app).
 
 Deployment automation is not part of the current `seamless-cli` command surface. Keep deployment
 docs status-based until deployment commands ship again in source.
