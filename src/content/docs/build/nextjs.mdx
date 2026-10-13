@@ -18,8 +18,10 @@ With both, there is no separate API server for auth. The browser calls `/auth` o
 application's own origin, the session cookies stay first-party, and the server can render the
 signed-in user on the first paint.
 
-Requires `@seamless-auth/nextjs` 0.2.0 or later and `@seamless-auth/react` 0.14.0 or later
-(0.14.0 is the release that made the React SDK safe to render from the App Router).
+Requires `@seamless-auth/nextjs` 0.4.0 or later and `@seamless-auth/react` 0.14.0 or later
+(0.14.0 is the release that made the React SDK safe to render from the App Router). Earlier
+`@seamless-auth/nextjs` releases have no `PUT` handler and do not serve auth API routes from the
+adapter manifest (see [Step 1](#step-1-serve-the-auth-routes)).
 
 ```txt
 browser
@@ -55,7 +57,7 @@ Mount a catch-all route handler at `app/auth/[...seamless]/route.ts`:
 ```ts
 import { createSeamlessAuthHandler } from '@seamless-auth/nextjs'
 
-export const { GET, POST, PATCH, DELETE } = createSeamlessAuthHandler({
+export const { GET, POST, PUT, PATCH, DELETE } = createSeamlessAuthHandler({
   authServerUrl: process.env.AUTH_SERVER_URL!,
   audience: process.env.AUTH_SERVER_URL!,
   cookieSecret: process.env.COOKIE_SIGNING_KEY!,
@@ -68,6 +70,16 @@ This serves the same routes and issues the same cookies as `@seamless-auth/expre
 `@seamless-auth/fastify`, for both cookie and bearer transport. Its tests hold it to identical
 responses from the Express adapter.
 
+Export all five methods. `PUT` is new in 0.4.0, and the OAuth provider retirement routes
+(`PUT /admin/organizations/:id/oauth-providers/:provider/retirement`) need it. A route module that
+does not export `PUT` answers those requests with `405` from Next.js before the handler runs.
+
+Routes the handler has no code of its own for are served from the adapter manifest the auth API
+publishes at `/.well-known/seamless-adapter.json` (0.4.0 or later), so a new auth API route works
+without a new release of this package. The handler fetches the manifest on its first request,
+waits up to five seconds, and keeps it for the life of the process. When the API does not serve
+one, it uses the copy bundled with the package and tries again a minute later.
+
 - `cookieSecret` and `serviceSecret` must be at least 32 characters, and `serviceSecret` must
   match the auth API's `API_SERVICE_TOKEN`. Both are checked when the handler is created.
 - The handler signs cookies with `jsonwebtoken`, so it needs the Node.js runtime, which is the
@@ -76,7 +88,20 @@ responses from the Express adapter.
 <Aside type="caution">
   `next build` imports route modules with no request and often no secrets. If your build
   environment has no `.env`, create the handler on the first request instead of at module scope,
-  or the secret check fails the build. The starter does this with a small lazy wrapper.
+  or the secret check fails the build. The starter does this with a small lazy wrapper:
+
+```ts
+import { createSeamlessAuthHandler, type SeamlessAuthRouteHandlers } from '@seamless-auth/nextjs'
+
+let handlers: SeamlessAuthRouteHandlers | undefined
+const seamless = () => (handlers ??= createSeamlessAuthHandler({ /* options as above */ }))
+
+export const GET = (request: Request) => seamless().GET(request)
+export const POST = (request: Request) => seamless().POST(request)
+export const PUT = (request: Request) => seamless().PUT(request)
+export const PATCH = (request: Request) => seamless().PATCH(request)
+export const DELETE = (request: Request) => seamless().DELETE(request)
+```
 </Aside>
 
 ### Options
@@ -103,6 +128,7 @@ responses from the Express adapter.
 | `preAuthCookieName`      | `seamless-ephemeral`           | Login-initiation cookie name                              |
 | `messaging`              | none                           | Your own email and SMS delivery for codes and magic links |
 | `resolveClientIp`        | none                           | Picks the end user's IP to forward to the auth API        |
+| `fetchManifest`          | `true`                         | Fetch the adapter manifest from the auth API. `false` uses only the copy bundled with the package, for example in tests that mock `fetch` |
 
 **Client IP.** A route handler has no trustworthy source for the client address, because any
 caller can set `X-Forwarded-For`. Nothing is forwarded unless you pass `resolveClientIp` and read
@@ -120,7 +146,7 @@ sign-in fails with `Invalid signed response from Auth Server`. Tell the adapter 
 separately:
 
 ```ts
-export const { GET, POST, PATCH, DELETE } = createSeamlessAuthHandler({
+export const { GET, POST, PUT, PATCH, DELETE } = createSeamlessAuthHandler({
   authServerUrl: 'http://localhost:5312',
   authServerIssuer: 'http://auth:5312',
   audience: 'http://auth:5312',
@@ -164,13 +190,14 @@ import { AuthProvider } from '@seamless-auth/react'
 export const dynamic = 'force-dynamic'
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // null is signed out. undefined (auth server unreachable) lets the provider find out in the browser.
   const session = await getSeamlessSession(await cookies(), {
     authServerUrl: process.env.AUTH_SERVER_URL!,
     cookieSecret: process.env.COOKIE_SIGNING_KEY!,
     serviceSecret: process.env.API_SERVICE_TOKEN!,
     jwksKid: process.env.JWKS_KID,
     userAgent: (await headers()).get('user-agent') ?? undefined,
-  })
+  }).catch(() => undefined)
 
   return (
     <html lang="en">
@@ -186,6 +213,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
 - **`apiHost=""`** sends every auth request to `/auth` on the page's own origin, which is the
   route handler from step 1.
+- **Catch the error.** `getSeamlessSession` calls the auth API, and it throws when the auth server
+  cannot be reached or `cookieSecret` is shorter than 32 characters. Uncaught, that renders the
+  error page with a `500` for every route under the layout. Resolving to `undefined` instead tells
+  the provider the session is unknown: it starts in its loading state and resolves the session from
+  the browser, while `null` renders signed out. The starter's `src/lib/auth.ts` logs the error and
+  does the same.
 - **`initialSession`** makes the first paint render the signed-in user instead of a loading state.
   The provider then revalidates in the background, without reporting `loading`, which fills in
   anything the server did not have and signs out a session that was revoked. It is read once,
