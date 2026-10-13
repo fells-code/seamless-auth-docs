@@ -46,11 +46,13 @@ account becomes the first admin. The [Self-Hosted Quickstart](/start/quickstart)
 ## Add It To An Existing Express App
 
 <Aside type="tip">
-  `npx seamless-cli add --local --email=you@example.com`, run in your project, does steps 1 and 3
-  for you: it finds your Express app (at the root or in `api/`, `server/`, `backend/`, `apps/*`,
-  or `packages/*`), writes a local auth server to `seamless/`, writes the values below into your
-  `.env` without touching ones you already have, and prints the code to paste. It never edits
-  your source files. Use `--app <id>` instead of `--local` for a managed application.
+  `npx seamless-cli add --local --email=you@example.com`, run in your project, does steps 1 and 2
+  for you and prints step 3: it finds your Express app (at the root or in `api/`, `server/`,
+  `backend/`, `apps/*`, or `packages/*`, among others), writes a local auth server to
+  `seamless/`, writes the values below into your `.env` without touching ones you already have,
+  installs the packages, and prints the code to paste. It never edits your source files. Use
+  `--app <id>` instead of `--local` for a managed application. See
+  [Add Seamless Auth To An Existing App](/operate/add-to-existing-app).
 </Aside>
 
 ### 1. Have An Auth Server

@@ -1,6 +1,6 @@
 ---
 title: "CLI Command Reference"
-description: "Reference for every seamless-cli command and flag: init (including non-interactive flags), templates, check, verify, profile, login, and the instance admin commands."
+description: "Reference for every seamless-cli command and flag: init (including non-interactive flags), add, templates, check, verify, profile, login, and the instance admin commands."
 sidebar:
   order: 1
 ---
@@ -16,6 +16,7 @@ The npm package is named `seamless-cli`. The executable binary is named `seamles
 | Command                        | Purpose                                                                                    |
 | ------------------------------ | ------------------------------------------------------------------------------------------ |
 | `seamless init [project-name]` | Scaffold a project, either a local self-hosted stack or connected to a managed application |
+| `seamless add [path]`          | Add Seamless Auth to an existing project: connect an auth server, write `.env`, install, print the code |
 | `seamless templates list`      | List the starters `init` can scaffold and the flags that select them                       |
 | `seamless check [--strict]`    | Validate generated project config, Docker, Compose, containers, and local health endpoints |
 | `seamless verify [flags]`      | Run the cross-package auth conformance harness (api / adapter / react matrix)              |
@@ -33,7 +34,7 @@ The npm package is named `seamless-cli`. The executable binary is named `seamles
 | `seamless --help`              | Print usage                                                                                |
 | `seamless --version`           | Print the installed CLI version                                                            |
 
-The `init`, `templates`, `check`, and `verify` commands are for building and testing a stack.
+The `init`, `add`, `templates`, `check`, and `verify` commands are for building and testing a stack.
 `login` and `apps` use your portal account. `whoami` and `logout` act on the portal session by
 default and on an instance with `--profile <name>`. The `profile`, `sessions`, `config`, `users`,
 `org`, and `migrate` commands act as an authenticated client against a running instance (managed or
@@ -65,7 +66,7 @@ seamless init
 
 The CLI uses the current directory. If the directory is not empty, `init` asks whether to connect it
 to a managed application or scaffold in place, because starter files overwrite anything with the
-same name. A full integration flow for an existing app is not shipped yet.
+same name. To add Seamless Auth to a project you already have, use [`add`](#add) instead.
 
 ### What it does
 
@@ -195,6 +196,118 @@ server.
 - No local auth server, Docker Compose file, or admin dashboard is generated.
 
 See the [Managed Quickstart](/start/managed-quickstart).
+
+---
+
+## `add`
+
+```bash
+seamless add [path] [--local | --app <id>] [--email=<address>] [--api-url=<url>] [--web-url=<url>] [--admin=<api|none>] [--skip-install] [--yes] [--force]
+```
+
+Adds Seamless Auth to an existing project, in the current directory or at `path`. Shipped in
+seamless-cli 0.22.0. It never edits your source files: it writes environment files, installs
+packages, and prints the code for you to add. For a walkthrough per backend, see
+[Add Seamless Auth To An Existing App](/operate/add-to-existing-app).
+
+What it does:
+
+- finds a backend and a web app from their manifests, at the project root or in `api/`, `server/`,
+  `backend/`, `web/`, `client/`, `frontend/`, `app/`, `apps/*`, or `packages/*` (the first match
+  of each kind wins)
+- connects an auth server: `--local` writes one to `seamless/`, `--app` connects a managed
+  application, and without either it asks
+- writes the backend's `.env` and the web app's API URL in `.env.local`, keeping every value and
+  comment already there
+- installs the server adapter and the web binding with the project's own tool
+- prints numbered next steps: install commands it did not run, how to start a local auth server,
+  the code for the backend's entry file, the code for each web app file, and how to sign in
+
+| Backend                      | Detected from                                       | Installs                                                                            |
+| ---------------------------- | --------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Express                      | `express` in `package.json`                         | `@seamless-auth/express`, `cookie-parser`, `cors` (plus `@types/cookie-parser` and `@types/cors` as dev dependencies in a TypeScript project) |
+| Fastify                      | `fastify` in `package.json`                         | `@seamless-auth/fastify`, `@fastify/cors`                                           |
+| Go (net/http, Gin, chi, Echo) | `go.mod`; the framework from its `require` lines   | `go get github.com/fells-code/seamless-auth-go@latest`                               |
+| Axum                         | `axum` in `Cargo.toml`                              | `cargo add seamless-auth`                                                           |
+| FastAPI, Django              | `pyproject.toml` or `requirements.txt`              | `seamless-auth[fastapi]>=0.2` or `seamless-auth[django]>=0.2` with `uv add` (a `uv.lock`) or `poetry add` (a `poetry.lock` or `[tool.poetry]`); a plain pip project gets the `pip install` printed, not run |
+
+Node projects install with npm, pnpm, yarn, or bun, picked from the nearest lock file. A Node
+project counts as TypeScript when it has a `tsconfig.json` or depends on `typescript`, and the
+printed code matches.
+
+| Web app   | Detected from                          | Installs                                                  | API URL written                                         |
+| --------- | -------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------- |
+| React     | `react` in `package.json` (not Next.js or React Native) | `@seamless-auth/react`                   | `VITE_API_URL` in `.env.local`, or `REACT_APP_API_URL` for Create React App |
+| Angular   | `@angular/core`                        | `@seamless-auth/angular`, plus `@angular/router` if missing | None; the URL is in the printed config, since the Angular CLI does not read `.env` |
+| Vue       | `vue` (not Nuxt)                       | `@seamless-auth/vue`, plus `vue-router` if missing        | `VITE_API_URL` in `.env.local`                          |
+| SvelteKit | `@sveltejs/kit`                        | `@seamless-auth/svelte`                                   | `VITE_API_URL` in `.env.local`                          |
+
+A web app is optional. Next.js, Nuxt, Svelte without SvelteKit, Rust without Axum, and Python
+without FastAPI or Django are reported as found but not wired. A project with no backend `add`
+can wire, such as a Next.js app on its own, fails with `Found no backend to add Seamless Auth to`
+and exits 1. For Next.js, follow [Next.js](/build/nextjs) by hand.
+
+The backend's `.env` gets:
+
+| Key                   | Written                                   | Value                                                                                   |
+| --------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------- |
+| `AUTH_SERVER_URL`     | Always (replaced if different)            | `http://localhost:5312` with `--local`, or the managed instance URL                      |
+| `AUTH_SERVER_ISSUER`  | Always (replaced if different)            | `http://auth:5312` with `--local`, or the managed instance URL                           |
+| `API_SERVICE_TOKEN`   | Always (replaced if different)            | The local stack's service token, or a token issued for the managed application         |
+| `JWKS_KID`            | Always (replaced if different)            | The local stack's key id (`dev-main`), or the managed instance's active key id          |
+| `COOKIE_SIGNING_KEY`  | Only when missing                         | A generated secret                                                                     |
+| `UI_ORIGINS`          | Only when missing                         | The web origin                                                                         |
+| `SERVE_ADMIN_CONSOLE` | Only when missing                         | `true` with `--local` and `--admin=api`, otherwise `false`                              |
+
+New keys are appended under a `# Seamless Auth` comment. `add` warns when the `.env` does not look
+gitignored.
+
+| Flag                  | Accepted values      | Default                                                       | Effect                                                                                                    |
+| --------------------- | -------------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `--local`             | none                 | off                                                           | Write a local auth server to `seamless/`; refused together with `--app`                                   |
+| `--app`               | a managed application id | none                                                      | Connect that managed application (needs `seamless login`)                                                 |
+| `--email`             | an email address     | your portal session email, when signed in                     | With `--local`, the owner address that becomes the admin when you register; required under `--yes` without a portal session |
+| `--api-url`           | a URL                | `http://localhost:<PORT>`, with `PORT` read from the backend's `.env`, or `3000` | The backend's origin: the web app's API URL, and the auth server's `APP_ORIGINS`                          |
+| `--web-url`           | a URL                | `http://localhost:5173`; `4200` for Angular, `3001` for Create React App | The web app's origin: `UI_ORIGINS`, and the auth server's `ORIGINS`                                |
+| `--admin`             | `api`, `none`        | `api`                                                         | Whether the backend serves the admin dashboard at `/console`; `none` leaves the console lines out         |
+| `--skip-install`      | none                 | off                                                           | Print the install commands instead of running them                                                         |
+| `--yes`, `-y`         | none                 | off                                                           | Answer every question with its default; needs `--local` or `--app`                                        |
+| `--force`             | none                 | off                                                           | Replace an existing `seamless/` stack, or rotate a managed application's existing service token, without asking |
+
+Valued flags take either `--flag=value` or `--flag value`. Any other flag is refused with
+`Unknown option for seamless add`.
+
+### `--local`
+
+Writes three files to `seamless/` and nothing else at the repository root:
+
+- `seamless/docker-compose.yml`: Postgres and the auth API image the CLI pins, with the auth server
+  published on `127.0.0.1:5312` only and Postgres not published. Start it with
+  `docker compose -f seamless/docker-compose.yml up -d`.
+- `seamless/.env`: the auth server's configuration and secrets, including `OWNER_EMAIL`,
+  `ORIGINS` (the web origin, plus the backend origin when the console is served), and
+  `APP_ORIGINS` (the backend origin).
+- `seamless/.gitignore`: ignores `seamless/.env`.
+
+When `seamless/docker-compose.yml` already exists, `add` asks before replacing it, because a new
+stack issues new secrets. Under `--yes` it fails instead unless you also pass `--force`.
+
+### `--app`
+
+Connects a managed application. It needs a portal session (`seamless login`), and only applications
+whose auth server has finished provisioning are offered. Issuing a service token invalidates the
+application's existing one, so `add` asks first; under `--yes` it fails unless you also pass
+`--force`. Nothing is written to `seamless/`, and the printed code leaves out the console lines.
+
+### Without a terminal
+
+Without `--local` or `--app`, `add` asks which auth server to use. With no terminal attached it
+fails and names the flags to pass, and `--yes` without either fails the same way, so it is safe in
+scripts and agents:
+
+```bash
+seamless add --local --yes --email=you@example.com < /dev/null
+```
 
 ---
 
