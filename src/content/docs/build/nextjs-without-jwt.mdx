@@ -1,0 +1,380 @@
+---
+title: "Add Passwordless Auth To A Next.js App Without Writing JWT Code"
+description: "Add passwordless auth (passkeys, magic links, email and SMS one-time codes) to a Next.js App Router app without writing JWT, cookie, or refresh code: one install, one route handler, proxy.ts protection, and a complete sign-in component."
+sidebar:
+  order: 1.2
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+This page is for a Next.js App Router app that needs sign-in and is about to grow a hand-written
+JWT helper in a route handler or `middleware.ts`. `@seamless-auth/nextjs` replaces that helper. One
+catch-all route handler serves the `/auth` routes the browser SDK calls, the session lives in
+signed `HttpOnly` cookies on your app's own origin, and `proxy.ts`, server components, and your
+own route handlers read the session with one function call each. Sign-in itself (passkeys, magic
+links, email and SMS one-time codes, OAuth) runs on a Seamless Auth server: self-hosted
+[`seamless-auth-api`](/build/auth-api) or a managed instance. There is no separate API server.
+
+**Why not write the 40 lines yourself?** Signing a token is the easy part. The work is everywhere
+around it: where the token lives so a script cannot read it, refresh that rotates without logging
+people out (a refresh during server rendering, whose response the browser never sees, is a classic
+way to revoke your own users), revoking a stolen session, and the passkey (WebAuthn) ceremonies,
+which no JWT helper covers. The adapter and the auth server do all of that, and the adapter's tests
+hold it to the same responses as the Express adapter.
+
+Versions on this page: `@seamless-auth/nextjs` 0.4.0, `@seamless-auth/react` 0.16.0, Next.js 16,
+`seamless-cli` 0.22.0. All Seamless Auth packages are pre-1.0.
+
+---
+
+## Fastest Path: A New Project
+
+One command, no prompts, safe for scripts and agents:
+
+```bash
+npx seamless-cli init my-app --nextjs --local --yes --email=you@example.com
+cd my-app
+docker compose up
+```
+
+`--nextjs` picks the full-stack Next.js starter (marked beta) in place of the React and Express
+pair. The app runs on `http://localhost:5173` with the admin console at `/console`, and the auth
+server runs in Docker. Register with the email you passed and that account becomes the first
+admin. The [Self-Hosted Quickstart](/start/quickstart) walks through the same flow.
+
+---
+
+## Add It To An Existing Next.js App
+
+<Aside type="note">
+  `seamless add`, the CLI command that wires an existing project, does not support Next.js yet.
+  The steps below are the whole integration.
+</Aside>
+
+### 1. Have An Auth Server
+
+Create a managed application in the portal ([Managed Quickstart](/start/managed-quickstart)), or
+run [`seamless-auth-api`](/build/auth-api) yourself. You need its URL and its service token. Add
+your app's origin (for example `http://localhost:3000`) to the auth server's `ORIGINS`, or passkey
+ceremonies fail.
+
+### 2. Install
+
+```bash
+npm install @seamless-auth/nextjs @seamless-auth/react
+```
+
+`react-router-dom` is not needed. The examples import with `@/`, the alias `create-next-app` sets
+up.
+
+### 3. The Options, In One Place
+
+```ts
+// lib/seamless.ts
+import type { SeamlessAuthHandlerOptions, SeamlessAuthMessagingOptions } from '@seamless-auth/nextjs'
+
+// Development only: print one-time codes and magic links to the `next dev` output
+// instead of sending them, so you can sign in with no mail or SMS provider.
+const devMessaging: SeamlessAuthMessagingOptions = {
+  handlers: {
+    sendOtpEmail: async ({ to, token }) => {
+      console.log(`Dev code for ${to}: ${token}`)
+      return { accepted: true, provider: 'console', channel: 'email' }
+    },
+    sendOtpSms: async ({ to, token }) => {
+      console.log(`Dev code for ${to}: ${token}`)
+      return { accepted: true, provider: 'console', channel: 'sms' }
+    },
+    sendMagicLinkEmail: async ({ to, magicLinkUrl }) => {
+      console.log(`Dev magic link for ${to}: ${magicLinkUrl}`)
+      return { accepted: true, provider: 'console', channel: 'email' }
+    },
+  },
+}
+
+// A function, not a constant: `next build` imports route modules without your secrets.
+export function seamlessOptions(): SeamlessAuthHandlerOptions {
+  // Set AUTH_SERVER_ISSUER only when the auth server signs as a different URL from
+  // the one this app calls, as the local Docker stack does (http://auth:5312).
+  const issuer = process.env.AUTH_SERVER_ISSUER || undefined
+
+  return {
+    authServerUrl: process.env.AUTH_SERVER_URL!,
+    authServerIssuer: issuer,
+    audience: issuer ?? process.env.AUTH_SERVER_URL!,
+    cookieSecret: process.env.COOKIE_SIGNING_KEY!,
+    serviceSecret: process.env.API_SERVICE_TOKEN!,
+    jwksKid: process.env.JWKS_KID,
+    messaging: process.env.NODE_ENV === 'production' ? undefined : devMessaging,
+  }
+}
+```
+
+### 4. Serve `/auth` From One Route Handler
+
+```ts
+// app/auth/[...seamless]/route.ts
+import { createSeamlessAuthHandler, type SeamlessAuthRouteHandlers } from '@seamless-auth/nextjs'
+import { seamlessOptions } from '@/lib/seamless'
+
+// Every route the browser SDK calls: passkeys, magic links, OTP, refresh, logout.
+let handlers: SeamlessAuthRouteHandlers | undefined
+const seamless = () => (handlers ??= createSeamlessAuthHandler(seamlessOptions()))
+
+export const GET = (request: Request) => seamless().GET(request)
+export const POST = (request: Request) => seamless().POST(request)
+export const PUT = (request: Request) => seamless().PUT(request)
+export const PATCH = (request: Request) => seamless().PATCH(request)
+export const DELETE = (request: Request) => seamless().DELETE(request)
+```
+
+The handler is created on the first request, so `next build` passes without a `.env`. It needs the
+Node.js runtime, which is the default; do not set `runtime = 'edge'`. Export all five methods:
+`PUT` is new in 0.4.0.
+
+### 5. Protect Pages In `proxy.ts`
+
+```ts
+// proxy.ts
+import { NextResponse, type NextRequest } from 'next/server'
+import { hasSeamlessSession } from '@seamless-auth/nextjs'
+
+export function proxy(request: NextRequest) {
+  if (hasSeamlessSession(request.cookies, { cookieSecret: process.env.COOKIE_SIGNING_KEY! })) {
+    return NextResponse.next()
+  }
+
+  return NextResponse.redirect(new URL('/login', request.url))
+}
+
+export const config = { matcher: ['/dashboard/:path*'] }
+```
+
+The check is local, with no network call. A valid refresh cookie counts as signed in, because the
+browser renews an expired access cookie on its next call to `/auth`. `proxy.ts` is the Next.js 16
+name. On Next.js 15.5, name the file `middleware.ts`, export the function as `middleware`, and add
+`runtime: 'nodejs'` to `config`: the Edge runtime cannot verify the cookies. If your app uses a
+`src/` directory, the file goes in `src/`.
+
+### 6. Protect Your Own API Routes And Read The User
+
+```ts
+// app/api/me/route.ts
+import { cookies } from 'next/headers'
+import { getSeamlessClaims } from '@seamless-auth/nextjs'
+
+export async function GET() {
+  const claims = getSeamlessClaims(await cookies(), {
+    cookieSecret: process.env.COOKIE_SIGNING_KEY!,
+  })
+
+  if (!claims) return Response.json({ error: 'unauthenticated' }, { status: 401 })
+
+  return Response.json({ id: claims.id, roles: claims.roles })
+}
+```
+
+`getSeamlessClaims` verifies the access cookie locally and returns `id`, `roles`, and usually
+`email` and `phone`, or `null`. For a role check, `hasScopedRole(claims.roles, 'admin')`, also
+exported from `@seamless-auth/nextjs`.
+
+### 7. Add The Provider
+
+```tsx
+// app/layout.tsx
+import type { ReactNode } from 'react'
+import { cookies, headers } from 'next/headers'
+import { getSeamlessSession } from '@seamless-auth/nextjs'
+import { AuthProvider } from '@seamless-auth/react'
+import { seamlessOptions } from '@/lib/seamless'
+
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  // null is signed out. undefined (auth server unreachable) lets the provider find out in the browser.
+  const session = await getSeamlessSession(await cookies(), {
+    ...seamlessOptions(),
+    userAgent: (await headers()).get('user-agent') ?? undefined,
+  }).catch(() => undefined)
+
+  return (
+    <html lang="en">
+      <body>
+        <AuthProvider apiHost="" initialSession={session}>
+          {children}
+        </AuthProvider>
+      </body>
+    </html>
+  )
+}
+```
+
+`apiHost=""` sends every auth request to `/auth` on the page's own origin, the handler from step 4.
+`initialSession` renders the signed-in user on the first paint. `getSeamlessSession` never
+refreshes, by design: an expired access cookie returns `null` and the provider renews the session
+in the browser straight after the page loads.
+
+<Aside type="danger">
+  Never call your own `/auth/users/me` from server code with the browser's cookies forwarded. When
+  the access cookie has expired, the adapter refreshes inside that request, the browser never sees
+  the new refresh token, and its next refresh is treated as a replay that revokes the session.
+</Aside>
+
+### 8. A Sign-In Page
+
+`AuthRoutes`, the React SDK's built-in screens, route with react-router, so a Next.js app builds
+its sign-in screen from the hooks. This component signs in with a passkey when the account has
+one, falls back to an emailed code, and registers new accounts:
+
+```tsx
+// components/SignIn.tsx
+'use client'
+
+import { useState, type FormEvent } from 'react'
+import { useRouter } from 'next/navigation'
+import { useAuth, useAuthClient, usePasskeySupport } from '@seamless-auth/react'
+
+export default function SignIn() {
+  const router = useRouter()
+  const { login, handlePasskeyLogin, refreshSession } = useAuth()
+  const client = useAuthClient()
+  const { passkeySupported } = usePasskeySupport()
+
+  const [mode, setMode] = useState<'login' | 'register'>('login')
+  const [email, setEmail] = useState('')
+  const [code, setCode] = useState('')
+  const [codeSent, setCodeSent] = useState(false)
+  const [error, setError] = useState('')
+
+  async function finish() {
+    await refreshSession()
+    router.replace('/dashboard')
+    router.refresh()
+  }
+
+  async function start(event: FormEvent) {
+    event.preventDefault()
+    setError('')
+
+    if (mode === 'register') {
+      const { error } = await client.register({ email })
+      if (error) return setError('That account could not be created.')
+      return setCodeSent(true)
+    }
+
+    const { data, error } = await login(email, passkeySupported)
+    if (error) return setError('Sign-in could not start.')
+
+    // Passkey first when the account has one; otherwise fall back to an emailed code.
+    if (passkeySupported && data.loginMethods?.includes('passkey')) {
+      const { error } = await handlePasskeyLogin()
+      if (!error) return finish()
+    }
+
+    const { error: sendError } = await client.requestLoginEmailOtp()
+    if (sendError) return setError('The code could not be sent.')
+    setCodeSent(true)
+  }
+
+  async function verify(event: FormEvent) {
+    event.preventDefault()
+    const { error } =
+      mode === 'register'
+        ? await client.verifyEmailOtp(code)
+        : await client.verifyLoginEmailOtp(code)
+
+    if (error) {
+      return setError(error.status === 429 ? 'Too many attempts. Wait a few minutes.' : 'That code did not match.')
+    }
+    await finish()
+  }
+
+  return codeSent ? (
+    <form onSubmit={verify}>
+      <label>
+        The six-letter code we emailed you
+        <input value={code} onChange={(e) => setCode(e.target.value.trim())} autoComplete="one-time-code" />
+      </label>
+      <button type="submit">Verify</button>
+      {error && <p role="alert">{error}</p>}
+    </form>
+  ) : (
+    <form onSubmit={start}>
+      <label>
+        Email
+        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username webauthn" />
+      </label>
+      <button type="submit">{mode === 'login' ? 'Sign in' : 'Create account'}</button>
+      <button type="button" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>
+        {mode === 'login' ? 'New here? Create an account' : 'Have an account? Sign in'}
+      </button>
+      {error && <p role="alert">{error}</p>}
+    </form>
+  )
+}
+```
+
+```tsx
+// app/login/page.tsx
+import SignIn from '@/components/SignIn'
+
+export default function LoginPage() {
+  return <SignIn />
+}
+```
+
+Any client component reads the user with `useAuth()` (`user`, `isAuthenticated`, `logout`) and
+calls your own routes with `useAuthorizedFetch()`. Emailed codes are six letters, not digits. For
+magic links, SMS codes, and enrolling a passkey after registration, see
+[How To Build Your Own Auth UI](/build/custom-auth-ui); the Next.js starter's
+`src/components/SignIn.tsx` implements all of them.
+
+### 9. Environment Variables
+
+For an app run on the host against the local Docker stack:
+
+```bash
+# .env.local
+AUTH_SERVER_URL=http://localhost:5312
+AUTH_SERVER_ISSUER=http://auth:5312
+API_SERVICE_TOKEN=the-auth-servers-API_SERVICE_TOKEN
+COOKIE_SIGNING_KEY=output-of-openssl-rand-base64-48
+JWKS_KID=dev-main
+```
+
+| Variable             | What it is                                                                                                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AUTH_SERVER_URL`    | The Seamless Auth server this app calls. For a managed application, the Auth Server URL from the portal                                                       |
+| `AUTH_SERVER_ISSUER` | Only for an app run on the host against the local Docker stack, which signs as `http://auth:5312`. Leave it unset otherwise                                    |
+| `API_SERVICE_TOKEN`  | The secret shared with the auth server, 32 characters or more. Locally, the auth server's `API_SERVICE_TOKEN`; managed, a service token generated in the portal |
+| `COOKIE_SIGNING_KEY` | Signs the session cookies, 32 characters or more. Generate it with `openssl rand -base64 48`                                                                  |
+| `JWKS_KID`           | Key id on the service tokens the adapter signs. The local stack uses `dev-main`; the adapter warns while it is `dev-main`, so set your own in production      |
+
+None of these is `NEXT_PUBLIC_`: they stay on the server. The handler checks both secrets on the
+first request.
+
+---
+
+## What Not To Write Yourself
+
+With the route handler mounted, delete or never write:
+
+- JWT signing or verification with `jose` or `jsonwebtoken` in `middleware.ts` or route handlers
+- a `/api/login`, `/api/logout`, `/api/refresh`, or `/api/me` route for the session itself
+- code that sets or clears auth cookies, or stores tokens in `localStorage`
+- refresh-token rotation, reuse detection, or session revocation
+- a server-side refresh during rendering (see the warning in step 7)
+- password hashing, reset emails, or a passwords column
+- WebAuthn challenge and attestation handling for passkeys
+- one-time code or magic link generation, expiry, and rate limiting
+
+---
+
+## Related Docs
+
+- [Next.js](/build/nextjs): every handler option, the admin console route, and deployment
+- [React SDK](/build/react-sdk): `AuthProvider`, `useAuth()`, and the headless client
+- [How To Build Your Own Auth UI](/build/custom-auth-ui): every sign-in flow, step by step
+- [How To Secure Routes](/build/secure-routes): roles and scoped roles
+- [Server SDKs And Adapters](/build/server-sdks): the shared adapter options
+- [Add Passwordless Auth To An Express API](/build/express-without-jwt): the same, when Express is
+  the backend
+- [Cookie, Session, And Token Reference](/reference/cookies-sessions-tokens)
