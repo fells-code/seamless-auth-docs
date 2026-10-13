@@ -124,7 +124,7 @@ Optional values:
 | Option            | Default                            | Purpose                                                |
 | ----------------- | ---------------------------------- | ------------------------------------------------------ |
 | `authServerIssuer` | `authServerUrl`                   | Expected `iss` on the auth server's tokens and signed responses; see [Auth server issuer](#auth-server-issuer) |
-| `jwksKid`         | `dev-main`, with a startup warning | Active JWKS key ID; set it explicitly in production    |
+| `jwksKid`         | `dev-main`, with a startup warning | `kid` header on the HS256 service tokens the adapter signs, not the auth API's signing key ID; set it explicitly in production |
 | `cookieDomain`    | unset                              | Domain attribute for adapter cookies                   |
 | `cookieSecure`    | `true`                             | Secure attribute; set `false` only for local HTTP      |
 | `cookieSameSite`  | `none` if secure, else `lax`       | SameSite attribute for adapter cookies                 |
