@@ -52,7 +52,7 @@ guidance may extend them but must not contradict them.
 
 ## Purpose
 
-This project is a React/Vite documentation site for Seamless Auth.
+This project is an Astro Starlight documentation site for Seamless Auth.
 
 The docs should help readers do three things well:
 
@@ -77,7 +77,7 @@ When touching CLI docs, also inspect:
 
 - `../seamless-cli`
 
-Do not preserve outdated claims just because they already exist in `/docs`.
+Do not preserve outdated claims just because they already exist in `src/content/docs`.
 
 If the code and the docs disagree, treat the code as authoritative unless the user explicitly says the docs are intentionally describing planned behavior.
 

@@ -1,0 +1,28 @@
+name: Docs problem
+description: A wrong command, a broken link, or a page that does not match what the software does
+labels: ['documentation']
+body:
+  - type: input
+    id: page
+    attributes:
+      label: Page
+      description: The URL of the page
+      placeholder: https://docs.seamlessauth.com/start/quickstart
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What went wrong
+      description: For a command that failed, paste the command and its output.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: CLI version (`npx seamless-cli --version`), package versions, OS and Node version, if relevant
