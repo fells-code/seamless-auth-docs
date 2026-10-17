@@ -1,90 +1,63 @@
 # Seamless Auth Docs
 
-This repository contains the docs site for the Seamless Auth ecosystem.
+The source for [docs.seamlessauth.com](https://docs.seamlessauth.com), the documentation for Seamless Auth: open source, self-hostable, passwordless authentication.
 
-It is a React + Vite + MDX application that publishes product documentation for:
+The site covers the whole ecosystem:
 
-- `seamless-cli`
-- `seamless-auth-api`
-- `@seamless-auth/core`
-- `@seamless-auth/express`
-- `@seamless-auth/react`
-- `seamless-auth-admin-dashboard`
+- `seamless-auth-api`, the auth server
+- `@seamless-auth/express`, `@seamless-auth/fastify`, `@seamless-auth/nextjs` and the Go, Python and Rust server adapters
+- `@seamless-auth/react`, `@seamless-auth/react-native` and the Angular, Vue and Svelte bindings
+- `seamless-cli` and the starter templates
+- the admin console
 
-## Goals
+## Found a problem?
 
-The docs should work well for both humans and agents.
+A wrong command, a broken link or a page that no longer matches the code is worth reporting. [Open an issue](https://github.com/fells-code/seamless-auth-docs/issues/new/choose), or use "Edit this page" at the bottom of any page to propose a fix. See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
-That means they should:
+Security issues go to the [security policy](https://github.com/fells-code/.github/blob/main/SECURITY.md), not to a public issue.
 
-- explain package boundaries clearly
-- reflect the current behavior of sibling repos
-- separate shipped functionality from planned functionality
-- provide both walkthroughs and technical reference material
+## Local development
 
-## Current Scope
-
-The docs are in a strong place for:
-
-- ecosystem/package discovery
-- local scaffolding and operator setup
-- auth API, server SDK, React SDK, and admin dashboard reference
-- route, env var, and CLI lookup
-
-The next major docs expansion should happen when the Seamless CLI can:
-
-- provision deployment infrastructure directly
-- guide Seamless Auth integration into an existing project
-
-Until then, keep deployment and existing-project integration language clearly labeled as in progress
-or planned.
-
-## Local Development
-
-Install dependencies:
+Node 22.12 or later (`.nvmrc` pins 24).
 
 ```bash
 npm install
-```
-
-Start the docs site:
-
-```bash
 npm run dev
 ```
 
-The local site runs on [http://localhost:5170](http://localhost:5170).
+## Checks
 
-## Scripts
+CI runs these on every pull request:
 
 ```bash
-npm run dev
-npm run lint
 npm run typecheck
+npm run lint
 npm run build
 ```
 
-`npm run build` also regenerates `public/sitemap.xml`.
+`npm run check:matrix` checks the package compatibility matrix against the published versions. It also runs weekly in CI.
 
-Both `npm run dev` and `npm run build` also regenerate:
+## Layout
 
-- `public/search-index.json`
-- `src/generated/docs-manifest.json`
-
-## Content Structure
+The site is built with [Astro Starlight](https://starlight.astro.build). Pages are MDX under `src/content/docs/`, one directory per sidebar section:
 
 ```txt
-docs/
-  start/
-  build/
-  understand/
-  operate/
+src/content/docs/
+  start/            first run, quickstart, first admin
+  build/            SDKs, adapters and integration guides
+  understand/       users, sessions, auth events, data model
+  operate/          deploy, CLI, migration
+  compare/          honest comparisons with other auth products
   troubleshooting/
-  reference/
+  reference/        routes, environment variables, system config
 ```
 
-Page metadata and section ordering are managed in `src/content.ts`.
+The sidebar is generated from these directories (`astro.config.mjs`). `/llms.txt`, `/llms-full.txt` and a Markdown copy of every page are generated at build time for coding agents.
 
-## Agent Guidance
+## Writing guidance
 
-If you are making docs changes, read [AGENTS.md](./AGENTS.md) first.
+Read [AGENTS.md](./AGENTS.md) before changing content. It applies to people as much as to agents: check claims against the code, keep shipped and planned features clearly apart, and cite a dated source for any fact about another product.
+
+## License
+
+Apache-2.0. See [LICENSE](./LICENSE).

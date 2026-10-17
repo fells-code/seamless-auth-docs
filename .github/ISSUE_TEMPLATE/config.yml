@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/fells-code/.github/blob/main/SECURITY.md
+    about: Please report security issues privately, not as a public issue.
+  - name: Bug in Seamless Auth itself
+    url: https://github.com/fells-code/seamless-auth-api/issues/new/choose
+    about: For a bug in the auth server or an SDK rather than in the docs, file it in the repository that ships the code.

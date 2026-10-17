@@ -1,0 +1,15 @@
+name: Missing docs
+description: Something you needed to know that the docs do not cover
+labels: ['documentation', 'enhancement']
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What you were trying to do
+    validations:
+      required: true
+  - type: textarea
+    id: looked
+    attributes:
+      label: Where you looked
+      description: Pages you checked, or what you searched for
