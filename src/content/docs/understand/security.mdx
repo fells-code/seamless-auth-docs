@@ -1,0 +1,403 @@
+---
+title: 'Security Posture and Threat Model'
+description: 'What the Seamless Auth API defends against and what it does not, with its session, key, audit, rate limit and disclosure design, each linked to the code at v0.19.1.'
+sidebar:
+  order: 5
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+This page is written for a security reviewer. It states what the Seamless Auth API
+(`seamless-auth-api`) does to protect authentication, which risks it accepts on purpose, and
+where its responsibility ends. Every claim links to the code or configuration at the
+[`v0.19.1`](https://github.com/fells-code/seamless-auth-api/tree/v0.19.1) release tag, so it
+can be checked rather than taken on trust.
+
+<Aside type="note">
+  This page describes `seamless-auth-api` v0.19.1. The project is pre-1.0. Seamless Auth holds no
+  security certification: FIDO certification is deferred to v1.0, and FIDO self-validation results
+  are not published yet.
+</Aside>
+
+The longer rationale for each accepted tradeoff lives in the API repository's
+[`docs/security-posture.md`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/docs/security-posture.md)
+and operational guidance in
+[`docs/production-operations.md`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/docs/production-operations.md).
+
+---
+
+## Trust Boundaries
+
+The API is a bearer/JSON service. It sets and reads no browser cookies (there is no cookie
+handling anywhere in [`src/`](https://github.com/fells-code/seamless-auth-api/tree/v0.19.1/src)).
+The intended topology is:
+
+```txt
+browser -> @seamless-auth/react (cookies) -> server adapter (@seamless-auth/server, @seamless-auth/express) -> auth API (Bearer/JSON)
+```
+
+| Party                  | What the API trusts it with                                                                                                                                                                                                                                                                                                                                                                                     |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Server adapter         | Holding tokens on the browser's behalf, setting cookies, and CSRF protection. Cookie and CSRF behaviour belongs to [`seamless-auth-server`](https://github.com/fells-code/seamless-auth-server), not to this API.                                                                                                                                                                                              |
+| Service token holders  | A holder of `SEAMLESS_SERVICE_TOKEN` can mint internal service tokens, choose the client IP and user agent recorded for a request ([`trustedClientContext.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/middleware/trustedClientContext.ts)), and use external delivery mode, which returns OTP codes and magic links to the caller instead of sending them. Treat it as an admin secret. |
+| Postgres               | All durable state. A role that owns the tables can rewrite them, including the audit trail (see [Audit Logging](#audit-logging)).                                                                                                                                                                                                                                                                              |
+| Whoever runs the image | Environment variables, signing keys and the choice of `NODE_ENV`.                                                                                                                                                                                                                                                                                                                                              |
+
+Internal service tokens are HMAC JWTs (`HS256`, `HS384` or `HS512`) and are refused when they carry
+no `exp` or an `exp` more than an hour and a minute away
+([`authenticateServiceToken.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/middleware/authenticateServiceToken.ts)).
+
+---
+
+## Threat Model Summary
+
+### What it defends against
+
+| Threat                                     | Control                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Phishing of passkey credentials            | WebAuthn verification checks the expected origin and RP ID ([`webauthn.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/controllers/webauthn.ts)).                                                                                                                                                                                                                                                                                                                                       |
+| WebAuthn assertion replay                  | Challenges are stored server side with a 300 second TTL and a per-flow purpose, and consumed on read before verification ([`webauthnChallengeService.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/services/webauthnChallengeService.ts)).                                                                                                                                                                                                                                         |
+| Guessing OTP and TOTP codes                | Per-account lockout on failed codes, plus per-IP and per-identity flow rate limits (see [Authentication Factors](#authentication-factors) and [Availability and Scaling](#availability-and-scaling)).                                                                                                                                                                                                                                                                                                         |
+| Account enumeration on `/login`            | An unknown identifier gets a signed decoy pre-auth token, and every endpoint that accepts a pre-auth token answers a decoy the way it answers a real account. `defineRoute` refuses to register an `auth: 'ephemeral'` route without a decoy responder ([`defineRoute.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/lib/defineRoute.ts)), and `/login` holds every pre-auth answer, real or decoy, to a minimum time, `LOGIN_RESPONSE_FLOOR_MS` (default 250 ms) ([`authentication.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/controllers/authentication.ts)). |
+| Stolen refresh tokens                      | Single-use rotation with reuse detection that revokes the session chain (see [Session Management](#session-management)).                                                                                                                                                                                                                                                                                                                                                                                      |
+| Token confusion                            | Every JWT is verified for `RS256`, issuer, audience and `typ`, so an access token is not accepted where a pre-auth token is expected, or the reverse ([`sessionService.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/services/sessionService.ts)).                                                                                                                                                                                                                                       |
+| OAuth account takeover by unverified email | Linking to or creating an account from an OAuth profile requires the provider to assert the email is verified ([`oauthService.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/services/oauthService.ts)). OAuth `state` is HMAC signed, expires after ten minutes and is refused on reuse, and PKCE is on unless a provider sets `pkce: false`.                                                                                                                                          |
+| Requests from disallowed browser origins   | A request whose `Origin` is not allowlisted is refused with `403` before the route runs, and recorded as `request_suspicious` ([`app.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/app.ts)).                                                                                                                                                                                                                                                                                         |
+| Tampering with the audit trail             | Hash-chained, append-only `auth_events` enforced by database triggers (see [Audit Logging](#audit-logging)).                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Running a development build in public      | The server refuses to start with `NODE_ENV` other than `production` when `ISSUER` or `APP_ORIGINS` names a non-local host, unless `SEAMLESS_ALLOW_INSECURE_DEV=true` is set on purpose ([`devModeGuard.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/config/devModeGuard.ts)). Development mode is what enables on-disk signing keys, guessable fallback secrets, `/docs`, and the switch that disables rate limits.                                                                       |
+| Secrets in logs and API responses          | Log lines and auth event metadata are redacted, and control characters in log lines are escaped ([`redaction.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/utils/redaction.ts), [`logger.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/utils/logger.ts)).                                                                                                                                                                                                     |
+
+### What it does not defend against
+
+- **A compromised server adapter or service token.** Either can act for any user the adapter
+  serves, and the service token can read OTP codes and magic links through external delivery mode.
+- **A compromised database owner role.** It can disable the audit triggers and rewrite the chain
+  consistently. Least privilege and external anchors are the mitigation, and both are the
+  operator's to set up.
+- **A compromised host or environment.** Signing keys and secrets arrive as environment variables.
+  Anyone who can read the process environment can sign tokens.
+- **Browser-side attacks on cookies.** Cookie flags, CSRF and session cookie lifecycle belong to the
+  server adapter.
+- **A compromised email inbox or phone number.** OTP and magic link factors prove possession of an
+  address. Passkeys are the factor that does not depend on one.
+- **Volumetric denial of service.** Rate limits are per process and in memory. Put a proxy or
+  load balancer limit in front for anything beyond request-level abuse.
+
+### Accepted risks
+
+These are deliberate, stated in
+[`docs/security-posture.md`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/docs/security-posture.md),
+and not open bugs.
+
+| Risk                                                            | Why it is accepted                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Lockout discloses that an account exists                        | Only a real account can be locked. A locked account with no passkey answers `/login` with `423` and `retryAfterSeconds`; one with a passkey continues with `loginMethods: ["passkey"]`. It needs prior failed attempts against that account, and hiding it would leave a locked-out user with no explanation ([`lockoutPolicyService.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/services/lockoutPolicyService.ts)).                                                                                                                                      |
+| A pre-auth token proves only possession of an address           | `/login` and `/registration/register` mint a pre-auth (ephemeral) token from an identifier alone. It can only continue a flow that still needs an OTP code, a magic link or a WebAuthn assertion. Anything that changes how an account signs in, such as passkey enrollment, requires an access session ([`webauthn.routes.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/routes/webauthn.routes.ts)).                                                                                                                                                        |
+| Pre-auth tokens can be replayed until they expire               | They are signed with a five minute expiry and are not single use ([`token.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/lib/token.ts)). The continuation endpoints are rate limited, and the credential each one needs is single use.                                                                                                                                                                                                                                                                                                                       |
+| Audit writes are best effort                                    | A failed write to `auth_events` is logged and swallowed rather than failing the request ([`authEventService.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/services/authEventService.ts)). No security control reads the audit trail, and `/health/status` reports `degraded` for five minutes after a failure ([`auditHealth.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/services/auditHealth.ts)). A deployment cannot make authentication fail closed on audit failure today. |
+| Email and phone are stored in plaintext                         | They are lookup keys for sign-in and admin search ([`users.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/models/users.ts)). Use database storage encryption to protect them at rest.                                                                                                                                                                                                                                                                                                                                                                         |
+| External delivery mode distinguishes a decoy                    | A real account's OTP or magic link answer carries a `delivery` block and a decoy's does not. The mode requires a valid internal service token, whose holder can already list users through the admin API.                                                                                                                                                                                                                                                                                                                                                                     |
+| Per-instance limits                                             | Rate limit counters, the `system_config` cache, the OAuth state replay cache and the audit degraded flag are held per process. See [Availability and Scaling](#availability-and-scaling).                                                                                                                                                                                                                                                                                                                                                                                       |
+| Development mode can be forced on a public host                 | `SEAMLESS_ALLOW_INSECURE_DEV=true` overrides the guard and logs a warning at boot. It exists for deliberate test deployments and should never be set in production.                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Metadata outage degrades attestation checks                     | Under `attestation: 'direct'`, when the FIDO Metadata Service blob cannot be fetched, registration continues without metadata validation rather than failing, so a model the service does not list is not refused even with `requireKnownAuthenticator`. The fetch is retried on later registrations, and `credentials.attestationVerified` stays false meanwhile ([`metadataServiceBootstrap.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/services/metadataServiceBootstrap.ts)).                                                                                                                                                                                                                                                                                                                             |
+
+---
+
+## Authentication Factors
+
+| Factor                 | How it is protected                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Passkeys (WebAuthn)    | Origin and RP ID are verified. User verification defaults to `required` and attestation to `none` (`authenticator_policy`, schema in `@seamless-auth/types`). Supported algorithms are EdDSA, ES256 and RS256 ([`webauthnAlgorithms.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/lib/webauthnAlgorithms.ts)). Synced passkeys are allowed by default and can be blocked with `syncedPasskeys: 'block'`; AAGUID allow and deny lists and `requireKnownAuthenticator` apply under `attestation: 'direct'` ([`authenticatorPolicyService.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/services/authenticatorPolicyService.ts)). |
+| Email and SMS OTP      | Email codes are six random uppercase letters and SMS codes six random digits, both drawn from `crypto.randomInt`, valid for five minutes, stored as SHA-256 hashes and compared in constant time ([`otp.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/utils/otp.ts)).                                                                                                                                                                                                                                                                                   |
+| Magic links            | 32 random bytes, stored as a SHA-256 hash, valid for 15 minutes, consumed once by a conditional update, and bound to the sign-in attempt that requested them. A link opened on a different device than the one that asked for it needs an explicit confirmation step ([`magicLinks.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/controllers/magicLinks.ts)).                                                                                                                                                                                              |
+| TOTP                   | Secrets are encrypted at rest with AES-256-GCM under a key derived from `TOTP_SECRET_ENCRYPTION_KEY`, and the last used counter is stored so a code cannot be reused ([`totpService.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/services/totpService.ts)).                                                                                                                                                                                                                                                                                         |
+| OAuth                  | Covered under [What it defends against](#what-it-defends-against).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Step-up                | Routes marked with `requireStepUp` need a step-up verification on the current session within the last five minutes by default ([`stepUpService.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/services/stepUpService.ts)). Audit export is one of them.                                                                                                                                                                                                                                                                                        |
+
+### Account lockout
+
+The policy is `lockout_policy`, default
+`{ "enabled": true, "maxFailures": 10, "windowSeconds": 900, "lockoutSeconds": 900 }`
+([`systemConfig.defaults.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/config/systemConfig.defaults.ts)).
+
+- An account locks when its last `maxFailures` counted failures fall within `windowSeconds`, and
+  stays locked for `lockoutSeconds` after the most recent of them
+  ([`lockoutPolicyService.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/services/lockoutPolicyService.ts)).
+- Counted failures are failed logins, OTP codes, TOTP codes (sign-in and step-up) and magic links
+  ([`authFailureCounter.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/services/authFailureCounter.ts)).
+  Failed passkey assertions are not counted.
+- Lockout blocks the code factors only. Passkey sign-in stays available, so anyone who knows an
+  address cannot lock its owner out of their passkey
+  ([GHSA-66gq-4pwg-33jq](https://github.com/fells-code/seamless-auth-api/security/advisories/GHSA-66gq-4pwg-33jq)).
+- Failures are stored in the `auth_failures` table, separate from the audit trail, so every
+  instance sees the same count. If the count cannot be read, the account is treated as locked.
+
+---
+
+## Session Management
+
+More detail on session records is in the [Session Model](/understand/sessions).
+
+| Property                 | Behaviour                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Refresh token format     | 32 random bytes, opaque, not a JWT ([`token.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/lib/token.ts)).                                                                                                                                                                                                                                                                                                                                 |
+| Refresh token at rest    | Only an HMAC-SHA256 fingerprint keyed with `REFRESH_TOKEN_LOOKUP_SECRET` is stored, and it is compared in constant time on lookup ([`sessionService.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/services/sessionService.ts)).                                                                                                                                                                                                              |
+| Rotation                 | Every refresh issues a new refresh token and links the old session to the new one. The link is written by a single conditional statement, so of two concurrent refreshes of the same token only one can win; the loser's new session is revoked with `rotation_race_lost` ([`authentication.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/controllers/authentication.ts)).                                                              |
+| Reuse detection          | Presenting an already rotated refresh token revokes the session chain from that point forward, records `refresh_token_suspicious`, and answers `401 refresh_token_reused`. Two legitimate concurrent refreshes of one token therefore sign the user out.                                                                                                                                                                                                         |
+| Absolute lifetime        | Rotation does not extend a session. Every session in a chain carries `chainStartedAt`, and its `expiresAt` is `chainStartedAt` plus `refresh_token_ttl`. Refusals are recorded with `absolute_lifetime_reached`.                                                                                                                                                                                                                                                 |
+| Idle lifetime            | A session that is not refreshed within `session_idle_ttl` (default `8h`) expires. Refusals are recorded with `idle_timeout`.                                                                                                                                                                                                                                                                                                                                       |
+| Access token checks      | Access tokens are RS256 JWTs carrying the session id. The API checks on every request that the session is not revoked, not rotated and not expired, and that the user is not revoked ([`sessionService.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/services/sessionService.ts)). A relying party that verifies the JWT locally against JWKS cannot see a revocation until the token expires, so keep `access_token_ttl` short. |
+| Concurrent session cap   | `max_concurrent_sessions` is unlimited (`null`) by default. When set, a new sign-in at the limit succeeds and the user's oldest sessions are revoked with `concurrent_session_limit`, recorded as `session_evicted` ([`concurrentSessionPolicy.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/services/concurrentSessionPolicy.ts)). A revocation that fails is logged and the sign-in continues.                                      |
+| Revocation               | Users revoke their own sessions through `DELETE /sessions/:id` and `DELETE /sessions` ([`session.routes.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/routes/session.routes.ts)), and admins through `DELETE /admin/sessions/by-id/:id` and `DELETE /admin/sessions/:userId/revoke-all` ([`admin.routes.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/routes/admin.routes.ts)). Revocation takes effect on the next request the API sees.                                                                                                                                                                                                                                                                                                                                                             |
+
+`access_token_ttl` and `refresh_token_ttl` have no built-in default. The server refuses to boot
+until `ACCESS_TOKEN_TTL` and `REFRESH_TOKEN_TTL` are set or the values are already in
+`system_config`
+([`bootstrapSystemConfig.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/config/bootstrapSystemConfig.ts)).
+The shipped [`.env.example`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/.env.example)
+uses `30m` and `1d`. See [System Config](/reference/system-config) for every key.
+
+---
+
+## Cryptography and Keys
+
+| Item                        | Algorithm and handling                                                                                                                                                                                                                                                                                                                   |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Access and pre-auth tokens  | RS256 JWTs with `iss` and `aud` equal to `ISSUER`, `typ` of `access` or `ephemeral`, and a `kid` header ([`token.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/lib/token.ts)).                                                                                                                                  |
+| Refresh token fingerprints  | HMAC-SHA256 keyed with `REFRESH_TOKEN_LOOKUP_SECRET`.                                                                                                                                                                                                                                                                                    |
+| OTP codes and magic links   | SHA-256 hashes.                                                                                                                                                                                                                                                                                                                          |
+| TOTP secrets                | AES-256-GCM, key derived by SHA-256 from `TOTP_SECRET_ENCRYPTION_KEY`.                                                                                                                                                                                                                                                                   |
+| OAuth state and PKCE        | HMAC-SHA256 keyed with `OAUTH_STATE_SECRET`.                                                                                                                                                                                                                                                                                             |
+| Decoy subjects              | HMAC-SHA256 keyed with `DECOY_SUBJECT_SECRET` ([`decoyPrincipal.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/services/decoyPrincipal.ts)).                                                                                                                                                                    |
+| Internal service tokens     | HMAC JWTs keyed with `SEAMLESS_SERVICE_TOKEN`.                                                                                                                                                                                                                                                                                           |
+
+### JWKS signing keys
+
+In production the server reads its keys from environment variables
+([`signingKeyStore.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/utils/signingKeyStore.ts)):
+
+- `SEAMLESS_JWKS_PUBLIC_KEYS` lists every published public key. `/.well-known/jwks.json`
+  publishes all of them, and verification picks the key by the token's `kid`.
+- `SEAMLESS_JWKS_ACTIVE_KID` selects the signing key, and `SEAMLESS_JWKS_KEY_<kid>_PRIVATE` holds
+  its private half.
+- Keys are re-read every five minutes within a process. The server never writes or rotates keys
+  itself.
+
+Rotation is three deploys: add the new public key, switch `SEAMLESS_JWKS_ACTIVE_KID` to it, then
+remove the old key once `access_token_ttl` has passed. Access tokens are the longest-lived signed
+tokens, and refresh tokens are not signed, so rotation does not affect them.
+
+Outside production the server generates an RSA key pair on disk under `keys/dev` and signs with
+it. The [development mode guard](#what-it-defends-against) keeps that from running on a public
+host by accident.
+
+### Secrets that fall back to the service token
+
+`REFRESH_TOKEN_LOOKUP_SECRET`, `TOTP_SECRET_ENCRYPTION_KEY`, `OAUTH_STATE_SECRET` and
+`DECOY_SUBJECT_SECRET` each fall back to the service token when unset, and the server logs a
+warning at boot naming each one that does
+([`serviceToken.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/config/serviceToken.ts)).
+While they share it, rotating the service token signs every user out and makes every stored TOTP
+secret unreadable.
+
+To separate them: set each of the four to the current service token value and deploy, then rotate
+the service token on the API and every server adapter. Do not set them to new values in the first
+step, because stored refresh fingerprints and TOTP secrets were made with the old value. The
+fallback is deprecated and the boot warning states it is removed in v0.20.
+
+`SEAMLESS_SERVICE_TOKEN` and the older `API_SERVICE_TOKEN` are both accepted. The server refuses
+to start if both are set to different values.
+
+Outside production, unset secrets fall back to fixed development values. In production, the server
+throws instead of using them.
+
+---
+
+## Audit Logging
+
+Sign-in outcomes, factor verifications, session lifecycle, admin actions and refused requests are
+written to `auth_events`. See [Auth Events and Auditing](/understand/authevents) for the event model.
+
+### Integrity
+
+The protections are installed by the migration
+[`20261008130000-protect-auth-events.cjs`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/migrations/20261008130000-protect-auth-events.cjs):
+
+- **Hash chain.** An insert trigger gives each row a `seq` and
+  `hash = sha256(prev_hash || payload)`. The chain head is a one-row table advanced with an
+  `UPDATE`, so concurrent inserts serialise on its row lock.
+- **Append-only.** Triggers refuse every `UPDATE` and `TRUNCATE`, and every `DELETE` unless the
+  transaction has set `seamless.audit_retention = 'on'`, which only the retention job does.
+- **No user foreign key.** Deleting a user no longer rewrites that user's audit rows.
+
+### Integrity check
+
+`GET /admin/auth-events/integrity` (admin read) recomputes every hash and reports the first
+`hash_mismatch`, `sequence_gap`, `broken_link` or `head_mismatch`, together with the current head
+and the anchor hash of the oldest remaining row
+([`auditIntegrity.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/services/auditIntegrity.ts),
+[`admin.routes.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/routes/admin.routes.ts)).
+
+<Aside type="caution">
+  A database role that owns `auth_events` can disable the triggers and rewrite the chain
+  consistently, and nothing inside the database can detect that. Run the application as a role
+  without `UPDATE`, `DELETE` or `TRUNCATE` on `auth_events`, and record the integrity check's
+  `head` somewhere the database cannot reach.
+</Aside>
+
+### Export
+
+`GET /admin/auth-events/export?from=&to=` (admin read, plus a fresh step-up) streams a contiguous
+`seq` range as JSON lines, each with its `prevHash`, `hash` and the exact `payload` that was hashed,
+followed by a `manifest` line. The file verifies on its own without the database. The export is
+itself recorded as an auth event
+([`auditExport.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/services/auditExport.ts)).
+
+### Retention
+
+`AUDIT_RETENTION_DAYS` unset means events are kept forever. When it is set together with
+`AUDIT_ARCHIVE_DIR`, a daily job archives expired events to that directory and only then deletes
+them. It only removes a contiguous run from the start of the chain and never the newest event, so
+what remains still verifies. With `AUDIT_RETENTION_DAYS` set and no archive directory, nothing is
+deleted
+([`auditRetention.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/services/auditRetention.ts)).
+
+The `auth_failures` table used by lockout is not pruned by this job.
+
+### Write failures
+
+Audit writes are best effort (see [Accepted risks](#accepted-risks)). Lockout reads
+`auth_failures`, not the audit trail, so a failed audit write cannot disable it
+([GHSA-2r8w-h4h9-jw8p](https://github.com/fells-code/seamless-auth-api/security/advisories/GHSA-2r8w-h4h9-jw8p)).
+
+---
+
+## Availability and Scaling
+
+Rate limiting is layered
+([`rateLimit.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/middleware/rateLimit.ts),
+[`slowDown.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/middleware/slowDown.ts)):
+
+- a global per-client limit (`rate_limit`, 50 requests a minute when unset) and a progressive
+  slow-down after `delay_after` requests (25 when unset),
+- per-flow limits for OTP, magic link, registration and OAuth, keyed by identity where one is known
+  and by client address otherwise (`flow_rate_limits`).
+
+`DISABLE_AUTH_RATE_LIMITS=true` turns these limiters off for local testing and is ignored under
+`NODE_ENV=production`
+([`rateLimitsDisabled.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/middleware/rateLimitsDisabled.ts)).
+Behind a proxy, set `TRUST_PROXY` so the client address is the real one. A server adapter can pass
+the browser's address in `x-seamless-client-ip`, which is honoured only with a valid internal
+service token.
+
+### Per-instance limits
+
+Sessions, refresh rotation, the lockout counter, OTP codes, magic links, WebAuthn challenges,
+`system_config` and the audit trail live in Postgres and are shared by every instance. These are
+held per process:
+
+| State                             | With more than one instance                                                                                                                                                                                                                                                                                    |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rate limit and slow-down counters | In-memory stores. Each instance counts on its own, so a client spread across N instances gets up to N times the budget. Route by client address or enforce a limit at the proxy as well.                                                                                                                     |
+| `system_config` cache             | Five minutes per process ([`getSystemConfig.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/config/getSystemConfig.ts)). A config write clears it only on the instance that served the write. Restart the instances when a change, such as a lockout policy or token lifetime, must apply at once. |
+| OAuth `state` replay cache        | Consumed states are remembered for ten minutes by the instance that consumed them ([`oauthService.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/src/services/oauthService.ts)). Another instance could accept a replayed callback in that window. The state is still signed and expiring, and the provider's authorization code is single use.  |
+| Audit degraded flag               | `/health/status` reports `degraded` only on the instance whose write failed. Monitor every instance.                                                                                                                                                                                                         |
+
+### Production caveats
+
+- Set `NODE_ENV=production`. Without it the development defaults above apply, and the server will
+  not start on a public `ISSUER` or `APP_ORIGINS` unless forced.
+- Set every secret explicitly rather than relying on the service token fallback.
+- Use HTTPS end to end, and restrict `APP_ORIGINS`, `origins` and `rpid` to exact values.
+- Back up Postgres and test restores.
+- Grant the application database role no `UPDATE`, `DELETE` or `TRUNCATE` on `auth_events`.
+
+---
+
+## Vulnerability Disclosure
+
+Report a vulnerability privately, not in a public issue:
+
+- through GitHub private vulnerability reporting, by opening
+  [a new report](https://github.com/fells-code/seamless-auth-api/security/advisories/new) on the
+  API repository, or
+- by email to **security@seamlessauth.com** with the subject `Security Issue: seamless-auth-api`.
+
+The project has a single maintainer. It aims to acknowledge a report within three business days
+and to fix critical vulnerabilities within 30 days, and discloses fixes as GitHub security
+advisories once a fixed release is available. Cookie and CSRF issues usually belong to
+[`seamless-auth-server`](https://github.com/fells-code/seamless-auth-server); reporting them to the
+API is fine, and they will be moved.
+
+### Supported versions
+
+Seamless Auth API is pre-1.0. Security fixes land on `main` and ship in the next release of the
+latest minor line. Older minor lines receive no backports, so the fix for a vulnerability is to
+upgrade.
+
+| Version          | Supported |
+| ---------------- | --------- |
+| 0.19.x (latest)  | Yes       |
+| 0.18.x and older | No        |
+
+Under 0.x a minor release can contain breaking changes. Read the
+[changelog](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/CHANGELOG.md) before
+upgrading across a minor version.
+
+### Published advisories
+
+| Advisory                                                                                             | Severity | Summary                                                                               | Affected  | Fixed in |
+| ---------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------- | --------- | -------- |
+| [GHSA-9jg2-jjqq-3346](https://github.com/fells-code/seamless-auth-api/security/advisories/GHSA-9jg2-jjqq-3346) | High     | Magic link sign-in issued a session to the requesting device repeatedly once clicked  | 0.18.0 and earlier | 0.19.0   |
+| [GHSA-66gq-4pwg-33jq](https://github.com/fells-code/seamless-auth-api/security/advisories/GHSA-66gq-4pwg-33jq) | Medium   | Anyone who knew an account's email could lock it out of every method, passkeys included | 0.18.0 and earlier | 0.19.0   |
+| [GHSA-p3fh-cq88-92h6](https://github.com/fells-code/seamless-auth-api/security/advisories/GHSA-p3fh-cq88-92h6) | Critical | OAuth sign-in linked to existing accounts on an unverified provider email             | 0.15.1 and earlier | 0.16.0   |
+| [GHSA-2r8w-h4h9-jw8p](https://github.com/fells-code/seamless-auth-api/security/advisories/GHSA-2r8w-h4h9-jw8p) | High     | An audit write failure silently disabled account lockout                              | 0.7.4 and earlier | 0.8.0    |
+| [GHSA-7f64-r335-j842](https://github.com/fells-code/seamless-auth-api/security/advisories/GHSA-7f64-r335-j842) | Medium   | The WebAuthn challenge was not consumed on the authentication path                    | 0.7.4 and earlier | 0.8.0    |
+
+The current list is always on the repository's
+[security advisories page](https://github.com/fells-code/seamless-auth-api/security/advisories).
+
+---
+
+## Supply Chain and Image Verification
+
+Release images at `ghcr.io/fells-code/seamless-auth-api` are built by
+[`docker-publish.yml`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/.github/workflows/docker-publish.yml),
+which [`release.yml`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/.github/workflows/release.yml)
+calls after a release. The workflow:
+
+- scans the image with Trivy and fails the release on a fixable `HIGH` or `CRITICAL` finding,
+- builds `linux/amd64` and `linux/arm64` with an SPDX SBOM and a SLSA provenance statement
+  (`sbom: true`, `provenance: mode=max`) attached to the image index,
+- signs the index digest with cosign keyless signing, so there is no long-lived signing key.
+
+Verify the signature before you deploy, then deploy by digest:
+
+```bash
+cosign verify ghcr.io/fells-code/seamless-auth-api:v0.19.1 \
+  --certificate-identity-regexp '^https://github\.com/fells-code/seamless-auth-api/\.github/workflows/docker-publish\.yml@refs/(heads/main|tags/v.*)$' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+A passing check shows the image was signed by `docker-publish.yml` in `fells-code/seamless-auth-api`
+on GitHub Actions and recorded in the public Rekor transparency log. Do not loosen the identity to
+the whole repository. The SBOM and provenance are BuildKit attestations inside the signed index;
+read them by the verified digest with `docker buildx imagetools inspect`.
+
+Source code checks run in CI:
+
+- CodeQL with the `security-extended` query suite on every pull request, every push to `main`
+  and weekly, with a gate that fails while any alert is open
+  ([`codeql.yml`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/.github/workflows/codeql.yml)).
+- `npm audit --omit=dev --audit-level=high` on production dependencies
+  ([`ci.yml`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/.github/workflows/ci.yml)).
+
+---
+
+## Related Docs
+
+- [Session Model](/understand/sessions)
+- [Auth Events and Auditing](/understand/authevents)
+- [Cookies, Sessions, and Tokens](/reference/cookies-sessions-tokens)
+- [System Config](/reference/system-config)
+- [Environment Variables](/reference/environment-variables)
