@@ -40,7 +40,6 @@ Common examples include:
 - `admin_session_revoked`
 - `admin_device_replacement_recovery`
 - `request_suspicious`
-- `bootstrap_admin_granted`
 
 Exact event types are implementation details, but the event stream should cover authentication,
 MFA, OAuth, admin actions, suspicious requests, and recovery flows.
@@ -100,7 +99,7 @@ You can use auth events to:
 - detect repeated login failures
 - track unusual IP behavior
 - surface suspicious request patterns
-- review bootstrap and admin-related activity
+- review admin-related activity
 - investigate OAuth account-linking failures
 - confirm session revocation and device replacement recovery actions
 

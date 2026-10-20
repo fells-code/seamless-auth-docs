@@ -16,7 +16,8 @@ import Image from '../../../components/Image.astro';
 ## Create Your First Admin
 
 The first admin of a local stack is whoever registers with the owner email you gave `seamless init`.
-There is no invite to create and no admin command to run.
+There is no invite to create and no admin command to run, and you never need to read container
+logs.
 
 ---
 
@@ -57,15 +58,25 @@ Open `http://localhost:5173` and register with the same email you gave `init`.
 
 ## Step 2: Enter The Code
 
-In local development the starter API logs one-time codes instead of sending email. Read the code
-from its logs:
+The local stack sends no email. When the page asks for a code, get one from the project directory:
 
 ```bash
-docker compose logs -f api
+npx seamless-cli owner-code
 ```
 
-Look for a line like `Dev OTP for admin@example.com: 123456`, enter the code, and enroll a passkey
-when prompted.
+It waits for the auth server, reads the owner address `init` recorded, and prints a code for it:
+
+```txt
+Code for admin@example.com: 4K7QZP
+```
+
+Enter that code, and enroll a passkey when prompted.
+
+<Aside type="tip">
+  Run it after the page asks for a code. It replaces any code sent before, so a code printed earlier
+  stops working once the page sends a new one; running the command again fixes that. Each code
+  expires after 5 minutes.
+</Aside>
 
 ---
 
@@ -106,7 +117,7 @@ instead.
 ## What Just Happened
 
 - `init` recorded your email as the owner
-- registration with that email verified you controlled it
+- registration with that email, and the code `owner-code` printed for it, verified the account
 - the new account received the admin roles at creation
 - the admin console became accessible through normal auth state
 

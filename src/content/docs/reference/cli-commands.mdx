@@ -19,6 +19,7 @@ The npm package is named `seamless-cli`. The executable binary is named `seamles
 | `seamless add [path]`          | Add Seamless Auth to an existing project: connect an auth server, write `.env`, install, print the code |
 | `seamless templates list`      | List the starters `init` can scaffold and the flags that select them                       |
 | `seamless check [--strict]`    | Validate generated project config, Docker, Compose, containers, and local health endpoints |
+| `seamless owner-code [email]`  | Print a one-time code for the owner of a local stack, to finish registering the first admin |
 | `seamless verify [flags]`      | Run the cross-package auth conformance harness (api / adapter / react matrix)              |
 | `seamless profile <sub>`       | Manage the instances the CLI targets, and sign in to one with `profile login`              |
 | `seamless login [identifier]`  | Sign in to the Seamless portal (managed control plane) with email OTP                      |
@@ -41,7 +42,8 @@ default and on an instance with `--profile <name>`. The `profile`, `sessions`, `
 self-hosted), signed in with `seamless profile login`.
 
 There is no `bootstrap-admin` command. The first admin is the account registered with the owner
-email you give `init`. See [Create Your First Admin](/start/firstadmin).
+email you give `init`, and `owner-code` prints the code that registration asks for. See
+[Create Your First Admin](/start/firstadmin).
 
 Use `npx seamless-cli ...` when you do not have the package installed globally:
 
@@ -372,6 +374,30 @@ recorded in `seamless.config.json`.
 | `--strict` | Exit 1 when any check failed, for a health-check script or CI gate. Without it, `check` exits 0 |
 
 It does not currently check Terraform, AWS CLI, or deployment state.
+
+---
+
+## `owner-code`
+
+```bash
+seamless owner-code [email] [--url <auth-url>] [--json]
+```
+
+Available in seamless-cli 0.24.0 or later. Prints a one-time email code for the owner of a local
+stack, so the first admin can finish registering without reading container logs. Register in the
+web app with the owner address first, then run this from the project root when the page asks for a
+code.
+
+It waits for the auth server to answer `/health/status`, then registers the address with external
+delivery, which the scaffolded stack allows in development, and prints the code from the response.
+The auth server keeps one email code per account, so the printed code replaces the one the page
+sent and works on that page. Each code expires after 5 minutes.
+
+| Argument or flag   | Effect                                                                                       |
+| ------------------ | -------------------------------------------------------------------------------------------- |
+| `[email]`          | The address to issue a code for. Defaults to `OWNER_EMAIL` from `auth/.env` or the compose file |
+| `--url <auth-url>` | The auth server, default `http://localhost:5312`. Only a local address is accepted           |
+| `--json`           | Print `{ "email", "code" }` as JSON                                                          |
 
 ---
 

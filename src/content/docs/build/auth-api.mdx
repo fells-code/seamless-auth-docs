@@ -106,7 +106,7 @@ The source repo is organized around:
 - controllers for request handling and response shaping
 - services for sessions, messaging, OAuth, organizations, TOTP, lockout, step-up, and redaction
 - Sequelize models for users, credentials, sessions, auth events, system config, organizations,
-  memberships, TOTP credentials, OAuth identities, and bootstrap invites
+  memberships, TOTP credentials, and OAuth identities
 - Postgres as the source of truth for auth state
 
 Route modules declare schemas that feed request validation, response validation, and generated
@@ -170,7 +170,7 @@ These projects typically sit above the auth API:
 - `@seamless-auth/express` for backend integration
 - `@seamless-auth/react` for frontend auth UX and state
 - `seamless-auth-admin-dashboard` for operator workflows
-- `seamless-cli` for scaffolding, local stack checks, and first-admin bootstrap
+- `seamless-cli` for scaffolding, local stack checks, and the first admin's sign-in code
 
 If you are using Seamless Auth through a starter or SDK, you are still relying on this service.
 

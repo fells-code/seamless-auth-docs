@@ -213,14 +213,14 @@ There is no separate admin command. `init` wrote the email you gave it to the au
 `OWNER_EMAIL`, and the auth server grants the admin role to the account created with that address.
 
 1. In the web app at `http://localhost:5173`, register with the email you gave `init`.
-2. When asked for a code, read it from the API logs. In local development the starter API logs
-   codes instead of sending email:
+2. When asked for a code, get it from the project directory. The local stack sends no email:
 
    ```bash
-   docker compose logs -f api
+   npx seamless-cli owner-code
    ```
 
-   Look for a line like `Dev OTP for you@example.com: 123456`.
+   It prints a code for the owner address `init` recorded.
+
 3. Enter the code, and enroll a passkey when prompted.
 
 You are now signed in as an admin. Open the admin console at `http://localhost:3000/console` (or
