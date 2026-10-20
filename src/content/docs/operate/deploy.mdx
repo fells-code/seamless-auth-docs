@@ -1,17 +1,14 @@
 ---
-title: "Running In Production"
-description: "How Seamless Auth runs in production: the managed hosted offering, and what self-hosted operators own since the CLI ships no deployment command."
+title: 'Running In Production'
+description: 'How Seamless Auth runs in production: the managed hosted offering, or self-hosting, where you run the auth server and Postgres yourself and the CLI ships no deployment command.'
 sidebar:
   order: 4
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Aside } from '@astrojs/starlight/components'
 
 There are two ways to run Seamless Auth in production. The managed offering hosts the auth instance
 for you. Self-hosting means you provision and operate the stack yourself.
-
-This page previously documented an AWS dev-tier `deploy` and `destroy` command flow. That flow is not
-in the current `../seamless-cli` source, so it is no longer described here as shipped.
 
 ---
 
@@ -30,85 +27,59 @@ On this path you do not provision Postgres, manage signing keys, or run the auth
 
 ---
 
-## Self-hosted CLI surface today
+## Self-hosting
 
-For self-hosting, the public CLI command surface is:
+The [Production Checklist](/operate/production-checklist) is the step-by-step guide for taking a
+self-hosted install to a public host. Start there.
 
-```bash
-seamless init [project-name]
-seamless templates list
-seamless check
-seamless verify
-seamless login
-seamless profile <list|add|use|remove|login>
-seamless --help
-seamless --version
-```
-
-The CLI also exposes `whoami`, `logout`, `sessions`, and the admin commands `config`, `users`, and
-`org` against a configured instance. See the [CLI command reference](/reference/cli-commands) for the
-full surface.
-
-There is no `seamless deploy` or `seamless destroy` implementation in `../seamless-cli`.
+The CLI ([`seamless-cli`](https://github.com/fells-code/seamless-cli)) scaffolds and inspects
+projects; it does not deploy them. It has no `deploy` or `destroy` command, so provisioning and
+operating the servers is up to you. See the [CLI command reference](/reference/cli-commands) for
+what it does ship.
 
 <Aside type="note">
-  A managed `init` flow, where `seamless init` connects a scaffolded app to your hosted managed
-  instance instead of hardwiring localhost.
-  Running `seamless init` when logged in will default to the managed path, adding `--local` will force the self-hosted stack.
-  at localhost.
-  Running `seamless init` while not logged in and in an non-empty directory will print 'log in first' and exit.
+  `seamless init` decides between a managed and a self-hosted project. `--local` always scaffolds
+  the self-hosted stack. Without it, a session from `seamless login` with a managed application
+  lets `init` connect that application instead; with `--yes` it will not guess, so pass `--app <id>`
+  or `--local`. When you are not logged in, `init` scaffolds a local project and says so.
 </Aside>
 
----
+### What the CLI prepares
 
-## What the CLI can prepare today
+`seamless init --local` generates a local project with:
 
-`seamless-cli` can generate a local self-hosted project with:
-
-- React web starter
-- Express API starter
-- Seamless Auth API in Docker or local-source mode
-- optional admin dashboard in Docker image or source mode
+- a web starter and a backend starter (or a full-stack starter)
+- the Seamless Auth API in Docker or local-source mode
+- the admin dashboard, served by your backend at `/console`, as a separate container, or not at all
 - Docker Compose wiring
 - local secrets and service URLs
 - `seamless.config.json`
 
-That gives you a production-shaped local stack, but it is not a hosted deployment workflow.
+That is a working local stack in development mode, not a production configuration. Its compose file
+returns sign-in codes in responses and signs tokens with a key generated on disk, so do not deploy
+it as it is. The [Production Checklist](/operate/production-checklist) says what to change.
 
----
+### What self-hosted operators own
 
-## What self-hosted operators still own
+If you self-host, you own:
 
-If you self-host, until deployment automation ships you own:
-
-- hosting the auth API, application API, web app, and optional admin dashboard
+- hosting the auth API, your application backend, your web app, and the admin console if you use it
 - provisioning Postgres
 - setting stable production secrets
 - configuring JWKS signing keys
 - configuring HTTPS, CORS, origins, cookie domain, and proxy headers
 - managing OAuth provider callback URLs and provider secrets
 - monitoring, logging, alerting, backup, and restore testing
+- upgrades and rollback
 
 Use [Environment Variables](/reference/environment-variables),
 [System Config Reference](/reference/system-config), and
-[Cookie, Session, And Token Reference](/reference/cookies-sessions-tokens) when planning those
-deployment surfaces.
+[Cookie, Session, And Token Reference](/reference/cookies-sessions-tokens) alongside the checklist.
 
 The managed offering handles these for you.
 
 ---
 
-## Documentation Rule
-
-When documenting deployment work:
-
-- do not describe `deploy` or `destroy` as shipped unless those commands exist in `../seamless-cli`
-- label future deployment flows as planned or in progress
-- tie infrastructure claims to current source code or generated files
-- keep operator-owned production hardening separate from CLI-generated local setup
-
----
-
 ## Next Step
 
-Continue to [Environment Variables](/reference/environment-variables).
+Continue to the [Production Checklist](/operate/production-checklist).

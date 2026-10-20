@@ -1,0 +1,530 @@
+---
+title: 'Production Checklist'
+description: 'An ordered checklist for taking a self-hosted Seamless Auth server from the local quickstart to a public deployment: production mode, secrets, signing keys, origins, TLS and TRUST_PROXY, image verification, Postgres backups, upgrades, rollback, scaling and monitoring.'
+sidebar:
+  order: 4.5
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+This page takes a self-hosted install from the [Self-Hosted Quickstart](/start/quickstart) to a
+deployment that is safe to put in front of real users. Work through it in order. Every setting and
+command here was checked against `seamless-auth-api`
+[v0.19.1](https://github.com/fells-code/seamless-auth-api/releases/tag/v0.19.1); if you deploy a
+later release, read its [CHANGELOG](https://github.com/fells-code/seamless-auth-api/blob/main/CHANGELOG.md)
+for anything that changed.
+
+It covers the auth server (`seamless-auth-api`) and its Postgres database. Your web app and the
+backend that runs the [server adapter](/build/server-sdks) are yours to host; the items that touch
+them are called out where they matter.
+
+<Aside type="caution" title="The quickstart stack is not a starting point for production">
+  The stack `seamless init --local` generates runs the auth server in development mode with
+  `ALLOW_UNCREDENTIALED_DELIVERY_SECRETS=true`, which returns sign-in codes and magic links in the
+  response body. On a reachable host that lets anyone sign in as anyone. It also signs tokens with a
+  key generated on disk and uses the Postgres password `mypassword`. Do not copy its compose file or
+  its database to a server. Build the production configuration below from scratch, against a new,
+  empty database.
+</Aside>
+
+---
+
+## 1. Decide where the auth server sits
+
+- [ ] Put the auth server where only your backend can reach it.
+
+The browser never talks to the auth server. It talks to your backend, and the server adapter there
+calls the auth server with bearer tokens and a shared service secret. So the auth server does not
+need to be on the public internet at all:
+
+- **Same host or private network as your backend.** Keep the auth server off the internet entirely:
+  bind it to `127.0.0.1` or leave it unpublished on a private Docker or VPC network. This is the
+  smaller attack surface.
+- **Backend on another host.** Publish the auth server on its own hostname (for example
+  `auth.example.com`) behind a TLS-terminating reverse proxy (step 9), and restrict who can reach it
+  with your firewall or security groups where you can.
+
+In both cases, never publish port `5312` directly to the internet.
+
+---
+
+## 2. Run in production mode
+
+- [ ] Set `NODE_ENV=production`.
+- [ ] Remove every development and test switch.
+
+The published image sets `NODE_ENV=production`, but the generated quickstart compose file overrides
+it to `development`. Anything other than `production` is development mode: signing keys generated on
+disk, the `/docs` API explorer, fallback development secrets, and switches that turn security
+controls off.
+
+The server refuses to start in development mode when `ISSUER` or any `APP_ORIGINS` entry is not
+local (local means `localhost`, `*.localhost`, `*.test`, a single-label name such as a compose
+service, or a loopback or private address). The refusal names each offending value. Do not work
+around it with `SEAMLESS_ALLOW_INSECURE_DEV=true`: that variable exists for a shared staging box,
+and an instance running with it reports `insecureDevelopmentMode` on `/health/status`.
+
+Remove these from the production environment. Each is ignored under `NODE_ENV=production`, but
+leaving them in place means one wrong `NODE_ENV` turns them all back on:
+
+| Variable                                | What it does outside production                                           |
+| --------------------------------------- | ------------------------------------------------------------------------- |
+| `ALLOW_UNCREDENTIALED_DELIVERY_SECRETS` | Returns OTP codes and magic-link URLs in the response, with no credential |
+| `DISABLE_AUTH_RATE_LIMITS`              | Turns off every auth rate limiter                                         |
+| `FIDO_CONFORMANCE_MODE`                 | Mounts an unauthenticated conformance test surface at `/conformance`      |
+| `SEAMLESS_ALLOW_INSECURE_DEV`           | Allows development mode on a public deployment                            |
+
+---
+
+## 3. Generate real secrets
+
+- [ ] Generate five separate secrets.
+- [ ] Keep them in a secret store, not in the repository.
+
+```bash
+openssl rand -hex 32
+```
+
+Run it once for each of these, and use a different value for every one:
+
+| Variable                      | Used for                                                                   |
+| ----------------------------- | -------------------------------------------------------------------------- |
+| `SEAMLESS_SERVICE_TOKEN`      | Shared secret between the auth server and your server adapter              |
+| `REFRESH_TOKEN_LOOKUP_SECRET` | HMAC key for the refresh token lookup fingerprints stored in Postgres      |
+| `TOTP_SECRET_ENCRYPTION_KEY`  | Encrypts stored TOTP secrets (32 bytes, as hex, base64 or base64url)       |
+| `OAUTH_STATE_SECRET`          | Signs OAuth `state`                                                        |
+| `DECOY_SUBJECT_SECRET`        | Derives the decoy subjects `/login` returns for unknown identifiers        |
+
+The last four fall back to the service token when unset, and the server logs a warning at boot for
+each one that does. That fallback is deprecated and each becomes required from v0.20. More
+importantly, while they share the service token you cannot rotate it without signing everyone out
+and making every stored TOTP secret unreadable.
+
+Do not set `API_SERVICE_TOKEN` as well. It is the older name, still accepted, and the server refuses
+to start when both are set to different values.
+
+Two of these are effectively permanent once users exist. Changing `REFRESH_TOKEN_LOOKUP_SECRET` signs
+everyone out, and changing `TOTP_SECRET_ENCRYPTION_KEY` makes stored TOTP secrets unreadable, so
+users must enroll TOTP again. Back them up with the same care as the database (step 11): a database
+restored without them is only partly usable.
+
+The server reads secrets from environment variables only. Inject them from your secret store,
+or, on a single host, from an env file readable only by the user that runs Docker (`chmod 600`) and
+kept out of version control.
+
+On your backend, give the server adapter the same `SEAMLESS_SERVICE_TOKEN` as its `serviceSecret`,
+and set its own production options (a long random `cookieSecret`, secure cookies and an explicit
+`jwksKid`). See [Required options](/build/server-sdks#required-options). Run the backend with
+`NODE_ENV=production` as well: the starter backends log sign-in codes to the console in development.
+
+---
+
+## 4. Create production signing keys
+
+- [ ] Generate an RSA key pair and publish it through the three JWKS variables.
+
+In production the server signs with a key you supply instead of one it generates. Tokens are RS256,
+so the key is RSA, with the private half in PKCS#8 PEM and the public half in SPKI PEM:
+
+```bash
+KID=main_2026_10
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$KID.private.pem"
+openssl pkey -in "$KID.private.pem" -pubout -out "$KID.public.pem"
+jq -cn --arg kid "$KID" --rawfile pem "$KID.public.pem" \
+  --arg createdAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  '{keys: [{kid: $kid, pem: $pem, createdAt: $createdAt}]}' > jwks-public-keys.json
+```
+
+A key id must be letters, digits and underscores, and must not start with a digit, because the
+private key's variable name is built from it. A hyphen produces a name that cannot be set.
+
+| Variable                          | Value                                                         |
+| --------------------------------- | ------------------------------------------------------------- |
+| `SEAMLESS_JWKS_ACTIVE_KID`        | The key id, for example `main_2026_10`                        |
+| `SEAMLESS_JWKS_KEY_<kid>_PRIVATE` | The private key PEM, for example `SEAMLESS_JWKS_KEY_main_2026_10_PRIVATE` |
+| `SEAMLESS_JWKS_PUBLIC_KEYS`       | The contents of `jwks-public-keys.json`                       |
+
+The container refuses to start under `NODE_ENV=production` when any of the three is missing. To
+append them to an env file that Docker Compose reads with `env_file` (Compose accepts a quoted
+multi-line value there; `docker run --env-file` does not):
+
+```bash
+{
+  echo "SEAMLESS_JWKS_ACTIVE_KID=$KID"
+  printf 'SEAMLESS_JWKS_KEY_%s_PRIVATE="%s"\n' "$KID" "$(cat "$KID.private.pem")"
+  printf "SEAMLESS_JWKS_PUBLIC_KEYS='%s'\n" "$(cat jwks-public-keys.json)"
+} >> auth.env
+```
+
+Then move the private key into your secret store and delete the local copy.
+
+**Rotation.** `SEAMLESS_JWKS_PUBLIC_KEYS` lists every published key, and tokens are verified by the
+`kid` in their header, so you rotate by overlapping keys rather than cutting over. Deploy each step
+before starting the next, and restart the server for each, since the values arrive as environment
+variables:
+
+1. **Add.** Generate a new pair, add its public half to `SEAMLESS_JWKS_PUBLIC_KEYS`, and deploy. The
+   old key still signs.
+2. **Flip.** Point `SEAMLESS_JWKS_ACTIVE_KID` at the new key, set its
+   `SEAMLESS_JWKS_KEY_<kid>_PRIVATE`, and deploy. Tokens signed by the old key still verify.
+3. **Retire.** Once `ACCESS_TOKEN_TTL` has passed, no token signed by the old key can still be live.
+   Remove it from the document, drop its private key, and deploy. Refresh tokens are opaque and not
+   signed, so rotation never affects them.
+
+The server never writes or rotates these values itself. The full procedure, including how to
+separate the four fallback secrets from the service token without breaking anything, is in the
+API's
+[production operations guide](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/docs/production-operations.md).
+
+---
+
+## 5. Point the URLs and origins at the public host
+
+- [ ] Replace every `localhost` value.
+
+| Variable       | Set it to                                                                                    | Example                   |
+| -------------- | -------------------------------------------------------------------------------------------- | ------------------------- |
+| `ISSUER`       | The URL your server adapter uses to reach the auth server. It becomes the tokens' `iss` and `aud` | `https://auth.example.com` |
+| `APP_ORIGINS`  | Browser origins allowed by CORS. No browser should call the auth server, so keep this to your app's origin | `https://app.example.com`  |
+| `RPID`         | The WebAuthn relying party ID: your app's domain, with no scheme or port                     | `example.com`             |
+| `ORIGINS`      | Every browser origin a passkey ceremony starts from, including the admin console's if you serve it | `https://app.example.com`  |
+| `FRONTEND_URL` | Base URL that emailed magic links point at                                                   | `https://app.example.com` |
+| `APP_ID`       | A stable identifier recorded on every audit event and session                                | `example-prod`            |
+| `APP_NAME`     | Human-readable name, at least three characters                                               | `Example`                 |
+
+On the adapter, `authServerUrl` and `audience` must match `ISSUER`. If the adapter reaches the
+server at a different URL from `ISSUER`, set `authServerIssuer` as well; see
+[Auth server issuer](/build/server-sdks#auth-server-issuer).
+
+Choose `RPID` before users enroll. A passkey is bound to the relying party ID it was created for, so
+changing `RPID` later leaves every existing passkey unusable.
+
+`RPID`, `ORIGINS` and `FRONTEND_URL` seed the `system_config` table. The environment value is
+re-applied on every boot until someone changes that key through the admin API or console; after
+that the stored value wins and the variable is ignored. See
+[How System Config Is Loaded](/reference/system-config#how-system-config-is-loaded).
+
+---
+
+## 6. Set the first admin
+
+- [ ] Set `OWNER_EMAIL` to your own address before the first boot.
+- [ ] Sign up with that address as soon as the instance is up.
+
+An account created for an `OWNER_EMAIL` address is granted an admin role at creation (`admin:write`
+when `AVAILABLE_ROLES` includes it, otherwise `admin`). The grant happens only when the account is
+created, so setting the variable after you already have an account promotes nobody. Replace the
+quickstart's address, and include `admin:read` and `admin:write` in `AVAILABLE_ROLES` if you want
+scoped admin roles.
+
+---
+
+## 7. Configure email and SMS delivery
+
+- [ ] Configure exactly one way to deliver codes and magic links.
+
+In production the auth server never returns codes in responses, so email codes, phone codes, magic
+links and registration need a real transport. Without one, those flows fail. Choose one:
+
+- **The auth server sends them.** Set `MESSAGING_EMAIL_FROM` and `MESSAGING_AWS_REGION` for Amazon
+  SES email. For SMS, set `MESSAGING_SMS_PROVIDER` to `aws`, or to `twilio` with
+  `MESSAGING_TWILIO_ACCOUNT_SID`, `MESSAGING_TWILIO_AUTH_TOKEN` and `MESSAGING_SMS_FROM`. SES and SNS
+  use the standard AWS SDK credential chain, such as an instance or task role. The Express and
+  Fastify starters enable their console-logging handlers only when `NODE_ENV=development`, so in
+  production they rely on this path unless you add real handlers.
+- **Your backend sends them.** Configure `messaging` on the server adapter; it requests the payloads
+  from the auth server with the service secret and delivers them itself. See
+  [Messaging Delivery](/build/server-sdks#messaging-delivery).
+
+With neither, the container logs `Direct email/SMS delivery is not configured` at boot.
+
+---
+
+## 8. Prepare Postgres
+
+- [ ] Use a strong database password, and never publish Postgres to the internet.
+- [ ] Turn on TLS for a database on another host.
+
+A managed database (RDS, Cloud SQL, and so on) or your own container both work. For a managed
+database, use `DATABASE_URL` and turn on certificate verification:
+
+| Variable       | Value                                                               |
+| -------------- | ------------------------------------------------------------------- |
+| `DATABASE_URL` | `postgres://user:password@host:5432/seamless_auth`                  |
+| `DB_SSL`       | `verify-full` (TLS is off by default)                               |
+| `DB_SSL_CA`    | The provider's CA bundle, inline PEM or a file path (RDS needs this) |
+
+`DB_SSL=true` or `require` encrypts without verifying the server certificate.
+
+For audit integrity, the API also documents running the application as a database role without
+`UPDATE`, `DELETE` or `TRUNCATE` on `auth_events`, with migrations run as the table owner. See
+[Audit trail integrity](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/docs/security-posture.md#audit-trail-integrity).
+
+---
+
+## 9. Bind ports, terminate TLS and set `TRUST_PROXY`
+
+- [ ] Publish the auth server on `127.0.0.1` only, or not at all.
+- [ ] Terminate TLS in a reverse proxy in front of it.
+- [ ] Set `TRUST_PROXY` to the number of proxies in front of the server, and only then.
+
+Docker inserts its own firewall rules for published ports, so a host firewall such as `ufw` does not
+block a port published as `5312:5312`. Prefix the binding with `127.0.0.1`, as below, or publish no
+port and put the proxy on the same Docker network.
+
+A minimal single-host layout, with the secrets from steps 3 and 4 in `auth.env` and the database
+credentials in `db.env` (`POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, matching the `DB_*`
+values in `auth.env`):
+
+```yaml
+name: seamless-auth-production
+
+services:
+  db:
+    image: postgres:18
+    env_file: db.env
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  auth:
+    # Pin the digest you verified in step 10.
+    image: ghcr.io/fells-code/seamless-auth-api@sha256:3a2eb5cd20c2da2f2507bad4a01cc1eb8d7a9853c859f284480c30fed3c840f5
+    env_file: auth.env
+    ports:
+      - '127.0.0.1:5312:5312'
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+```
+
+`auth.env` then carries `DB_HOST=db`, `DB_PORT=5432`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` and
+`DB_LOGGING=false`, plus the remaining required values: `DEFAULT_ROLES`, `AVAILABLE_ROLES`,
+`ACCESS_TOKEN_TTL`, `REFRESH_TOKEN_TTL`, `RATE_LIMIT` and `DELAY_AFTER`. The container checks for
+each at startup and exits naming the first one missing. The API's
+[configuration reference](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/docs/configuration.md)
+lists every variable.
+
+If the auth server must be reachable from another host, put a TLS-terminating proxy in front of it.
+With [Caddy](https://caddyserver.com/) on the same host, which obtains and renews the certificate
+itself:
+
+```txt
+auth.example.com {
+	reverse_proxy 127.0.0.1:5312
+}
+```
+
+Any proxy works if it terminates TLS and sets `X-Forwarded-For`. Then set `TRUST_PROXY`:
+
+- **One proxy in front (the layout above):** `TRUST_PROXY=1`.
+- **Several hops,** such as a cloud load balancer and then a proxy: the number of hops, or a
+  comma-separated list of the proxies' addresses or CIDR ranges. `loopback` also works.
+- **No proxy:** leave it unset. If the server trusts `X-Forwarded-For` while clients can reach it
+  directly, any client can set the header and pick its own rate-limit bucket.
+
+Without `TRUST_PROXY` behind a proxy, the server sees every request as coming from the proxy, and the
+per-IP rate limiters treat all clients as one caller.
+
+Requests from your server adapter carry the end user's address separately, in a header the auth
+server accepts only alongside the service secret. The adapter takes that address from your backend's
+own Express `trust proxy` setting, so set that correctly on your backend too.
+
+---
+
+## 10. Verify the image and pin it by digest
+
+- [ ] Verify the signature of the image you deploy.
+- [ ] Deploy it by digest, not by tag.
+
+Every release image of `ghcr.io/fells-code/seamless-auth-api` from v0.8.0 is signed with cosign
+keyless signing by the repository's release workflow, and carries an SPDX SBOM and SLSA provenance.
+You need [cosign](https://docs.sigstore.dev/cosign/system_config/installation/) v2, Docker with
+Buildx, and `jq`. Without cosign installed, `docker run --rm ghcr.io/sigstore/cosign/cosign:v2.4.1 verify ...`
+works the same way. Substitute the tag you deploy.
+
+Resolve the tag to a digest once. Tags can be moved; digests cannot:
+
+```bash
+IMAGE=ghcr.io/fells-code/seamless-auth-api
+DIGEST=$(docker buildx imagetools inspect "$IMAGE:v0.19.1" --format '{{ json .Manifest }}' | jq -r .digest)
+echo "$IMAGE@$DIGEST"
+```
+
+Verify the signature:
+
+```bash
+cosign verify "$IMAGE@$DIGEST" \
+  --certificate-identity-regexp '^https://github\.com/fells-code/seamless-auth-api/\.github/workflows/docker-publish\.yml@refs/(heads/main|tags/v.*)$' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+A passing check proves the digest was signed by `docker-publish.yml` in
+`fells-code/seamless-auth-api` on GitHub Actions and is recorded in the public Rekor transparency
+log. Do not loosen the regular expression to the whole repository, which would accept an image
+signed by any workflow on any branch.
+
+cosign prints the verified signatures as JSON. Its `.[0].optional.githubWorkflowSha` field is the
+commit the image was built from, and should match the release tag:
+
+```bash
+git ls-remote https://github.com/fells-code/seamless-auth-api refs/tags/v0.19.1
+```
+
+For v0.19.1 the digest is
+`sha256:3a2eb5cd20c2da2f2507bad4a01cc1eb8d7a9853c859f284480c30fed3c840f5` and the commit is
+`8316914c8f7b8bb9adc7a157dc2e77be140dd4d5`. Put the digest in the `image:` line, as in step 9.
+
+---
+
+## 11. Back up Postgres, and test a restore
+
+- [ ] Schedule backups and copy them off the host.
+- [ ] Restore one into a scratch environment before you need to.
+
+The database holds every account, passkey, session and audit event, and email addresses and phone
+numbers in plain text. Encrypt backups and store them away from the host. Back up the secrets from
+steps 3 and 4 as well, separately from the dump.
+
+With the compose file from step 9 (service `db`), a custom-format dump:
+
+```bash
+docker compose exec -T db pg_dump -U seamless -d seamless_auth --format=custom > "seamless_auth-$(date +%Y%m%d).dump"
+```
+
+Replace `seamless` with your `POSTGRES_USER`. For a managed database, run
+`pg_dump "$DATABASE_URL" --format=custom --file=seamless_auth.dump` from a machine with a `pg_dump`
+at least as new as the server, and use the provider's snapshots as well.
+
+To restore, stop the auth server, recreate the database, load the dump, and start it again:
+
+```bash
+docker compose stop auth
+docker compose exec -T db dropdb -U seamless seamless_auth
+docker compose exec -T db createdb -U seamless seamless_auth
+docker compose exec -T db pg_restore -U seamless -d seamless_auth --no-owner < seamless_auth-YYYYMMDD.dump
+docker compose start auth
+```
+
+Restore into an empty database, as above, rather than over a live one. The audit table is
+append-only and hash-chained by database triggers, and a full restore into an empty database keeps
+that chain intact; the audit integrity check (`GET /admin/auth-events/integrity`) should report no
+failure afterwards.
+
+---
+
+## 12. Plan upgrades and rollback
+
+- [ ] Take a backup before every upgrade.
+- [ ] Know that migrations only move forward.
+
+Schema migrations ship inside the image. By default the container applies any pending ones each time
+it starts, then starts the server. The server then checks that every migration it ships with has
+been applied and refuses to start if one is pending, so new code never runs against an old schema.
+There is no step in the image that reverses a migration.
+
+To upgrade:
+
+1. Read the [CHANGELOG](https://github.com/fells-code/seamless-auth-api/blob/main/CHANGELOG.md) for
+   every version you are crossing. Before 1.0, a minor release can contain breaking changes,
+   including renamed or newly required variables.
+2. Back up the database (step 11).
+3. Resolve and verify the new image (step 10), and put its digest in the compose file.
+4. Optionally apply migrations as a separate step, which validates the environment and exits:
+
+   ```bash
+   docker compose run --rm auth migrate
+   ```
+
+5. Start the new version and confirm it:
+
+   ```bash
+   docker compose up -d auth
+   curl -s http://127.0.0.1:5312/health/version
+   ```
+
+To roll back, put the previous digest back and run `docker compose up -d auth`. An older build is
+allowed to start against a newer schema and keeps the data written since the upgrade. That works
+when the newer release's migrations only added things the older code ignores, which has been the
+usual case, but nothing guarantees it. If the older version errors against the newer schema, restore
+the backup you took before upgrading, which loses everything written since. Two more things to check
+before rolling back: the older version may expect older variable names (v0.18.0 requires
+`API_SERVICE_TOKEN`, for example), and it may lack a security fix the newer one carries.
+
+---
+
+## 13. One instance or several
+
+- [ ] Run one instance unless you need more, and know what changes when you do.
+
+A single instance with `restart: unless-stopped` is the simplest supported shape. Several instances
+behind a load balancer also work: sessions and refresh rotation, the lockout counter, OTP codes,
+magic links, WebAuthn challenges, `system_config` and the audit trail all live in Postgres and are
+shared. Every instance needs the same environment, signing keys included.
+
+Some state is still held in each process:
+
+| State                       | With several instances                                                                                                  |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Rate limit counters         | Each instance counts on its own, so a client spread across N instances gets up to N times the budget. Route by client address at the load balancer, or also limit at the proxy. |
+| `system_config` cache       | A config change clears the five-minute cache only on the instance that served it. Restart the others when a change must apply at once. |
+| OAuth `state` replay cache  | Only the instance that consumed a state refuses it again, for its ten-minute life. The state is still signed, provider-bound and short-lived, and the provider's code is single use. |
+| Audit degraded flag         | `/health/status` reports `degraded` only on the instance whose audit write failed. Monitor every instance.              |
+
+With several instances, every one races to apply migrations at startup. Run
+`docker compose run --rm auth migrate` (or the equivalent one-off task on your platform) once per
+deploy, and set `RUN_MIGRATIONS=false` on the instances. They still refuse to start while a
+migration is pending.
+
+---
+
+## 14. Monitor it
+
+- [ ] Alert on `/health/status` reporting `degraded`, not only on its status code.
+- [ ] Collect the container logs.
+
+`GET /health/status` answers `200 {"message":"System up"}` while healthy, and the image's built-in
+health check only looks at that status code. It stays `200` when something is wrong, because the
+server is still serving, and adds a `degraded` object instead:
+
+- `degraded.audit`, for five minutes after an audit event failed to write, with `failureCount` and
+  `lastFailureAt`.
+- `degraded.insecureDevelopmentMode`, when development mode is running on a public deployment
+  (step 2).
+
+A check that fails when either is present:
+
+```bash
+curl -fsS http://127.0.0.1:5312/health/status | jq -e 'has("degraded") | not'
+```
+
+`GET /health/version` returns the running version. In the logs, watch for the boot warnings about
+secrets falling back to the service token, and for errors that a development switch was ignored in
+production.
+
+---
+
+## 15. Check it after go-live
+
+- [ ] `/health/status` reports `System up` with no `degraded` field.
+- [ ] `/.well-known/jwks.json` lists your key id and no `dev-` key.
+- [ ] `/docs` answers `404` (the API explorer only runs in development mode).
+- [ ] Ports `5312` and `5432` are unreachable from another machine on the internet.
+- [ ] The boot log has no warning about secrets falling back to the service token.
+- [ ] You have signed up with `OWNER_EMAIL` and can open the admin console as an admin.
+- [ ] A sign-in code or magic link arrives by email or SMS, and never appears in a response body.
+- [ ] A backup has been restored successfully somewhere other than production.
+
+For anything beyond this list, such as high availability, the API's
+[production operations guide](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/docs/production-operations.md)
+and [configuration reference](https://github.com/fells-code/seamless-auth-api/blob/v0.19.1/docs/configuration.md)
+are the source of truth.
