@@ -228,8 +228,8 @@ What it does:
 | Express                      | `express` in `package.json`                         | `@seamless-auth/express`, `cookie-parser`, `cors` (plus `@types/cookie-parser` and `@types/cors` as dev dependencies in a TypeScript project) |
 | Fastify                      | `fastify` in `package.json`                         | `@seamless-auth/fastify`, `@fastify/cors`                                           |
 | Go (net/http, Gin, chi, Echo) | `go.mod`; the framework from its `require` lines   | `go get github.com/fells-code/seamless-auth-go@latest`                               |
-| Axum                         | `axum` in `Cargo.toml`                              | `cargo add seamless-auth`                                                           |
-| FastAPI, Django              | `pyproject.toml` or `requirements.txt`              | `seamless-auth[fastapi]>=0.2` or `seamless-auth[django]>=0.2` with `uv add` (a `uv.lock`) or `poetry add` (a `poetry.lock` or `[tool.poetry]`); a plain pip project gets the `pip install` printed, not run |
+| Axum                         | `axum` in `Cargo.toml`                              | `cargo add seamless-auth`, `cargo add tower-http --features cors`                   |
+| FastAPI, Django              | `pyproject.toml` or `requirements.txt`              | `seamless-auth[fastapi]>=0.2` or `seamless-auth[django]>=0.2`, plus `python-dotenv` (and `django-cors-headers` for Django), with `uv add` (a `uv.lock`) or `poetry add` (a `poetry.lock` or `[tool.poetry]`); a plain pip project gets the `pip install` printed, not run |
 
 Node projects install with npm, pnpm, yarn, or bun, picked from the nearest lock file. A Node
 project counts as TypeScript when it has a `tsconfig.json` or depends on `typescript`, and the
@@ -237,7 +237,7 @@ printed code matches.
 
 | Web app   | Detected from                          | Installs                                                  | API URL written                                         |
 | --------- | -------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------- |
-| React     | `react` in `package.json` (not Next.js or React Native) | `@seamless-auth/react`                   | `VITE_API_URL` in `.env.local`, or `REACT_APP_API_URL` for Create React App |
+| React     | `react` in `package.json` (not Next.js or React Native) | `@seamless-auth/react`, plus `react-router-dom` if missing | `VITE_API_URL` in `.env.local`, or `REACT_APP_API_URL` for Create React App |
 | Angular   | `@angular/core`                        | `@seamless-auth/angular`, plus `@angular/router` if missing | None; the URL is in the printed config, since the Angular CLI does not read `.env` |
 | Vue       | `vue` (not Nuxt)                       | `@seamless-auth/vue`, plus `vue-router` if missing        | `VITE_API_URL` in `.env.local`                          |
 | SvelteKit | `@sveltejs/kit`                        | `@seamless-auth/svelte`                                   | `VITE_API_URL` in `.env.local`                          |
@@ -267,7 +267,7 @@ gitignored.
 | `--local`             | none                 | off                                                           | Write a local auth server to `seamless/`; refused together with `--app`                                   |
 | `--app`               | a managed application id | none                                                      | Connect that managed application (needs `seamless login`)                                                 |
 | `--email`             | an email address     | your portal session email, when signed in                     | With `--local`, the owner address that becomes the admin when you register; required under `--yes` without a portal session |
-| `--api-url`           | a URL                | `http://localhost:<PORT>`, with `PORT` read from the backend's `.env`, or `3000` | The backend's origin: the web app's API URL, and the auth server's `APP_ORIGINS`                          |
+| `--api-url`           | a URL                | `http://localhost:<port>`: `PORT` from the backend's `.env`, else the entry file's listen port, else `3000` (Node), `8000` (FastAPI, Django), or `8080` (Go, Rust) | The backend's origin: the web app's API URL, and the auth server's `APP_ORIGINS`                          |
 | `--web-url`           | a URL                | `http://localhost:5173`; `4200` for Angular, `3001` for Create React App | The web app's origin: `UI_ORIGINS`, and the auth server's `ORIGINS`                                |
 | `--admin`             | `api`, `none`        | `api`                                                         | Whether the backend serves the admin dashboard at `/console`; `none` leaves the console lines out         |
 | `--skip-install`      | none                 | off                                                           | Print the install commands instead of running them                                                         |
@@ -282,7 +282,9 @@ Valued flags take either `--flag=value` or `--flag value`. Any other flag is ref
 Writes three files to `seamless/` and nothing else at the repository root:
 
 - `seamless/docker-compose.yml`: Postgres and the auth API image the CLI pins, with the auth server
-  published on `127.0.0.1:5312` only and Postgres not published. Start it with
+  published on `127.0.0.1:5312` only and Postgres not published. It sets `name: <repo>-seamless`,
+  derived from the repository folder, so the volumes are `<repo>-seamless_pgdata` and
+  `<repo>-seamless_auth-keys` and no two repositories share a stack. Start it with
   `docker compose -f seamless/docker-compose.yml up -d`.
 - `seamless/.env`: the auth server's configuration and secrets, including `OWNER_EMAIL`,
   `ORIGINS` (the web origin, plus the backend origin when the console is served), and
@@ -290,7 +292,9 @@ Writes three files to `seamless/` and nothing else at the repository root:
 - `seamless/.gitignore`: ignores `seamless/.env`.
 
 When `seamless/docker-compose.yml` already exists, `add` asks before replacing it, because a new
-stack issues new secrets. Under `--yes` it fails instead unless you also pass `--force`.
+stack issues new secrets. Under `--yes` it fails instead unless you also pass `--force`. A
+replaced file keeps its existing `name:`. Replacing a file from seamless-cli 0.23.0 or earlier,
+which had no `name:`, prints the command to stop the old `seamless` project first.
 
 ### `--app`
 

@@ -17,7 +17,7 @@ Use it when you have a working backend and want sign-in added to it. To start fr
 [`seamless init`](/operate/cli-init) instead, which scaffolds a whole project with auth already
 wired.
 
-`seamless add` shipped in seamless-cli 0.22.0. Everything on this page is from seamless-cli 0.23.0.
+`seamless add` shipped in seamless-cli 0.22.0. Everything on this page is from seamless-cli 0.23.1.
 The [CLI Command Reference](/reference/cli-commands#add) lists every flag.
 
 ---
@@ -28,12 +28,12 @@ The [CLI Command Reference](/reference/cli-commands#add) lists every flag.
 | ----------------------------- | ------------------------------------------- | ----------------------------------------------- |
 | Express, Fastify              | `express` or `fastify` in `package.json`    | `@seamless-auth/express` or `@seamless-auth/fastify` |
 | Go: net/http, Gin, chi, Echo  | `go.mod`                                    | `github.com/fells-code/seamless-auth-go`        |
-| Rust: Axum                    | `axum` in `Cargo.toml`                      | `seamless-auth` (crates.io)                     |
-| Python: FastAPI, Django       | `pyproject.toml` or `requirements.txt`      | `seamless-auth[fastapi]` or `seamless-auth[django]` (PyPI) |
+| Rust: Axum                    | `axum` in `Cargo.toml`                      | `seamless-auth` (crates.io) and `tower-http` with the `cors` feature |
+| Python: FastAPI, Django       | `pyproject.toml` or `requirements.txt`      | `seamless-auth[fastapi]` or `seamless-auth[django]` (PyPI), `python-dotenv`, and `django-cors-headers` for Django |
 
 | Web app   | Binding installed         |
 | --------- | ------------------------- |
-| React     | `@seamless-auth/react`    |
+| React     | `@seamless-auth/react`, and `react-router-dom` when missing |
 | Angular   | `@seamless-auth/angular`  |
 | Vue       | `@seamless-auth/vue`      |
 | SvelteKit | `@seamless-auth/svelte`   |
@@ -75,13 +75,14 @@ form is safe in scripts and for coding agents:
 npx seamless-cli add --local --yes --email=you@example.com < /dev/null
 ```
 
-Pass `--api-url` when your backend does not listen on `http://localhost:3000` (or on the `PORT` in
-its `.env`), and `--web-url` when your web app is not on its framework's default
-(`http://localhost:5173`, `4200` for Angular, `3001` for Create React App). FastAPI and Django
-dev servers usually listen on port 8000, so for those:
+`add` works out your backend's origin as `http://localhost:<port>`: the `PORT` in the backend's
+`.env`, else the port in the entry file's listen call, else 3000 for Node, 8000 for FastAPI and
+Django (the uvicorn and `runserver` defaults), and 8080 for Go and Rust. Pass `--api-url` when that
+is wrong, and `--web-url` when your web app is not on its framework's default
+(`http://localhost:5173`, `4200` for Angular, `3001` for Create React App):
 
 ```bash
-npx seamless-cli add --local --email=you@example.com --api-url=http://localhost:8000
+npx seamless-cli add --local --email=you@example.com --api-url=http://localhost:4000
 ```
 
 The origins matter: the web app's API URL points at `--api-url`, and the local auth server only
@@ -99,31 +100,42 @@ seamless add
   Backend: Express in api (src/server.ts)
   Web:     React in web (src/main.tsx)
 Owner email: you@example.com
-Wrote seamless/: docker-compose.yml, .env, .gitignore
+Wrote seamless/: docker-compose.yml (Compose project my-app-seamless), .env, .gitignore
 
 Wrote api/.env: AUTH_SERVER_URL, AUTH_SERVER_ISSUER, API_SERVICE_TOKEN, JWKS_KID, COOKIE_SIGNING_KEY, UI_ORIGINS, SERVE_ADMIN_CONSOLE
 Wrote web/.env.local: VITE_API_URL
 
 $ cd api && npm install @seamless-auth/express cookie-parser cors
 $ cd api && npm install --save-dev @types/cookie-parser @types/cors
-$ cd web && npm install @seamless-auth/react
+$ cd web && npm install @seamless-auth/react react-router-dom
 ```
 
 Then it prints numbered steps: start the auth server, add the backend code, wire the web app, and
-sign in.
+sign in. With `--skip-install`, the install commands come first, as step 1.
+
+The project name in that output comes from the repository folder (`my-app` here).
 
 ### `seamless/` (with `--local`)
 
 | File                          | What it holds                                                                     |
 | ----------------------------- | --------------------------------------------------------------------------------- |
-| `seamless/docker-compose.yml` | Postgres and the auth API image the CLI pins. The auth server listens on `127.0.0.1:5312` only; Postgres is not published |
+| `seamless/docker-compose.yml` | Postgres and the auth API image the CLI pins, under the Compose project `<repo>-seamless`, so its containers and volumes (`<repo>-seamless_pgdata`, `<repo>-seamless_auth-keys`) belong to this repository alone. The auth server listens on `127.0.0.1:5312` only; Postgres is not published |
 | `seamless/.env`               | The auth server's configuration and secrets: `OWNER_EMAIL`, `ORIGINS` (your web origin, plus your backend origin when it serves the console), `APP_ORIGINS` (your backend origin) |
 | `seamless/.gitignore`         | Keeps `seamless/.env` out of the repository                                       |
 
 Nothing else at the repository root changes, so the stack is one folder to delete. Running `add
 --local` again asks before replacing `seamless/`, because a new stack issues new secrets; under
-`--yes` it needs `--force`. A replaced stack writes the new `API_SERVICE_TOKEN` into your backend's
-`.env` too.
+`--yes` it needs `--force`. A replaced stack keeps its project name, including one you edited, and
+writes the new `API_SERVICE_TOKEN` into your backend's `.env` too.
+
+<Aside type="caution">
+  **Upgrading from seamless-cli 0.23.0 or earlier.** Those versions wrote no project name, so every
+  repository's stack ran as the Compose project `seamless` and shared one database and one set of
+  signing keys. The next `add --local` names the project after the repository and starts with
+  empty volumes. It prints the command to stop the old stack first, which otherwise keeps port
+  5312: `docker compose -p seamless -f seamless/docker-compose.yml down`. The old `seamless_*`
+  volumes may hold other repositories' users, so remove them only when nothing else uses them.
+</Aside>
 
 With `--app`, no `seamless/` folder is written. `add` issues a service token for the application,
 and asks first when one already exists, because the new token invalidates it (`--yes` needs
@@ -136,7 +148,7 @@ and asks first when one already exists, because the new token invalidates it (`-
 | `AUTH_SERVER_URL`     | `http://localhost:5312`, or the managed instance URL                | Yes               |
 | `AUTH_SERVER_ISSUER`  | `http://auth:5312` (the issuer the Docker stack signs as), or the managed instance URL | Yes |
 | `API_SERVICE_TOKEN`   | The service token shared with the auth server                       | Yes               |
-| `JWKS_KID`            | The auth server's signing key id                                    | Yes               |
+| `JWKS_KID`            | The key id the adapter puts on its service tokens (the auth API does not check it) | Yes |
 | `COOKIE_SIGNING_KEY`  | A generated secret that signs the session cookies                   | No                |
 | `UI_ORIGINS`          | Your web origin, for CORS                                           | No                |
 | `SERVE_ADMIN_CONSOLE` | `true` with `--local` (unless `--admin=none`), otherwise `false`    | No                |
@@ -156,8 +168,8 @@ written, because the Angular CLI does not read `.env`: the URL is in the printed
 Node projects install with npm, pnpm, yarn, or bun, whichever the nearest lock file names. Go uses
 `go get`, Rust `cargo add`, and Python `uv add` or `poetry add` when the project uses one of them.
 A Python project with only `pip` gets the `pip install` printed instead of run, since only you know
-which environment it belongs in. Angular and Vue apps without a router also get `@angular/router`
-or `vue-router`. `--skip-install` prints every command instead of running it, and a command that
+which environment it belongs in. Apps without a router also get one: `react-router-dom`,
+`@angular/router`, or `vue-router`. `--skip-install` prints every command instead of running it, and a command that
 fails is printed for you to run.
 
 ---
@@ -167,9 +179,9 @@ fails is printed for you to run.
 `add` prints this code; adding it is up to you.
 
 1. **Start the auth server** (local only): `docker compose -f seamless/docker-compose.yml up -d`.
-2. **Load the `.env`.** The printed code reads `process.env`, `os.Getenv`, `std::env::var`, or
-   `os.environ`. If your backend does not load `.env` already, `add` tells you how for its
-   language. It installs no loader.
+2. **Load the `.env`.** The printed Python code loads it with `load_dotenv()` (python-dotenv is in
+   the install). The Node, Go, and Rust code reads `process.env`, `os.Getenv`, or `std::env::var`;
+   if your backend does not load `.env` already, `add` tells you how for its language.
 3. **Paste the backend code** into the entry file it names, after you create the app and before
    your routes, merging the imports with yours.
 4. **Wire the web app** with the printed code for each file.
@@ -209,52 +221,56 @@ exists. The printed code builds `seamlessauth.Options` from the environment, mou
 `auth.Handler()` at `/auth` and `auth.ConsoleHandler()` at `/console`, and protects `GET /api/me`
 with `auth.RequireAuth`.
 
-By hand: add credentialed CORS for the origins in `UI_ORIGINS` (the printed code has only a comment
-for it), and load the `.env`, for example with `github.com/joho/godotenv`. See the
+The printed code also adds credentialed CORS for the origins in `UI_ORIGINS`: a small middleware
+for net/http and chi (serve the mux through it where you call `ListenAndServe`), the Gin starter's
+middleware for Gin, and `middleware.CORSWithConfig` for Echo.
+
+By hand: load the `.env`, for example with `github.com/joho/godotenv`. See the
 [Go adapter](/build/go-adapter).
 
 ### Rust (Axum)
 
-`add` runs `cargo add seamless-auth`. The printed code for `src/main.rs` builds the adapter with
-`Adapter::builder`, nests `auth.router()` at `/auth`, merges `auth.console_router()`, protects
-`/api/me` with `auth.require_auth()`, and serves with connect info so the adapter can forward the
-client address.
+`add` runs `cargo add seamless-auth` and `cargo add tower-http --features cors`. The printed code
+for `src/main.rs` builds the adapter with `Adapter::builder`, nests `auth.router()` at `/auth`,
+protects `/api/me` with `auth.require_auth()`, adds a credentialed `CorsLayer` for `UI_ORIGINS`
+that leaves out the console, merges `auth.console_router()` after it, and serves with connect info
+so the adapter can forward the client address.
 
-By hand: add credentialed CORS (tower-http's `CorsLayer`) for `UI_ORIGINS`, and load the `.env`
-with the `dotenvy` crate. See the [Rust adapter](/build/rust-adapter).
+By hand: load the `.env` with the `dotenvy` crate. See the [Rust adapter](/build/rust-adapter).
 
 ### FastAPI
 
-`add` installs `seamless-auth[fastapi]>=0.2` with `uv add` or `poetry add`, or prints the
-`pip install` for a pip project. It names the entry as the first of `main.py`, `app/main.py`,
+`add` installs `seamless-auth[fastapi]>=0.2` and `python-dotenv` with `uv add` or `poetry add`, or
+prints the `pip install` for a pip project. It names the entry as the first of `main.py`, `app/main.py`,
 `app.py`, `src/main.py`, or `api/main.py` that exists. The printed code creates an `Adapter` from
-the environment, adds `CORSMiddleware` for `UI_ORIGINS` with credentials, includes `auth_router`
+the `.env` (loaded with `load_dotenv()` first), adds `CORSMiddleware` for `UI_ORIGINS` with credentials, includes `auth_router`
 (and `console_router` behind `SERVE_ADMIN_CONSOLE`), and protects `GET /api/me` with
 `RequireUser`.
 
-By hand: load the `.env` with python-dotenv (`load_dotenv()`), or run uvicorn with
-`--env-file .env` (which also needs python-dotenv installed), and pass `--api-url` if uvicorn is not on port 3000. With pip, also add the
-package to `requirements.txt`. See the [Python adapter](/build/python-adapter).
+By hand: with pip, add the packages to `requirements.txt` yourself. See the
+[Python adapter](/build/python-adapter).
 
 ### Django
 
-`add` installs `seamless-auth[django]>=0.2` the same way, and names the settings module that
-`manage.py` points at. The printed code adds a `SEAMLESS_AUTH` dict to `settings.py`, includes
-`seamless_auth.django` at `auth/` (and the console at `console/`) in `urls.py`, and protects a view
-with `@require_auth`.
+`add` installs `seamless-auth[django]>=0.2`, `python-dotenv`, and `django-cors-headers` the same
+way, and names the settings module that `manage.py` points at. The printed code loads the `.env`
+with `load_dotenv()` at the top of `settings.py`, adds `corsheaders` with credentialed CORS for
+`UI_ORIGINS`, adds a `SEAMLESS_AUTH` dict, includes `seamless_auth.django` at `auth/` (and the
+console at `console/`) in `urls.py`, and protects a view with `@require_auth`.
 
-By hand: credentialed CORS for `UI_ORIGINS` (for example with django-cors-headers), and loading
-the `.env` at the top of `settings.py` with python-dotenv. See the
+By hand: with pip, add the packages to `requirements.txt` yourself. See the
 [Python adapter](/build/python-adapter).
 
 ---
 
 ## Per Web App
 
-- **React** gets one step: wrap the app in `AuthProvider` with `apiHost` read from the API URL
-  variable, then read the session with `useAuth()`. Sign-in screens are yours to add: the bundled
-  `AuthRoutes` with react-router, or your own ([React SDK](/build/react-sdk),
-  [How To Build Your Own Auth UI](/build/custom-auth-ui)).
+- **React** gets two steps. First, wrap the app in `BrowserRouter` and `AuthProvider` with
+  `apiHost` read from the API URL variable (keep your router if you have one). Second, add the
+  bundled sign-in screens: `AuthRoutes` as the catch-all route for signed-out visitors, and a
+  `RequireAuth` wrapper that sends everyone else to `/login`. Read the session with `useAuth()`.
+  To use your own screens instead, see [How To Build Your Own Auth UI](/build/custom-auth-ui)
+  ([React SDK](/build/react-sdk)).
 - **Angular** gets `provideSeamlessAuth` (with the backend URL in it) and the `HttpClient`
   interceptor for your providers (`src/app/app.config.ts` when it exists), then the bundled
   sign-in screens as routes in `src/app/app.routes.ts` with guards for signed-in and signed-out

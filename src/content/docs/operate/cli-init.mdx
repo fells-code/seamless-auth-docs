@@ -71,10 +71,13 @@ templates are shown but cannot be selected.
 
 ### Web example
 
-Every web and full-stack template in the registry. As of the pinned registry ref (`v0.17.0`) that is:
+Every web and full-stack template in the registry. As of the pinned registry ref (`v0.19.1`) that is:
 
 - React (Vite) - basic example
 - React (Vite) - OAuth example
+- Angular (beta)
+- Vue (Vite) (beta)
+- SvelteKit (single-page app) (beta)
 - Next.js (App Router) - full-stack example (beta)
 
 Next.js is a full-stack template: it lands in `web/` and serves `/auth` itself, so a project built
@@ -84,10 +87,13 @@ on it has no `api/` layer and the backend question is skipped. See [Next.js](/bu
 
 ### Backend framework
 
-Every api template in the registry. As of `v0.17.0`:
+Every api template in the registry. As of `v0.19.1`:
 
 - Express
 - Fastify (beta)
+- Go (Gin) (beta)
+- Rust (Axum) (beta)
+- Python (FastAPI) (beta)
 
 This determines your API server in `api/`.
 
@@ -149,20 +155,27 @@ full-stack templates without asking.
 Every template can be selected on the command line, which answers that layer's prompt. The flags are
 registry-driven: each template answers to `--<id>`, and some also declare a shorter `--<alias>`.
 `seamless templates list` prints the id, kind, framework, flags, and status of every template the
-current registry offers, so treat it as the authoritative list. As of `v0.17.0`:
+current registry offers, so treat it as the authoritative list. As of `v0.19.1`:
 
 | Template                                    | Kind      | Flags                         | Status |
 | ------------------------------------------- | --------- | ----------------------------- | ------ |
 | React (Vite) - basic example                | web       | `--basic`, `--react-vite`     | stable |
 | React (Vite) - OAuth example                | web       | `--oauth`, `--react-oauth`    | stable |
+| Angular                                     | web       | `--angular`                   | beta   |
+| Vue (Vite)                                  | web       | `--vue`                       | beta   |
+| SvelteKit (single-page app)                 | web       | `--svelte`                    | beta   |
 | Express                                     | api       | `--express`                   | stable |
 | Fastify                                     | api       | `--fastify`                   | beta   |
+| Go (Gin)                                    | api       | `--gin`                       | beta   |
+| Rust (Axum)                                 | api       | `--axum`                      | beta   |
+| Python (FastAPI)                            | api       | `--fastapi`                   | beta   |
 | Expo (React Native) - mobile example        | mobile    | `--mobile`, `--expo`          | beta   |
 | Next.js (App Router) - full-stack example   | fullstack | `--nextjs`                    | beta   |
 
-Status is the starter template's status in the registry, not the adapter package's. The Fastify and
-Next.js templates are beta; `@seamless-auth/fastify` and `@seamless-auth/nextjs` themselves are
-official adapters (see [Current Official Coverage](/build/server-sdks#current-official-coverage)).
+Status is the starter template's status in the registry, not the adapter package's. The Fastify,
+Gin, Axum, FastAPI, and Next.js templates are beta; the adapters under them are official (see
+[Current Official Coverage](/build/server-sdks#current-official-coverage) and the
+[Python](/build/python-adapter), [Go](/build/go-adapter), and [Rust](/build/rust-adapter) pages).
 
 ```bash
 npx seamless-cli init my-app --oauth --fastify
@@ -216,8 +229,8 @@ The starters live in the
 `templates/web/react-oauth`) holds the starter source plus a `template.json` manifest.
 
 The CLI pins the repository to a tag, so a given CLI version always produces the same project. The
-current CLI (0.20.0) pins
-[`v0.17.0`](https://github.com/fells-code/seamless-templates/tree/v0.17.0). `openTemplateSource()`
+current CLI (0.23.1) pins
+[`v0.19.1`](https://github.com/fells-code/seamless-templates/tree/v0.19.1). `openTemplateSource()`
 resolves where templates are read from:
 
 | Source                       | When                             | Behavior                                                                                    |
@@ -227,9 +240,9 @@ resolves where templates are read from:
 | Local checkout               | `SEAMLESS_TEMPLATES_DIR` is set  | Reads `registry.json` and the templates from that directory; takes precedence over the ref |
 
 Before anything is copied, the CLI reads each selected template's manifest and checks its
-`requires.cliMin`, failing with an upgrade message if your CLI is older. At `v0.17.0` the Express,
-Fastify, and Next.js starters require seamless-cli 0.19.0 (they read `{{authServerIssuer}}`), Expo
-requires 0.16.0, and the React (Vite) starters require 0.3.0. Pointing an older CLI at that tag
+`requires.cliMin`, failing with an upgrade message if your CLI is older. At `v0.19.1` the Express,
+Fastify, Gin, Axum, FastAPI, and Next.js starters require seamless-cli 0.19.0 (they read `{{authServerIssuer}}`), Expo
+requires 0.16.0, and the React (Vite), Angular, Vue, and SvelteKit starters require 0.3.0. Pointing an older CLI at that tag
 with `SEAMLESS_TEMPLATES_REF` therefore fails for the server-side starters. Each template is then
 copied into the manifest's `targetDir` (`web`, `api`, or `mobile`). Build output and local-only
 files such as `node_modules`, `dist`, `.git`, and `.env` are never copied.
