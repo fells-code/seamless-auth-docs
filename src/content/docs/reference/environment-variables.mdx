@@ -124,7 +124,8 @@ passkey flows even when the rest of the stack looks healthy.
 | `OAUTH_PROVIDERS`    | JSON provider config array                      |
 | `OAUTH_STATE_SECRET` | OAuth state signing secret                      |
 | `OAUTH_ALLOW_UNBOUND_STATE` | Deprecated, removed in v0.20. `true` accepts an OAuth callback without the `binding` from `/start`, for clients older than `@seamless-auth/client` 0.7.1. It reopens login CSRF while set and warns at boot |
-| Provider secret vars | Values referenced by provider `clientSecretEnv` |
+| `OAUTH_PROVIDER_PRIVATE_HOSTS` | Comma-separated OAuth provider hosts allowed to resolve to private or loopback addresses in production, for an on-premises IdP. Link-local is always refused |
+| Provider secret vars | Values referenced by provider `clientSecretEnv`; names must end in `_CLIENT_SECRET` |
 
 Example provider configs reference secrets by name:
 

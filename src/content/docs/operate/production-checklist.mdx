@@ -114,7 +114,9 @@ kept out of version control.
 
 On your backend, give the server adapter the same `SEAMLESS_SERVICE_TOKEN` as its `serviceSecret`,
 and set its own production options (a long random `cookieSecret`, secure cookies and an explicit
-`jwksKid`). See [Required options](/build/server-sdks#required-options). Run the backend with
+`jwksKid`). If the backend started from a starter's `.env.example`, replace its example
+`COOKIE_SIGNING_KEY` and `SEAMLESS_SERVICE_TOKEN`: those values are public, and starters refuse them
+outside development. See [Required options](/build/server-sdks#required-options). Run the backend with
 `NODE_ENV=production` as well: the starter backends log sign-in codes to the console in development.
 
 ---
