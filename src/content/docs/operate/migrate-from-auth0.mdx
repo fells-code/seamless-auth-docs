@@ -386,6 +386,16 @@ a permissive license: you can use, modify, and self-host it commercially, and it
 obligations on your application code. Keep the license and notices if you redistribute Seamless Auth
 itself.
 
+The license is backed by the
+[Seamless Auth License Pledge](https://github.com/fells-code/.github/blob/main/GOVERNANCE.md#the-seamless-auth-license-pledge) in the
+fells-code [governance document](https://github.com/fells-code/.github/blob/main/GOVERNANCE.md). In brief: there is no enterprise edition; single sign-on,
+SCIM, multi-factor authentication, organizations, and security features such as audit logging and
+admin controls are part of the open source product and stay in it; code released under Apache-2.0
+will not be relicensed to a source-available or more restrictive license; and any managed offering
+charges for hosting and support, never for features missing from the open source release. The
+pledge is about where features live, not a list of what ships today: SAML and SCIM are not built
+yet.
+
 **Is passkey sign-in phishing-resistant?**
 Yes. A passkey is bound to your site's domain, so a look-alike site cannot use it. With
 `phishing_resistant_only: true`, passkeys are the only way to start a session.

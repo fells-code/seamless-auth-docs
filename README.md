@@ -61,3 +61,7 @@ Read [AGENTS.md](./AGENTS.md) before changing content. It applies to people as m
 ## License
 
 Apache-2.0. See [LICENSE](./LICENSE).
+
+Project governance, including the
+[Seamless Auth License Pledge](https://github.com/fells-code/.github/blob/main/GOVERNANCE.md#the-seamless-auth-license-pledge),
+is in the fells-code [GOVERNANCE.md](https://github.com/fells-code/.github/blob/main/GOVERNANCE.md).
