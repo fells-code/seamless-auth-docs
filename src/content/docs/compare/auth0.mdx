@@ -1,0 +1,234 @@
+---
+title: "Seamless Auth vs Auth0"
+description: "Considering leaving Auth0 for a self-hosted, open source alternative? An honest comparison of Seamless Auth and Auth0 (Okta Customer Identity): sign-in methods, organizations, enterprise SSO, MFA, extensibility, hosting, export, and cost, with dated sources."
+sidebar:
+  order: 4
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Auth0 and Seamless Auth both sign users in to your applications and manage their sessions, but they
+are very different in scope. Auth0, owned by Okta, is a hosted identity platform with a broad
+feature set: passwords and passwordless sign-in, enterprise connections including SAML, inbound
+SCIM, Organizations, many MFA factors, Node.js Actions, and an OAuth 2.0 and OpenID Connect
+authorization server for your own APIs and machine-to-machine clients. Seamless Auth is an open
+source (Apache-2.0), passwordless-only auth server that you self-host inside your own stack or run
+on the Seamless Auth managed service. It does much less than Auth0, on purpose.
+
+This page is for an engineer or technical lead deciding whether to move off Auth0, or whether to
+start on it. Every Auth0 detail links to Auth0's or Okta's own docs or pricing page, and the
+[Sources](#sources) section gives the date each one was checked. Seamless Auth details were checked
+against the source repositories. Prices, plan contents, and feature limits change, so confirm them
+on [auth0.com/pricing](https://auth0.com/pricing) before you decide.
+
+---
+
+## Choose Auth0 If
+
+- **You need SAML enterprise SSO or SCIM provisioning for your customers.** Auth0 supports SAML,
+  OpenID Connect, AD/LDAP, ADFS, Microsoft Entra ID, Google Workspace, and other enterprise
+  connections, which can be enabled per Organization, and inbound SCIM on selected enterprise
+  connections. Seamless Auth has no SAML and no SCIM.
+- **You need an identity provider for other applications.** Auth0 is an OAuth 2.0 and OpenID Connect
+  authorization server: it issues tokens for your APIs, supports the client credentials flow for
+  machine-to-machine access, and is a certified FAPI OpenID Provider. Seamless Auth signs users in to
+  your application only. It is not an OpenID Connect provider for third-party clients and issues no
+  machine-to-machine tokens.
+- **You need password sign-in.** Auth0 supports passwords in database connections. Seamless Auth has
+  no password flow, by design.
+- **You want to run custom code inside the login flow.** Auth0 Actions are Node.js functions on
+  triggers such as `post-login`, `pre-user-registration`, and `credentials-exchange`. Seamless Auth
+  has no equivalent; that logic goes in your own backend.
+- **You need a wide choice of MFA factors.** Auth0 lists push notifications (Guardian), SMS, voice,
+  authenticator-app OTP, WebAuthn security keys and device biometrics, email, Cisco Duo, and recovery
+  codes. Seamless Auth offers passkeys and TOTP as a second factor.
+- **You need a vendor's compliance reports or an SLA.** Auth0 documents an annual SOC 2 Type 2 audit,
+  ISO 27001/27017/27018, a HIPAA BAA on request, PCI DSS deployment models, and CSA STAR, and its
+  pricing page lists a 99.99% SLA on Enterprise. Seamless Auth has no third-party compliance
+  attestations of its own.
+- **You want nothing to run yourself and a large, established product.** Auth0 operates the service,
+  in a multi-tenant public cloud or a dedicated private cloud on AWS or Azure. Seamless Auth is 0.x,
+  with a much smaller community.
+
+## Choose Seamless Auth If
+
+- **Users and sessions must stay inside your own boundary.** Self-hosted, the auth API and its
+  Postgres database run in your infrastructure. Auth0's documented deployment options (public cloud,
+  Private Cloud on AWS, Private Cloud on Azure) are all managed by Auth0; it documents no
+  self-hosted deployment.
+- **You want passwordless as the only option, enforced.** There is no password to phish, reuse, or
+  export. The `phishing_resistant_only` system setting accepts only passkeys to start a session.
+  In Auth0, passkeys are an option on database connections, and Auth0's docs note that passkeys do
+  not replace or invalidate a user's existing credentials.
+- **You want the auth server's source under a permissive license.** The auth API, server adapters,
+  frontend SDKs, admin dashboard, and CLI are all Apache-2.0. Auth0 is a commercial service sold by
+  plan.
+- **You prefer not to pay per active user or per enterprise connection.** Self-hosting has no per-user
+  fee; you pay for the infrastructure you run. Auth0 plans scale with monthly active users, and its
+  pricing page lists a charge for each enterprise SSO connection above a plan's allowance.
+- **You want your user data in a database you can query.** Self-hosted, users, memberships, and
+  auth events are rows in a Postgres database you run, and the auth event trail exports as a
+  hash-chained file you can verify. Auth0's bulk user export is not on its Free plan, and a password
+  hash export goes through a support case with no delivery estimate.
+- **You want organizations without plan limits.** Seamless Auth ships organizations, memberships,
+  per-organization roles and scopes, and an active organization on the session, with no cap on how
+  many. Auth0's pricing page limits the number of Organizations on its Free plan and B2C plans.
+
+---
+
+## Feature Comparison
+
+Auth0 column as checked on the dates in [Sources](#sources). "Plan" names refer to Auth0's pricing
+page.
+
+| | Seamless Auth | Auth0 |
+| --- | --- | --- |
+| License | Apache-2.0 for the server, SDKs, dashboard, and CLI | Commercial hosted service, sold by plan |
+| Hosting | Self-host (Docker, Postgres) or Seamless Auth managed hosting | Auth0 public cloud, or Private Cloud on AWS or Azure, all managed by Auth0 |
+| Where user data lives | Your Postgres when self-hosted; Fells Code's infrastructure on the managed path | Auth0's infrastructure (shared or dedicated) |
+| Passkeys | Yes, primary sign-in method (WebAuthn via SimpleWebAuthn) | Yes, on database connections, all plans; up to 20 per user |
+| Magic links | Yes | Yes, but Classic Login only, not Universal Login |
+| Email OTP | Yes | Yes |
+| SMS OTP | Yes (Twilio or AWS SNS, configured by you) | Yes |
+| MFA | TOTP and passkey (WebAuthn) step-up as a second factor | Push (Guardian), SMS, voice, OTP apps, WebAuthn keys and biometrics, email, Duo, recovery codes; available factors depend on plan |
+| Passwords | No, by design | Yes |
+| Social and OIDC login | Yes, instance-wide; CLI presets for Google, GitHub, Microsoft (Entra ID), GitLab | Yes, social and enterprise connections |
+| SAML enterprise SSO | No | Yes, as an enterprise connection. 1 on Free, 3 on B2B Essentials, 5 on B2B Professional, extra connections a paid add-on; the B2C feature table lists none on Essentials or Professional |
+| SCIM provisioning | No | Inbound SCIM on SAML, OIDC, Okta Workforce, and Entra ID connections; needs a plan with enterprise connections |
+| Acts as an OAuth/OIDC provider, machine-to-machine tokens | No | Yes |
+| Organizations | Yes: memberships, per-organization roles and scopes, active organization on the session | Yes: members, roles, invitations, per-organization connections and branding; 5 on Free, 10 on B2C paid plans, unlimited (subject to system limits) on B2B paid plans |
+| Extensibility | Logic in your own backend, behind the server adapter | Actions (Node.js) on login, registration, password, and machine-to-machine triggers; 5 on Free up to 30 on Enterprise |
+| Prebuilt UI | Built-in auth routes (`AuthRoutes` in React; equivalents in Angular, Vue, Svelte), or headless | Universal Login on Auth0's authorization server, Classic Login, and embedded login |
+| User import | `seamless migrate csv`, `seamless migrate entra-id`, `POST /admin/users/import`; identities only, no credentials | Bulk import into a database connection, including supported password hashes; 500KB per file |
+| User export | No bulk export endpoint; self-hosted, the data is in your own Postgres. Paginated admin user list and a passkey coverage report (CSV) | Bulk export job (JSON or CSV), not on Free; password hashes and MFA secrets by support case |
+| Audit trail | Append-only, hash-chained auth events; NDJSON export with an integrity check | Tenant logs, retention by plan; log streams to many services or a webhook |
+| Third-party compliance attestations | None for Seamless Auth itself | SOC 2 Type 2, ISO 27001/27017/27018, HIPAA BAA, PCI DSS, CSA STAR, FAPI certified |
+| Maturity | 0.x, small community | Established commercial product, large community |
+| Pricing model | Free to self-host; managed plans in the portal | Free plan up to 25,000 MAU; paid plans priced by MAU tier, separate B2C and B2B prices, add-ons for enterprise connections, MFA, and M2M tokens |
+
+<Aside type="note">
+  As checked on 2026-10-20, Auth0's pricing page lists a Free plan up to 25,000 monthly active
+  users, Essentials from $35 per month (B2C) or $150 per month (B2B), Professional from $240 per
+  month (B2C) or $800 per month (B2B), and Enterprise on request. Those starting prices are for 500
+  MAU, and the price rises with the MAU tier. Extra enterprise SSO connections on B2B plans are listed at $100 per
+  month each, up to 30 in total. Check [auth0.com/pricing](https://auth0.com/pricing) for current
+  figures.
+</Aside>
+
+---
+
+## Okta Customer Identity
+
+Okta sells Auth0 under the Okta Customer Identity name. Okta's cloud deployment page describes
+"Okta Customer Identity Cloud, powered by Auth0," and Okta's customer identity product page
+redirects to auth0.com. If you are evaluating "Okta Customer Identity" or "Okta CIC," the Auth0
+column above is the product you are evaluating: the same deployment options (multi-tenant public
+cloud, or a single-tenant private cloud on AWS or Azure) and no self-hosted option.
+
+This page does not cover Okta Workforce Identity, Okta's product for employee sign-in. Auth0 can
+use an Okta Workforce organization as an enterprise connection.
+
+---
+
+## Architecture Difference
+
+**Auth0** is an external identity provider. Your app redirects users to Auth0 (usually Universal
+Login on an Auth0 domain or a custom domain you point at Auth0), Auth0 authenticates them against a
+connection, runs any Actions, and returns OpenID Connect tokens to your app. Your APIs validate
+Auth0-issued access tokens. Users, credentials, and organizations live in Auth0's tenant, and you
+read them through the Management API.
+
+**Seamless Auth** is a service you run next to your backend:
+
+```txt
+browser or native app
+  -> your backend's /auth routes   (@seamless-auth/express, fastify, nextjs, or the Python/Go/Rust adapter)
+  -> seamless-auth-api             (your infrastructure, or Seamless Auth managed)
+  -> Postgres
+```
+
+Clients never call the auth API directly. Your backend mounts the adapter routes, forwards calls
+with a service token, and keeps the session in signed `httpOnly` cookies on your domain (native
+apps use bearer tokens in the platform keystore). Your backend verifies sessions locally against the
+auth API's JWKS. Authorization stays in your own code. See
+[What Is Seamless Auth?](/start/overview#how-the-pieces-connect).
+
+The practical consequence: Auth0 is a central identity provider that many apps and APIs can trust;
+Seamless Auth is sign-in for your application, and the sign-in pages are yours.
+
+---
+
+## When Not To Use Seamless Auth
+
+Be direct with yourself about these before planning a move off Auth0. If any is a hard requirement
+today, stay on Auth0 or choose another product.
+
+- **A customer requires SAML SSO into your app.** Seamless Auth has no SAML. Its OAuth and OpenID
+  Connect providers are configured instance-wide, not per customer organization.
+- **You provision users from a customer's directory with SCIM.** Seamless Auth has no SCIM. Bulk
+  changes go through the CSV import.
+- **Other applications or services use Auth0 as their identity provider.** Seamless Auth is not an
+  OpenID Connect provider and does not issue tokens to third-party apps or machine-to-machine
+  clients. Anything that logs in through Auth0 today, other than your own application, needs another
+  home.
+- **Your users sign in with passwords and you cannot change that.** There is no password flow, and
+  no password hashes are imported.
+- **You depend on Actions to shape tokens or gate login.** There is no hook system; you move that
+  logic into your backend.
+- **You need a vendor's SOC 2 report or a contractual SLA for the auth service itself.** Seamless
+  Auth has no third-party attestations. Self-hosted, it is covered by your own controls.
+- **You need a 1.0 stability guarantee.** Every Seamless Auth package is still 0.x.
+
+The full list is in
+[When Seamless Auth Is Not The Right Choice](/start/overview#when-seamless-auth-is-not-the-right-choice)
+and [What You Give Up Or Must Plan For](/operate/migrate-from-auth0#what-you-give-up-or-must-plan-for).
+
+---
+
+## Migrating From Auth0
+
+The [Auth0 migration guide](/operate/migrate-from-auth0) covers the move end to end: export users
+with the Management API's bulk export job, convert the export to CSV with `jq`, import identities
+with `seamless migrate csv --source auth0`, keep Auth0 sign-in working through OpenID Connect while
+users move, get everyone onto a passkey, and switch Auth0 off.
+
+Seamless Auth imports no credentials of any kind, so you never need Auth0's password hash export,
+and passkeys and MFA factors registered with Auth0 do not carry over. Each user proves their email
+once, or signs in through Auth0 during cutover, and enrolls a new passkey. Fells Code, which
+maintains Seamless Auth, offers hands-on migration help (see the end of that guide).
+
+---
+
+## Sources
+
+Auth0 and Okta details, each checked on the date shown:
+
+- [Auth0 pricing](https://auth0.com/pricing), checked 2026-10-20: plans and starting prices, B2C and B2B split, MAU limits, passkeys on all plans, MFA tiers, Organizations, enterprise connection allowances and add-on price, SCIM, Actions counts, SLA
+- [Passkeys](https://auth0.com/docs/authenticate/database-connections/passkeys), checked 2026-10-20: database connections, 20 passkeys per user, existing credentials not replaced
+- [Passwordless connections](https://auth0.com/docs/authenticate/passwordless), checked 2026-10-20: email and SMS codes, magic links in Classic Login only
+- [Multi-factor authentication factors](https://auth0.com/docs/secure/multi-factor-authentication/multi-factor-authentication-factors), checked 2026-10-20: factor list, factors depend on plan
+- [Organizations](https://auth0.com/docs/manage-users/organizations), checked 2026-10-20: members, roles, invitations, per-organization connections and branding
+- [Enterprise connections](https://auth0.com/docs/authenticate/enterprise-connections), checked 2026-10-20: SAML, OIDC, AD/LDAP, ADFS, Entra ID, Google Workspace, PingFederate, Okta Workforce
+- [Configure inbound SCIM](https://auth0.com/docs/authenticate/protocols/scim/configure-inbound-scim), checked 2026-10-20: supported connection types, plan must include enterprise connections
+- [Actions](https://auth0.com/docs/customize/actions), checked 2026-10-20: Node.js, triggers
+- [Client credentials flow](https://auth0.com/docs/get-started/authentication-and-authorization-flow/client-credentials-flow), checked 2026-10-20: machine-to-machine applications
+- [Bulk user imports](https://auth0.com/docs/manage-users/user-migration/bulk-user-imports), checked 2026-10-20: database connections, supported password hashes, 500KB file limit
+- [Bulk user exports](https://auth0.com/docs/manage-users/user-migration/bulk-user-exports), checked 2026-10-20: not on the Free plan, JSON and CSV, job data deleted after 24 hours
+- [Export password hashes and MFA secrets](https://auth0.com/docs/manage-users/user-migration/export-password-hashes-and-mfa-secrets), checked 2026-10-20: support case, no delivery estimate
+- [Log streams](https://auth0.com/docs/customize/log-streams), checked 2026-10-20: destinations, custom webhook, retention depends on subscription
+- [Data privacy and compliance](https://auth0.com/docs/secure/data-privacy-and-compliance), checked 2026-10-20: SOC 2 Type 2, ISO, HIPAA, PCI DSS, CSA STAR, FAPI
+- [Deployment options](https://auth0.com/docs/deploy-monitor/deployment-options), checked 2026-10-20: public cloud and Private Cloud on AWS or Azure, all managed
+- [Okta cloud deployment](https://www.okta.com/products/cloud-deployment/), checked 2026-10-20: "Okta Customer Identity Cloud, powered by Auth0", public and private cloud
+- [Universal Login](https://auth0.com/docs/authenticate/login/auth0-universal-login), checked 2026-10-20: login on Auth0's authorization server
+- [Okta customer identity product page](https://www.okta.com/products/customer-identity/), checked 2026-10-20: redirects to auth0.com
+
+Seamless Auth details:
+
+- [What Is Seamless Auth?](/start/overview), including [When Seamless Auth Is Not The Right Choice](/start/overview#when-seamless-auth-is-not-the-right-choice)
+- [Migrating Off Auth0](/operate/migrate-from-auth0), including [What You Give Up Or Must Plan For](/operate/migrate-from-auth0#what-you-give-up-or-must-plan-for)
+- [Migrate Users From Another Identity System](/operate/migrate-users)
+- [Environment Variables](/reference/environment-variables) (`LOGIN_METHODS`, SMS providers)
+- [How To Use Organizations And Memberships](/build/organizations-memberships)
+- [OAuth Login](/build/oauth-login)
+- [Auth Events and Auditing](/understand/authevents)
+- Source: [fells-code on GitHub](https://github.com/fells-code)
