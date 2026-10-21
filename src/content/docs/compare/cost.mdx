@@ -82,6 +82,9 @@ uses one typical setup, priced from DigitalOcean's own pricing pages on 2026-10-
 DigitalOcean's PostgreSQL pricing details page says single node clusters are not highly available
 and recommends them for development and testing, and that high availability clusters begin at
 $30.00 per month for the primary node plus at least one matching standby node at $30.00 per month.
+The same page says that from 15 October 2026 for new accounts, and 30 November 2026 for all
+accounts, new Standard Edition clusters cannot add standby nodes, so a new high availability
+cluster needs a different edition. The single node plan the calculator uses is not affected.
 Extra storage on a Standard Edition cluster costs $0.215 per GiB per month. That page gives
 round starting prices (single node clusters from $15.00 per month); the calculator uses the
 $15.15 that the Managed Databases pricing page lists for the plan.
@@ -132,7 +135,8 @@ Each page was checked on the date shown. All prices are in US dollars.
   range 10 to 30 GiB
 - [DigitalOcean PostgreSQL pricing details](https://docs.digitalocean.com/products/databases/postgresql/details/pricing/),
   checked 2026-10-21: single node clusters not highly available, high availability from $30.00 per
-  month per node, extra Standard Edition storage at $0.215 per GiB per month
+  month per node, no standby nodes on new Standard Edition clusters from 2026-10-15 (new accounts)
+  and 2026-11-30 (all accounts), extra Standard Edition storage at $0.215 per GiB per month
 
 The calculator's prices all live in one file,
 [`src/components/cost-calculator/pricing.ts`](https://github.com/fells-code/seamless-auth-docs/blob/main/src/components/cost-calculator/pricing.ts),
