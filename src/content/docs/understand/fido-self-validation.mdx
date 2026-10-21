@@ -1,0 +1,109 @@
+---
+title: 'FIDO2 Server Self-Validation'
+description: 'Results of running the FIDO Alliance conformance tools against the Seamless Auth API: tool version, date, pass or fail per suite, the tests that did not run and why, and known deviations. Self-validation, not certification.'
+sidebar:
+  order: 7
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import Image from '../../../components/Image.astro';
+
+<Aside type="caution" title="Self-validation, not certification">
+  These are results of running the FIDO Alliance's public conformance tools ourselves. The FIDO
+  Alliance has not reviewed them, and Seamless Auth is not FIDO Certified. Interoperability testing
+  and certification are planned for v1.0
+  ([#397](https://github.com/fells-code/seamless-auth-api/issues/397)).
+</Aside>
+
+## Latest Run
+
+| | |
+| --- | --- |
+| Date | 2026-10-21 |
+| Tool | FIDO Conformance Tools 1.9.1 (desktop), FIDO2 Server tests |
+| Server | [`seamless-auth-api` v0.19.3](https://github.com/fells-code/seamless-auth-api/tree/v0.19.3) |
+| Result | **159 passed, 0 failed** (21.52 s) |
+| Test groups | All selected: MakeCredential Request, MakeCredential Response, MakeCredential Platform Attestations, GetAssertion Request, GetAssertion Response, Metadata Service Tests |
+| Optional features selected | Android Keystore attestation |
+
+<Image
+  src="/fido-self-validation-2026-10-21.webp"
+  alt="FIDO Conformance Tools 1.9.1, FIDO2 Server tests: passes 159, failures 0, duration 21.52s"
+  caption="Summary and configuration of the 2026-10-21 run"
+/>
+
+## Results Per Suite
+
+Every test the tool ran in each suite passed.
+
+| Suite | What it tests | Result |
+| --- | --- | --- |
+| Server-ServerPublicKeyCredentialCreationOptions-Req-1 | Registration options | Pass |
+| Server-ServerAuthenticatorAttestationResponse-Resp-1 | Registration response structure | Pass |
+| Server-ServerAuthenticatorAttestationResponse-Resp-2 | Registration `clientDataJSON` | Pass |
+| Server-ServerAuthenticatorAttestationResponse-Resp-3 | `attestationObject` | Pass |
+| Server-ServerAuthenticatorAttestationResponse-Resp-4 | Authentication algorithms | Pass, optional algorithms not run (below) |
+| Server-ServerAuthenticatorAttestationResponse-Resp-5 | `packed` full attestation | Pass |
+| Server-ServerAuthenticatorAttestationResponse-Resp-6 | `packed` self attestation | Pass |
+| Server-ServerAuthenticatorAttestationResponse-Resp-7 | `none` attestation | Pass |
+| Server-ServerAuthenticatorAttestationResponse-Resp-8 | `fido-u2f` attestation | Pass |
+| Server-ServerAuthenticatorAttestationResponse-Resp-9 | `tpm` attestation | Pass, P-3 and P-4 not run (below) |
+| Server-ServerAuthenticatorAttestationResponse-Resp-A | `android-key` attestation | Pass |
+| Server-ServerPublicKeyCredentialGetOptionsResponse-Req-1 | Authentication options | Pass |
+| Server-ServerAuthenticatorAssertionResponse-Resp-1 | Authentication response structure | Pass |
+| Server-ServerAuthenticatorAssertionResponse-Resp-2 | Authentication `clientDataJSON` | Pass |
+| Server-ServerAuthenticatorAssertionResponse-Resp-3 | `authenticatorData` | Pass |
+| Server-MDS3 | FIDO Metadata Service 3 | Pass |
+
+## Tests That Did Not Run
+
+The tool runs an optional test only when it is selected, and only for the algorithms the server
+supports. The API supports EdDSA, ES256, RS256 and RS1
+([`webauthnAlgorithms.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.3/src/lib/webauthnAlgorithms.ts)),
+so these did not run:
+
+- **Resp-4 P-1, P-2, P-3, P-4, P-6, P-7, P-10, P-11:** the optional algorithms ES256K (secp256k1),
+  PS256, PS384, PS512, RS384, RS512, ES384 and ES512, which the API does not offer.
+- **Resp-9 P-4,** `tpm` attestation with ES256. The tool lists it as experimental, and it was
+  deselected for this run. With it selected, it fails: the attestation is refused with
+  `PubArea unique is not same as public key x and y (TPM|ECC)`. The cause is in the WebAuthn
+  library the API uses (SimpleWebAuthn 14.0.3): its TPM structure parser does not read the hash
+  algorithm that follows an ECDSA signing scheme, so every later field is read two bytes early.
+  The authenticator's key matches the credential. A TPM that sets an ECDSA scheme on an ES256 key
+  cannot register a passkey with `attestation: 'direct'` until the library is fixed.
+- **Resp-9 P-3,** `tpm` attestation whose `pubArea.nameAlg` differs from the algorithm used for
+  `attested.name`. The tool did not run it in this configuration.
+
+## Known Deviations
+
+- **Android SafetyNet attestation is not tested.** Tool 1.9.1 has no SafetyNet suite, and
+  SafetyNet cannot be tested with fixtures: its statements expire within a minute and the tools
+  never emit one. The API still verifies SafetyNet attestation through SimpleWebAuthn.
+- **The tools drive a test-only interface.** They speak their own message format, so the API mounts
+  `/conformance` routes only when `FIDO_CONFORMANCE_MODE=true`, and never under
+  `NODE_ENV=production`
+  ([`conformanceMode.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.3/src/config/conformanceMode.ts)).
+  Those routes verify registrations and assertions with the same SimpleWebAuthn calls, origins,
+  RP ID and supported algorithms as the production WebAuthn routes
+  ([`conformance.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.3/src/controllers/conformance.ts),
+  [`webauthn.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.3/src/controllers/webauthn.ts)).
+  They skip what the tools cannot exercise: the pre-auth flow, session issuance, and the
+  deployment's authenticator policy. The options they return echo the selection criteria,
+  attestation conveyance and extensions the tools request, as the tools require.
+- **Test metadata and roots.** For the run, the API loads the tools' own metadata statements and
+  Metadata Service endpoints and trusts the tools' test root certificate, because the tools sign
+  every attestation with test keys.
+
+## Earlier Runs
+
+The first runs, on 2026-09-02 against the development branch after v0.7.4, found and fixed two issues: the
+conformance metadata loader did not read the tools' nested statement directory, so every
+attestation was refused as unlisted, and the registration options carried an extension the tools
+had not asked for. The tool's own report was not kept from those runs, so they are not published
+as results.
+
+---
+
+## Related Docs
+
+- [Security Posture and Threat Model](/understand/security)
