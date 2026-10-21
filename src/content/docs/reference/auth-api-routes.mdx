@@ -38,7 +38,6 @@ map of the auth server surface as it exists in the source repo today.
 | Admin          | `/admin/*`                         | Admin users, import, enrollment, reports, audit, orgs |
 | Internal       | `/internal/*`                      | Metrics, grouped events, login stats, anomalies       |
 | System Config  | `/system-config/*`                 | Roles, runtime config, and OAuth providers            |
-| Bootstrap      | `/internal/bootstrap/admin-invite` | First-admin bootstrap invite creation                 |
 | JWKS           | `/.well-known/jwks.json`           | Public JWKS endpoint                                  |
 | Health         | `/health/*`                        | Status and version probes                             |
 
@@ -347,16 +346,6 @@ System config includes roles, token TTLs, login methods, OAuth providers, lockou
 fallback policy, WebAuthn relying party ID, and allowed origins.
 
 For field-level behavior, see [System Config Reference](/reference/system-config).
-
----
-
-## Bootstrap
-
-| Method | Path                               | Purpose                               |
-| ------ | ---------------------------------- | ------------------------------------- |
-| `POST` | `/internal/bootstrap/admin-invite` | Create a first-admin bootstrap invite |
-
-This is an internal bootstrap route used by the CLI and guarded by the bootstrap secret flow.
 
 ---
 

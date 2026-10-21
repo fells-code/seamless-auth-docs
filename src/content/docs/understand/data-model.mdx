@@ -27,7 +27,6 @@ Organization -> has many -> Organization Memberships
 Session -> may point to -> Active Organization
 
 System -> configured by -> System Config
-Bootstrap -> handled by -> Bootstrap Invites
 ```
 
 ---
@@ -234,26 +233,6 @@ System config controls auth behavior such as:
 - `frontend_url`
 
 Raw secrets should stay in environment variables or a secret manager, not in `system_config`.
-
----
-
-## Bootstrap Invites
-
-Bootstrap invites are used for the first admin flow.
-
-| Field              | Type                | Description                 |
-| ------------------ | ------------------- | --------------------------- |
-| `id`               | `uuid`              | Invite ID                   |
-| `email`            | `string`            | Target email                |
-| `role`             | `'admin'`           | Assigned bootstrap role     |
-| `tokenHash`        | `string`            | Invite token hash           |
-| `expiresAt`        | `timestamp`         | Expiration                  |
-| `consumedAt`       | `timestamp \| null` | Usage marker                |
-| `createdBy`        | `string`            | Creation source             |
-| `createdIp`        | `string \| null`    | Creation request IP         |
-| `createdUserAgent` | `text \| null`      | Creation request user agent |
-| `lastSentAt`       | `timestamp \| null` | Last invite send            |
-| `attemptCount`     | `number`            | Invite attempts             |
 
 ---
 
