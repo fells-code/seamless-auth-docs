@@ -70,7 +70,8 @@ so these did not run:
   library the API uses (SimpleWebAuthn 14.0.3): its TPM structure parser does not read the hash
   algorithm that follows an ECDSA signing scheme, so every later field is read two bytes early.
   The authenticator's key matches the credential. A TPM that sets an ECDSA scheme on an ES256 key
-  cannot register a passkey with `attestation: 'direct'` until the library is fixed.
+  cannot register a passkey with `attestation: 'direct'` until the library is fixed. Reported
+  upstream as [SimpleWebAuthn#818](https://github.com/MasterKale/SimpleWebAuthn/issues/818).
 - **Resp-9 P-3,** `tpm` attestation whose `pubArea.nameAlg` differs from the algorithm used for
   `attested.name`. The tool did not run it in this configuration.
 
