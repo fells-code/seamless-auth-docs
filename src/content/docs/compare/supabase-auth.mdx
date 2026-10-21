@@ -52,7 +52,7 @@ status.
   its API gateway. Seamless Auth stores its own data in its own Postgres and works with whatever
   database and backend your app already uses.
 - **You need organizations and memberships as a built-in model.** Seamless Auth ships organizations,
-  memberships, scoped roles, and an active organization on the session. In Supabase you model tenants
+  memberships with per-organization roles and scopes, and an active organization on the session. In Supabase you model tenants
   yourself in tables and enforce them with RLS (Supabase's own "organizations" are for billing your
   Supabase account, not for your end users).
 - **You want sign-in to go through your backend.** Seamless Auth clients call your backend's `/auth`
@@ -75,13 +75,13 @@ Supabase column as of October 2026.
 | Passkeys | Yes, primary sign-in method (WebAuthn via SimpleWebAuthn) | Experimental (beta since May 2026): registered by a signed-in user; JS needs an opt-in flag; Flutter and Swift also experimental |
 | Magic links | Yes | Yes |
 | Email OTP | Yes | Yes |
-| SMS OTP | Yes (Twilio or AWS) | Yes (Twilio, MessageBird, Vonage) |
+| SMS OTP | Yes when self-hosted, through your Twilio or AWS account; not on managed instances | Yes (Twilio, MessageBird, Vonage) |
 | TOTP | Yes, as step-up / second factor | Yes, TOTP MFA; phone MFA is a paid add-on |
 | Passwords | No, by design | Yes |
 | Social and OIDC login | Yes, instance-wide; CLI presets for Google, GitHub, Microsoft (Entra ID), GitLab | Yes, about 20 providers plus custom OAuth2 and OIDC |
 | SAML enterprise SSO | No | Yes, Pro plan and above; self-hosted setup documented |
 | SCIM directory sync | No | Not documented |
-| Organizations for your end users | Yes: memberships, scoped roles, active organization on the session | No built-in model; build with tables and RLS (SAML connections carry an `sso_provider_id` usable in RLS) |
+| Organizations for your end users | Yes: memberships with per-organization roles and scopes, and an active organization on the session | No built-in model; build with tables and RLS (SAML connections carry an `sso_provider_id` usable in RLS) |
 | Prebuilt UI | Built-in auth routes (`AuthRoutes` in React; equivalents in Angular, Vue, Svelte), or headless | Copy-in auth blocks from the shadcn-based Supabase UI Library; the older `auth-ui-react` package is archived |
 | Admin dashboard | Yes, open source app you run (bundled on the managed path) | Supabase Studio (hosted dashboard; self-hosted Studio runs a single project) |
 | Third-party compliance attestations | None for Seamless Auth itself | SOC 2 Type 2 and HIPAA for the hosted platform, reports and BAA on Team and Enterprise |

@@ -24,8 +24,8 @@ decide.
 ## Choose Clerk If
 
 - **You want no auth infrastructure to run at all.** Clerk operates the service, the database,
-  email and SMS delivery, and upgrades. Seamless Auth's managed path also removes this, but its
-  self-hosted path, the reason most people look at it, means you operate it.
+  email and SMS delivery, and upgrades. Seamless Auth's managed path removes most of this (it has no
+  SMS sender), but its self-hosted path, the reason most people look at it, means you operate it.
 - **You need password sign-in.** Clerk supports passwords alongside passwordless methods. Seamless
   Auth has no password flow, by design.
 - **You need SAML enterprise SSO or SCIM directory sync today.** Clerk offers SAML and OIDC
@@ -70,13 +70,13 @@ production.
 | Passkeys | Yes, primary sign-in method (WebAuthn via SimpleWebAuthn) | Yes, paid plan. Added after sign-up, max 10 per account |
 | Magic links | Yes | Yes (email links) |
 | Email OTP | Yes | Yes |
-| SMS OTP | Yes (Twilio or AWS) | Yes, paid plan, US and Canada enabled by default |
+| SMS OTP | Yes when self-hosted, through your Twilio or AWS account; not on managed instances | Yes, paid plan, US and Canada enabled by default |
 | TOTP | Yes, as step-up / second factor | Yes, MFA on a paid plan |
 | Passwords | No, by design | Yes |
 | Social and OIDC login | Yes, instance-wide; CLI presets for Google, GitHub, Microsoft (Entra ID), GitLab | Yes; free plan limited to 3 social connections |
 | SAML enterprise SSO | No | Yes, paid plan, per connection |
 | SCIM directory sync | No | Yes (Directory Sync), paid plan |
-| Organizations | Yes: memberships, scoped roles, active organization on the session | Yes: roles, permissions, invitations, verified domains; limits on the free tier |
+| Organizations | Yes: memberships with per-organization roles and scopes, and an active organization on the session | Yes: roles, permissions, invitations, verified domains; limits on the free tier |
 | Prebuilt UI | Built-in auth routes (`AuthRoutes` in React; equivalents in Angular, Vue, Svelte), or headless | Extensive components (sign-in, sign-up, user profile, organization switcher) and hosted Account Portal |
 | Admin dashboard | Yes, open source app you run (bundled on the managed path) | Yes, the Clerk Dashboard |
 | Third-party compliance attestations | None for Seamless Auth itself | SOC 2 report on Business plan; HIPAA BAA on Enterprise |
