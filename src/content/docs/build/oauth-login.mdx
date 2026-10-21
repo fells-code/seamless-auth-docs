@@ -294,6 +294,13 @@ resolves, so `useAuth()` is already signed in when the dashboard renders.
 The snippet reads `result.error` instead of destructuring because the component already has an
 `error` state variable.
 
+Since auth API 0.19.2 the callback must also carry the `binding` that `/start` returned, which ties
+the `state` to the browser that started the sign-in. `startOAuthLogin` and `finishOAuthLogin` from
+`useAuth()` keep it in `sessionStorage` and send it for you (`@seamless-auth/client` 0.7.1 and
+later), so the snippets above need no change. If you call the auth client directly instead, keep
+`data.binding` from the start response with its `state` and pass it as `binding` to
+`finishOAuthLogin`. A callback without it fails with `Invalid OAuth state`.
+
 When the Express adapter handles `/auth/oauth/:providerId/callback`, it verifies the auth API
 response and sets the access and refresh cookies.
 
