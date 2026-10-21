@@ -1,0 +1,227 @@
+---
+title: "Seamless Auth vs Amazon Cognito"
+description: "Considering a self-hosted, open source alternative to Amazon Cognito? An honest comparison of Seamless Auth and Cognito user pools: feature plans, passkeys, passwordless codes, federation, machine-to-machine tokens, Lambda triggers, export, hosting, and cost, with dated sources."
+sidebar:
+  order: 6
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Amazon Cognito and Seamless Auth both sign users in to your applications and manage their sessions.
+Cognito user pools are an AWS-operated user directory and OAuth 2.0 and OpenID Connect authorization
+server, sold in three feature plans (Lite, Essentials, and Plus). They support passwords, passkeys,
+email and SMS one-time codes, social, SAML, and OIDC identity providers, machine-to-machine tokens,
+Lambda triggers, and a hosted sign-in page called managed login, and they plug into other AWS
+services. Seamless Auth is an open source (Apache-2.0), passwordless-only auth server that you
+self-host inside your own stack or run on the Seamless Auth managed service. It does much less than
+Cognito, and it is not tied to AWS.
+
+This page is for an engineer or technical lead deciding whether to move off Cognito, or whether to
+start on it. Every Cognito detail links to an AWS page, and the [Sources](#sources) section gives
+the date each one was checked. Seamless Auth details were checked against the source repositories
+at Seamless Auth API v0.19.3. Prices, plan contents, and feature limits change, so confirm them on
+[aws.amazon.com/cognito/pricing](https://aws.amazon.com/cognito/pricing/) before you decide.
+
+---
+
+## Choose Cognito If
+
+- **Your application is built on AWS and leans on its integrations.** Cognito user pool groups can
+  carry IAM roles for identity pools, identity pools exchange a sign-in for AWS credentials, and API
+  Gateway accepts Cognito access and ID tokens in a Cognito authorizer. Seamless Auth issues no AWS
+  credentials and no AWS service reads its sessions natively.
+- **You need SAML enterprise SSO.** User pools federate with SAML 2.0 and OpenID Connect identity
+  providers on every feature plan, as well as social providers. Seamless Auth has no SAML.
+- **You need an identity provider for other applications or machine clients.** A user pool with a
+  domain is an OAuth 2.0 and OpenID Connect authorization server, with resource servers, custom
+  scopes, and machine-to-machine access tokens through the client credentials grant. Seamless Auth
+  signs users in to your application only. It is not an OpenID Connect provider for third-party
+  clients and issues no machine-to-machine tokens.
+- **You need password sign-in.** Cognito supports passwords, including Secure Remote Password (SRP),
+  and can import existing bcrypt, scrypt, Argon2id, or PBKDF2-SHA256 password hashes. Seamless Auth
+  has no password flow, by design.
+- **You want to run custom code inside the sign-in flow.** Cognito invokes Lambda functions at pre
+  sign-up, pre and post authentication, pre token generation, user migration, custom messages,
+  custom senders, and custom authentication challenges. Seamless Auth has no equivalent; that logic
+  goes in your own backend.
+- **You need a vendor's compliance coverage.** AWS states that third-party auditors assess Cognito
+  as part of AWS compliance programs including SOC, PCI, FedRAMP, and HIPAA, with reports in AWS
+  Artifact. Seamless Auth has no third-party compliance attestations of its own.
+- **You want nothing to run yourself and a large, established product.** AWS operates Cognito.
+  Seamless Auth is 0.x, with a much smaller community.
+
+## Choose Seamless Auth If
+
+- **You want passkeys enforced, not just offered.** In Cognito, passkey sign-in is not on the Lite
+  plan, and the user pool sign-in policy requires the passkey option to be accompanied by at least
+  one other first factor. Seamless Auth's `phishing_resistant_only` setting accepts only a passkey
+  to start a session.
+- **You want a stricter passkey policy.** Cognito's user verification setting defaults to preferred,
+  and its docs state that it does not currently support attestation enforcement. Seamless Auth's
+  `authenticator_policy` defaults user verification to required, can block synced passkeys, and,
+  with direct attestation, can allow or deny authenticator models by AAGUID. See
+  [Authenticator Policy](/reference/system-config#authenticator-policy).
+- **Users and sessions must stay inside your own boundary, on any cloud.** Self-hosted, the auth API
+  and its Postgres database run in your infrastructure, which can be your own AWS account or
+  somewhere else. A Cognito user pool is an AWS-operated service in an AWS Region.
+- **You want the auth server's source under a permissive license.** The auth API, server adapters,
+  frontend SDKs, admin dashboard, and CLI are all Apache-2.0. Cognito is a proprietary AWS service.
+- **You prefer not to pay per active user or per token request.** Self-hosting has no per-user fee;
+  you pay for the infrastructure you run. Cognito bills monthly active users by plan, federated
+  users separately, and each machine-to-machine token request.
+- **You want your user data in a database you can query.** Self-hosted, users, memberships, and
+  auth events are rows in a Postgres database you run, and the auth event trail exports as a
+  hash-chained file you can verify. Cognito has no bulk export job: you page through `ListUsers`, at
+  most 60 users per call, and the user records it returns carry no password.
+- **You want organizations and memberships built in.** Seamless Auth ships organizations,
+  memberships, per-organization roles and scopes, and an active organization on the session.
+
+---
+
+## Feature Comparison
+
+Cognito column as checked on the dates in [Sources](#sources). "Plan" names refer to Cognito's user
+pool feature plans.
+
+| | Seamless Auth | Amazon Cognito user pools |
+| --- | --- | --- |
+| License | Apache-2.0 for the server, SDKs, dashboard, and CLI | Proprietary AWS service |
+| Hosting | Self-host (Docker, Postgres) or Seamless Auth managed hosting | Operated by AWS, per AWS Region; multi-Region replication is a paid add-on |
+| Where user data lives | Your Postgres when self-hosted; Fells Code's infrastructure on the managed path | AWS, in the user pool's Region; encrypted at rest with an AWS owned key or your own KMS key |
+| Passkeys | Yes, primary sign-in method (WebAuthn via SimpleWebAuthn); passkey-only mode | Yes, on Essentials and Plus, not Lite; must be offered alongside another first factor; up to 20 per user |
+| Passkey policy | User verification required by default; synced passkey and AAGUID allow or deny rules | User verification preferred by default, can be set to required; no attestation enforcement |
+| Magic links | Yes | Not listed among Cognito's sign-in methods |
+| Email OTP | Yes | Yes, as a first factor on Essentials and Plus |
+| SMS OTP | Yes (Twilio or AWS SNS, configured by you) | Yes, as a first factor on Essentials and Plus; messages sent through Amazon SNS and billed separately |
+| MFA | TOTP and passkey (WebAuthn) step-up as a second factor | Authenticator app and SMS codes on all plans; email codes on Essentials and Plus |
+| Passwords | No, by design | Yes, including SRP; password hash import from CSV |
+| Social and OIDC login | Yes, instance-wide; CLI presets for Google, GitHub, Microsoft (Entra ID), GitLab | Yes: Google, Facebook, Login with Amazon, Sign in with Apple, and OIDC providers, on all plans |
+| SAML enterprise SSO | No | Yes, as a SAML 2.0 service provider, on all plans |
+| Acts as an OAuth/OIDC provider, machine-to-machine tokens | No | Yes: authorization server, resource servers, custom scopes, client credentials |
+| Organizations | Yes: memberships, per-organization roles and scopes, active organization on the session | Groups, optionally mapped to IAM roles |
+| Extensibility | Logic in your own backend, behind the server adapter | Lambda triggers on sign-up, authentication, token generation, migration, and messages |
+| Prebuilt UI | Built-in auth routes (`AuthRoutes` in React; equivalents in Angular, Vue, Svelte), or headless | Managed login on a user pool domain (Essentials and Plus); classic hosted UI on all plans |
+| AWS integration | None; your backend verifies sessions with a server adapter | Identity pools for AWS credentials, API Gateway authorizers, Amplify |
+| User import | `seamless migrate csv`, `seamless migrate entra-id`, `POST /admin/users/import`; identities only, no credentials | CSV import jobs (up to 500,000 users per file), optionally with password hashes; user migration Lambda trigger |
+| User export | No bulk export endpoint; self-hosted, the data is in your own Postgres. Paginated admin user list and a passkey coverage report (CSV) | No bulk export job; `ListUsers`, 60 users per call, with no password field |
+| Audit trail | Append-only, hash-chained auth events; NDJSON export with an integrity check | User activity and risk logs with export on Plus |
+| Third-party compliance attestations | None for Seamless Auth itself | In scope for AWS programs including SOC, PCI, FedRAMP, and HIPAA |
+| Maturity | 0.x, small community | Established AWS service |
+| Pricing model | Free to self-host; managed plans in the portal | Per MAU by plan, federated MAUs priced separately, M2M billed per token request, add-ons for multi-Region replication and higher quotas |
+
+<Aside type="note">
+  As checked on 2026-10-21, Cognito's pricing page lists a free tier of 10,000 monthly active users
+  per account or AWS organization on Lite and Essentials, with no free tier on Plus. Above it,
+  Essentials is $0.015 per MAU and Plus is $0.020 per MAU. Lite is tiered; the page's worked example
+  charges $0.0055 per MAU up to 100,000 and $0.0046 from 100,001 to 1,000,000. Users who sign in
+  through SAML or OIDC federation have a free tier of 50 MAUs and then cost $0.015 per MAU on any
+  plan. Machine-to-machine token requests have no free tier, and the page's US East (N. Virginia)
+  example charges $0.00225 per token request. SMS and email are billed through Amazon SNS and SES.
+  The free tier is not available in the AWS GovCloud (US) Regions. Check
+  [aws.amazon.com/cognito/pricing](https://aws.amazon.com/cognito/pricing/) for current figures.
+</Aside>
+
+---
+
+## Architecture Difference
+
+**Cognito** is an AWS-operated identity provider. Your app signs users in either through managed
+login on a user pool domain (a Cognito prefix domain or your own custom domain), which redirects
+back with OAuth 2.0 and OpenID Connect tokens, or through the user pools API from your own code.
+Your APIs validate Cognito-issued JWTs, or let API Gateway do it. Users, credentials, and groups
+live in the user pool, and Lambda triggers customize the flow. Identity pools can exchange those
+tokens for temporary AWS credentials.
+
+**Seamless Auth** is a service you run next to your backend:
+
+```txt
+browser or native app
+  -> your backend's /auth routes   (@seamless-auth/express, fastify, nextjs, or the Python/Go/Rust adapter)
+  -> seamless-auth-api             (your infrastructure, or Seamless Auth managed)
+  -> Postgres
+```
+
+Clients never call the auth API directly. Your backend mounts the adapter routes, forwards calls
+with a service token, and keeps the session in signed `httpOnly` cookies on your domain (native
+apps use bearer tokens in the platform keystore). Your backend verifies sessions locally against the
+auth API's JWKS. Authorization stays in your own code. See
+[What Is Seamless Auth?](/start/overview#how-the-pieces-connect).
+
+The practical consequence: Cognito is an identity provider wired into AWS that many apps, APIs, and
+AWS services can trust; Seamless Auth is sign-in for your application, the sign-in pages are yours,
+and anything AWS-side goes through your backend.
+
+---
+
+## When Not To Use Seamless Auth
+
+Be direct with yourself about these before planning a move off Cognito. If any is a hard
+requirement today, stay on Cognito or choose another product.
+
+- **Your frontend calls AWS services directly with identity pool credentials.** Seamless Auth does
+  not issue AWS credentials. Those calls have to move behind your backend.
+- **API Gateway authorizers, Amplify Auth, or other AWS services read Cognito tokens.** None of them
+  read Seamless Auth sessions. Each one needs replacing with verification in your backend.
+- **A customer requires SAML SSO into your app.** Seamless Auth has no SAML. Its OAuth and OpenID
+  Connect providers are configured instance-wide, not per customer organization.
+- **Other applications or machine clients use Cognito as their authorization server.** Seamless Auth
+  is not an OpenID Connect provider and issues no client credentials tokens.
+- **Your users sign in with passwords and you cannot change that.** There is no password flow, and
+  no password hashes are imported.
+- **You depend on Lambda triggers to shape tokens or gate sign-in.** There is no hook system; you
+  move that logic into your backend.
+- **You need a vendor's audit reports for the auth service itself.** Seamless Auth has no
+  third-party attestations. Self-hosted, it is covered by your own controls.
+- **You need a 1.0 stability guarantee.** Every Seamless Auth package is still 0.x.
+
+The full list is in
+[When Seamless Auth Is Not The Right Choice](/start/overview#when-seamless-auth-is-not-the-right-choice)
+and [What You Give Up Or Must Plan For](/operate/migrate-from-cognito#what-you-give-up-or-must-plan-for).
+
+---
+
+## Migrating From Cognito
+
+The [Cognito migration guide](/operate/migrate-from-cognito) covers the move end to end: export
+users with a paged `aws cognito-idp list-users` loop (and groups with `ListUsersInGroup`), convert
+the export to CSV with `jq`, using each user's `sub` as the external id, import identities with
+`seamless migrate csv --source cognito`, keep Cognito sign-in working by adding the user pool as an
+OpenID Connect provider linked by `sub` while users move, get everyone onto a passkey, retire
+Cognito sign-in per organization or all at once, and switch the user pool off.
+
+Seamless Auth imports no credentials of any kind, so the lack of a password export from Cognito
+does not matter, and TOTP secrets, SMS MFA settings, and passkeys registered with Cognito do not
+carry over. Each user proves their email once, or signs in through Cognito during cutover, and
+enrolls a new passkey. Fells Code, which maintains Seamless Auth, offers hands-on migration help
+(see the end of that guide).
+
+---
+
+## Sources
+
+Amazon Cognito details, each checked on the date shown:
+
+- [Amazon Cognito pricing](https://aws.amazon.com/cognito/pricing/), checked 2026-10-21: Lite, Essentials, and Plus; free tiers; per-MAU prices; federated MAU price; machine-to-machine billing per token request and example rate; multi-Region replication and quota add-ons; SMS and email billed through SNS and SES; GovCloud exclusion; plan descriptions (Essentials adds managed login and passwordless sign-in with passkeys, email, or SMS)
+- [User pool feature plans](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-sign-in-feature-plans.html), checked 2026-10-21: features by plan, including passkeys and passwordless codes on Essentials and Plus, federation, authorization server, M2M, user import, MFA factors, Lambda triggers, managed login, and Plus activity logs and export
+- [Authentication flows](https://docs.aws.amazon.com/cognito/latest/developerguide/amazon-cognito-user-pools-authentication-flow-methods.html), checked 2026-10-21: passkeys not on Lite, `WEB_AUTHN` must be accompanied by another option, user verification preferred by default, no attestation enforcement, 20 passkeys per user, passwordless email and SMS codes, SRP
+- [Managed login](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-managed-login.html), checked 2026-10-21: authorization server and hosted pages on a user pool domain, classic hosted UI the only option on Lite, no passkeys in the classic hosted UI, Amplify
+- [Third-party sign-in](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-identity-federation.html), checked 2026-10-21: social, SAML, and OIDC providers; Cognito as an OIDC and OAuth 2.0 IdP
+- [SAML identity providers](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-saml-idp.html), checked 2026-10-21: SAML 2.0 IdPs, Cognito as a service provider
+- [Scopes, M2M, and resource servers](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-define-resource-servers.html), checked 2026-10-21: resource servers, custom scopes, client credentials, API Gateway authorizers, M2M billing model
+- [Lambda triggers](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-working-with-lambda-triggers.html), checked 2026-10-21: trigger types, five-second response limit
+- [Importing users from a CSV file](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-using-import-tool.html), checked 2026-10-21: password hash import and supported algorithms, 500,000 users per file
+- [`ListUsers`](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_ListUsers.html) and [`UserType`](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_UserType.html), checked 2026-10-21: at most 60 users per call; user record fields, none of them a password
+- [Cognito user profiles export guidance: limitations](https://docs.aws.amazon.com/solutions/latest/cognito-user-profiles-export-reference-architecture/guidance-components.html#limitations), checked 2026-10-21: passwords not backed up, users reset passwords in the new pool; MFA tokens not replicated
+- [Data protection in Amazon Cognito](https://docs.aws.amazon.com/cognito/latest/developerguide/data-protection.html), checked 2026-10-21: encryption at rest with AWS owned or customer managed keys in the user pool's Region
+- [Compliance validation for Amazon Cognito](https://docs.aws.amazon.com/cognito/latest/developerguide/compliance-validation.html), checked 2026-10-21: SOC, PCI, FedRAMP, HIPAA, AWS Artifact
+
+Seamless Auth details (Seamless Auth API v0.19.3):
+
+- [What Is Seamless Auth?](/start/overview), including [When Seamless Auth Is Not The Right Choice](/start/overview#when-seamless-auth-is-not-the-right-choice)
+- [Migrating Off Amazon Cognito](/operate/migrate-from-cognito), including [What You Give Up Or Must Plan For](/operate/migrate-from-cognito#what-you-give-up-or-must-plan-for)
+- [Migrate Users From Another Identity System](/operate/migrate-users)
+- [System Config Reference](/reference/system-config), including [Authenticator Policy](/reference/system-config#authenticator-policy), and [Environment Variables](/reference/environment-variables) (`LOGIN_METHODS`, SMS providers)
+- [How To Use Organizations And Memberships](/build/organizations-memberships)
+- [OAuth Login](/build/oauth-login)
+- [Auth Events and Auditing](/understand/authevents)
+- Source: [fells-code on GitHub](https://github.com/fells-code)
