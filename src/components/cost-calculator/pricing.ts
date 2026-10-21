@@ -15,37 +15,37 @@ export const sources = {
   auth0: {
     label: 'Auth0 pricing',
     url: 'https://auth0.com/pricing',
-    checked: '2026-10-20',
+    checked: '2026-10-21',
   },
   auth0Sales: {
     label: 'Auth0 sales',
     url: 'https://auth0.com/contact-us',
-    checked: '2026-10-20',
+    checked: '2026-10-21',
   },
   okta: {
     label: 'Okta plans and pricing, Customer Identity tab',
     url: 'https://www.okta.com/pricing/',
-    checked: '2026-10-20',
+    checked: '2026-10-21',
   },
   oktaSales: {
     label: 'Okta sales',
     url: 'https://www.okta.com/contact-sales/',
-    checked: '2026-10-20',
+    checked: '2026-10-21',
   },
   doDroplets: {
     label: 'DigitalOcean Droplet pricing',
     url: 'https://www.digitalocean.com/pricing/droplets',
-    checked: '2026-10-20',
+    checked: '2026-10-21',
   },
   doDatabases: {
     label: 'DigitalOcean Managed Databases pricing',
     url: 'https://www.digitalocean.com/pricing/managed-databases',
-    checked: '2026-10-20',
+    checked: '2026-10-21',
   },
   doPostgresDocs: {
     label: 'DigitalOcean PostgreSQL pricing details',
     url: 'https://docs.digitalocean.com/products/databases/postgresql/details/pricing/',
-    checked: '2026-10-20',
+    checked: '2026-10-21',
   },
 } satisfies Record<string, Source>
 
