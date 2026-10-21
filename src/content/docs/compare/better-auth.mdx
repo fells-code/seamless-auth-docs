@@ -76,14 +76,14 @@ Better Auth column as of October 2026.
 | Passkeys | Yes, primary sign-in method (WebAuthn via SimpleWebAuthn) | Yes, `@better-auth/passkey` plugin (SimpleWebAuthn); add to an existing account by default, passkey-first registration configurable |
 | Magic links | Yes | Yes, `magicLink` plugin; you supply the email sender |
 | Email OTP | Yes | Yes, `email-otp` plugin |
-| SMS OTP | Yes (Twilio or AWS) | Yes, `phone-number` plugin; you supply the SMS sender |
+| SMS OTP | Yes when self-hosted, through your Twilio or AWS account; not on managed instances | Yes, `phone-number` plugin; you supply the SMS sender |
 | TOTP | Yes, as step-up / second factor | Yes, `twoFactor` plugin (TOTP, OTP, backup codes); passwordless users need `allowPasswordless: true` |
 | Passwords | No, by design | Yes, built in |
 | Social and OIDC login | Yes, instance-wide; CLI presets for Google, GitHub, Microsoft (Entra ID), GitLab | Yes, built-in social providers and a `generic-oauth` plugin |
 | SAML enterprise SSO | No | Yes, `@better-auth/sso` plugin |
 | SCIM directory sync | No | Yes, `@better-auth/scim` plugin |
 | Acts as an OAuth/OIDC provider | No | Yes, `oauth-provider` plugin |
-| Organizations | Yes: memberships, scoped roles, active organization on the session | Yes, `organization` plugin: roles, invitations, teams, custom access control |
+| Organizations | Yes: memberships with per-organization roles and scopes, and an active organization on the session | Yes, `organization` plugin: roles, invitations, teams, custom access control |
 | Prebuilt UI | Built-in auth routes (`AuthRoutes` in React; equivalents in Angular, Vue, Svelte), or headless | No official components in the core docs; community projects such as Better Auth UI exist |
 | Admin dashboard | Yes, open source app you run | `admin` plugin APIs; dashboard via Better Auth Infrastructure (paid service, free Starter tier) |
 | Third-party compliance attestations | None for Seamless Auth itself | Not applicable to the library; it runs inside your own boundary |
