@@ -1,0 +1,115 @@
+---
+title: 'v0.19 Release Notes'
+description: 'What changed in Seamless Auth v0.19: security fixes and advisories, OAuth state binding, admin continuity, a first admin without logs, and honest documentation, with upgrade steps.'
+sidebar:
+  order: 10
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+v0.19 is about making what Seamless Auth already does trustworthy and findable. It shipped as the
+auth API 0.19.0 security release on 2026-10-18 and the 0.19.x patches that followed, with matching
+releases of the SDKs, server adapters, admin dashboard, templates, and CLI. The versions that go
+together are in the [Compatibility Matrix](/build/ecosystem#compatibility-matrix). Full details
+are in each package's changelog and GitHub release.
+
+<Aside type="caution">
+  Upgrade the auth API and the client SDK together. From auth API 0.19.2, OAuth sign-in needs
+  `@seamless-auth/client` 0.7.1 or later (`@seamless-auth/react` 0.18.1, `@seamless-auth/react-native`
+  0.3.3), and magic link sign-in from 0.19.0 needs a server adapter that forwards the browser's
+  pre-auth token on verify. See [Upgrading](#upgrading).
+</Aside>
+
+---
+
+## Security
+
+- **Two advisories fixed in 0.19.0.**
+  [GHSA-9jg2-jjqq-3346](https://github.com/fells-code/seamless-auth-api/security/advisories/GHSA-9jg2-jjqq-3346)
+  (high): a magic link issued a session to whoever polled for it, more than once. Each link now
+  issues one session, to the attempt that requested it, and a link opened on another device needs
+  the person who opened it to confirm.
+  [GHSA-66gq-4pwg-33jq](https://github.com/fells-code/seamless-auth-api/security/advisories/GHSA-66gq-4pwg-33jq)
+  (medium): anyone could lock an account, and the lock blocked passkeys too. Passkey sign-in is
+  no longer subject to lockout.
+- **Two older advisories disclosed.**
+  [GHSA-2r8w-h4h9-jw8p](https://github.com/fells-code/seamless-auth-api/security/advisories/GHSA-2r8w-h4h9-jw8p)
+  and [GHSA-7f64-r335-j842](https://github.com/fells-code/seamless-auth-api/security/advisories/GHSA-7f64-r335-j842),
+  both fixed in 0.8.0, are now published. The full list is under
+  [Published advisories](/understand/security#published-advisories).
+- **OAuth state bound to the client that started the sign-in (0.19.2).** `/oauth/:providerId/start`
+  returns a `binding` that the callback must send back, so a `state` and code taken from one
+  sign-in cannot be finished in another browser (login CSRF, RFC 9700 section 4.7). Found while
+  writing the [RFC 9700 matrix](/understand/oauth-rfc9700).
+- **Stricter tokens.** Access and pre-auth tokens must carry the issuer as audience and a `typ`,
+  and service tokens must expire within an hour.
+- **Fail closed on a response schema mismatch.** A response that does not match its declared schema
+  is replaced with a generic 500 instead of being sent.
+- **Development mode refused on public hosts.** The server will not start with `NODE_ENV` other than
+  `production` when `ISSUER` or `APP_ORIGINS` names a non-local host, unless
+  `SEAMLESS_ALLOW_INSECURE_DEV=true` is set on purpose.
+- **Shared secrets warned about.** The server names each secret that falls back to the service
+  token at boot. The fallback is removed in v0.20.
+- **IPv6 rate limits (0.19.2).** The magic link, OTP and OAuth limiters key an IPv6 client on its
+  /56.
+- **Dependencies (0.19.2).** `follow-redirects` 1.16.1.
+
+## Never Stranded
+
+- The last active admin can no longer be deleted, demoted, or delete themselves (`409 last_admin`).
+- A user still cannot delete their last passkey, and device replacement recovery remains the admin
+  path for a user who lost every credential.
+
+## Easier First Run
+
+- `seamless init` to a signed-in first admin without reading container logs: `seamless owner-code`
+  prints the owner's registration code (CLI 0.24.0). Timed on clean Linux x64 and arm64 machines and
+  a macOS machine.
+- Every template is on the current SDKs, and the starter dev containers no longer write root-owned
+  files into your project on Linux.
+- The bundled console at `/console` no longer requests a missing `/config.js`, handles the
+  cross-device magic link confirmation, and sends the OAuth binding (dashboard 0.10.1, API 0.19.3).
+- `seamless migrate entra-id` imports users from Microsoft Entra ID (CLI 0.25.0).
+- The server adapters publish declarations that resolve under `NodeNext`.
+
+## Honest Documentation
+
+- [Security Posture and Threat Model](/understand/security), checked against the code at a pinned
+  tag, including per-instance limits and accepted risks.
+- [OAuth Client and RFC 9700](/understand/oauth-rfc9700), row by row.
+- [Production Checklist](/operate/production-checklist).
+- Container image signing and verification, and `SECURITY.md` with the `security@fellscode.com`
+  contact.
+- The [Seamless Auth License Pledge](https://github.com/fells-code/.github/blob/main/GOVERNANCE.md#the-seamless-auth-license-pledge)
+  and the [governance document](https://github.com/fells-code/.github/blob/main/GOVERNANCE.md).
+
+## Choosing Seamless
+
+- Comparisons with [Auth0](/compare/auth0) (including Okta Customer Identity) and
+  [Keycloak](/compare/keycloak), each with a "choose them if" section first and every competitor
+  fact dated.
+
+---
+
+## Upgrading
+
+1. **Server adapter first.** Move to `@seamless-auth/express` or `@seamless-auth/fastify` 0.21 or
+   later, `@seamless-auth/nextjs` 0.5 or later, or the current Go, Python or Rust adapter. They
+   forward the pre-auth token the magic link fix relies on.
+2. **Client SDK with the API.** `@seamless-auth/client` 0.7.1, `@seamless-auth/react` 0.18.1,
+   `@seamless-auth/react-native` 0.3.3, or the Angular, Vue and Svelte bindings on client 0.7.1.
+   React 0.18 makes `AuthProvider` cookie transport only in the browser.
+3. **The auth API**, 0.19.3. It runs its migrations on start unless `RUN_MIGRATIONS=false`.
+4. **Set the dedicated secrets** (`REFRESH_TOKEN_LOOKUP_SECRET`, `TOTP_SECRET_ENCRYPTION_KEY`,
+   `OAUTH_STATE_SECRET`, `DECOY_SUBJECT_SECRET`) to the current service token value, so v0.20, which
+   requires them, is a no-op.
+5. **If some clients cannot upgrade yet**, `OAUTH_ALLOW_UNBOUND_STATE=true` lets their OAuth
+   callbacks through without a binding. It reopens login CSRF while set and is removed in v0.20.
+6. **A direct API integration** (not through an SDK) has to keep the `binding` from
+   `/oauth/:providerId/start` and send it with the callback. See [OAuth Login](/build/oauth-login).
+
+## Not In v0.19
+
+- FIDO certification is deferred to v1.0. v0.19 publishes self-validation results only.
+- Step-up on admin configuration, role and deletion writes moves to v0.20.
+- The OAuth state replay cache is still per instance (#414, v0.21).
