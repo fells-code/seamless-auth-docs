@@ -1,0 +1,262 @@
+---
+title: "Seamless Auth vs Keycloak"
+description: "Looking for a lighter, passkey-first alternative to Keycloak? An honest comparison of Seamless Auth and Keycloak: footprint, setup, theming, upgrades, passkeys, protocols, organizations, and SCIM, with dated sources."
+sidebar:
+  order: 5
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Keycloak and Seamless Auth are both open source (Apache-2.0) and both are meant to be self-hosted.
+They solve different problems. Keycloak is a full identity and access management server: an OpenID
+Connect and OAuth 2.0 provider, a SAML identity provider, an identity broker, and a user federation
+layer over LDAP and Active Directory, with its own login pages, account console, and admin console.
+Seamless Auth is a passwordless-only auth server for your own applications, built around passkeys,
+that sits behind your backend and lets your app render its own sign-in screens.
+
+This page is for an engineer who has Keycloak on the shortlist, because it is the default choice for
+self-hosted identity. Every Keycloak statement below links to a Keycloak-owned page (keycloak.org or
+the `keycloak/keycloak` GitHub repository), and the [Sources](#sources) list gives the date each
+page was checked. Keycloak details reflect Keycloak 26.8.1, the release listed on Keycloak's
+downloads page on 2026-10-20. Seamless Auth details were checked against the source repositories
+at Seamless Auth API v0.19.1. Keycloak ships often, so check its release notes for anything newer.
+
+---
+
+## Choose Keycloak If
+
+- **You need SAML.** Keycloak supports SAML 2.0 both for securing your applications and for
+  brokering to external SAML identity providers. Seamless Auth has no SAML support of any kind.
+- **You need LDAP or Active Directory federation.** Keycloak can federate existing LDAP and Active
+  Directory directories (and Kerberos) through User Federation, and offers a User Storage SPI for
+  other user databases. Seamless Auth has no LDAP, Active Directory, or Kerberos integration; users
+  live in its own Postgres database.
+- **You need a standards-based OIDC provider today.** Keycloak is an OpenID Connect and OAuth 2.0
+  provider, so any application with an OIDC relying party or SAML service provider library can sign
+  in through it, and one Keycloak realm can give many applications single sign-on. Seamless Auth is
+  not an OIDC provider: it publishes a JWKS for its own tokens, but has no authorization endpoint and
+  no OpenID discovery document, and its OAuth support is inbound only (signing users in with Google,
+  GitHub, and similar providers). Applications integrate through a Seamless Auth adapter or its
+  HTTP API instead.
+- **You need SCIM provisioning.** Keycloak 26.8.0 promoted its SCIM API from preview to supported.
+  It exposes SCIM 2.0 user and group endpoints per realm, once you turn the SCIM API on in that
+  realm's settings. Seamless Auth has no SCIM endpoints.
+- **You need passwords alongside passkeys, or many tenants with separate configuration.** Keycloak
+  supports passwords, passkeys, TOTP and HOTP, recovery codes, X.509 certificates, and step-up
+  authentication, and can run several isolated realms, each managing its own users, credentials,
+  roles, and groups. Seamless Auth has no password flow, by
+  design, and one instance has a single user directory and a single runtime configuration.
+- **You want a mature, widely deployed project with a large extension surface.** Keycloak is a Cloud
+  Native Computing Foundation incubating project, supports several databases (PostgreSQL, MySQL,
+  MariaDB, Microsoft SQL Server, Oracle, and managed variants), and is extended through Java SPIs for
+  authenticators, user storage, protocol mappers, and more. Seamless Auth is 0.x, runs only on
+  Postgres, and has a much smaller community.
+
+## Choose Seamless Auth If
+
+- **Passkeys are the primary sign-in method, not an addition to a password form.** Keycloak's passkey
+  support is mature (supported since 26.4.0) and is integrated into its username and password forms
+  once you switch on Enable Passkeys in the realm's WebAuthn Passwordless Policy. In Seamless Auth
+  there is no password form: the default login methods are passkey and magic link, and the
+  `phishing_resistant_only` setting restricts sign-in to passkeys alone.
+- **You want sign-in screens to live in your app's code.** Keycloak renders its login, account, and
+  email pages from FreeMarker theme templates on the server. Seamless Auth renders sign-in in your
+  application, through the SDK's built-in screens (themed with `--seamless-*` CSS custom properties)
+  or your own components on the headless client. There are no server-side templates to keep in step
+  with each server release.
+- **You want a smaller runtime.** Seamless Auth is one Node.js container plus Postgres, and the same
+  image serves the admin console at `/console`. See [Footprint](#footprint) for measured figures and
+  how they compare with Keycloak's published sizing guidance.
+- **Your applications are built on a stack Seamless Auth has an adapter for.** Adapters exist for
+  Node.js (Express, Fastify, Next.js), Python (FastAPI, Django), Go (`net/http`), and Rust (Axum),
+  with frontend SDKs for React, Angular, Vue, Svelte, and React Native. Browser sessions stay in
+  `httpOnly` cookies on your own domain.
+- **You do not need SAML, LDAP, or SCIM.** If your users sign in to your own product rather than to
+  a portfolio of enterprise applications, most of what Keycloak adds is surface you would configure,
+  secure, and upgrade without using.
+
+---
+
+## Feature Comparison
+
+Keycloak column as of Keycloak 26.8.1, checked 2026-10-20.
+
+| | Seamless Auth | Keycloak |
+| --- | --- | --- |
+| License | Apache-2.0 for the server, SDKs, dashboard, and CLI | Apache-2.0 |
+| Runtime | Node.js, one container (API plus admin console) | Java (the zip install needs OpenJDK 25); official container image on Quay |
+| Databases | Postgres only | PostgreSQL, MySQL, MariaDB, Microsoft SQL Server, Oracle, Aurora PostgreSQL, Azure SQL, and others; a `dev-file` database for development only |
+| Published memory guidance | None published; see the measurement under [Footprint](#footprint) | 1250 MB RAM per pod as a base including realm caches and 10,000 cached sessions; 2 GB recommended limit for smaller production deployments |
+| Passkeys | Yes, primary sign-in method (WebAuthn via SimpleWebAuthn) | Yes, supported since 26.4.0; conditional and modal UI in the default login forms, enabled per realm |
+| Passwords | No, by design | Yes |
+| Other methods | Magic links, email OTP, SMS OTP, TOTP as a second factor and for step-up | TOTP and HOTP, recovery codes, X.509 certificates, step-up authentication, Kerberos |
+| Social and external OIDC login | Yes, inbound only; CLI presets for Google, GitHub, Microsoft (Entra ID), GitLab | Yes, social login and brokering to external OIDC and SAML providers |
+| Acts as an OIDC / OAuth 2.0 provider | No | Yes |
+| SAML | No | Yes, SAML 2.0 for applications and for identity brokering |
+| LDAP / Active Directory federation | No | Yes, plus Kerberos and a User Storage SPI |
+| SCIM | No | Yes, SCIM 2.0 users and groups per realm; supported since 26.8.0 (preview in 26.7.0) |
+| Organizations | Yes: memberships, scoped roles, active organization on the session | Yes, supported since 26.0: domains, members, groups, linked identity providers, invitations |
+| Multi-tenancy | One user directory and one configuration per instance | Realms, isolated from one another, each managing its own users, credentials, roles, and groups; organizations within a realm |
+| Sign-in UI | Rendered in your app by the SDK (`AuthRoutes` in React; equivalents in Angular, Vue, Svelte) or fully custom on the headless client | Server-rendered login, account, and email themes built from FreeMarker templates |
+| Theming | CSS custom properties on the built-in screens, or your own components | Custom themes that extend a built-in theme; templates, messages, and styles can be overridden |
+| Admin console | Yes, open source app served by the API image at `/console` | Yes, built in, plus an Admin REST API and Admin CLI |
+| Upgrades | Migrations run on container start by default, or once per deploy with the image's `migrate` command | Automatic database migration on first start of the new version, or a generated SQL script; rolling updates for patch releases since 26.6.0 |
+| Maturity | 0.x, small community | Established project, CNCF incubating |
+
+---
+
+## Footprint
+
+Keycloak publishes sizing guidance; Seamless Auth does not yet, so its figures below are a
+measurement, with the method stated.
+
+**Keycloak.** Keycloak's memory and CPU sizing guide gives a base of 1250 MB of RAM per pod,
+including caches of realm data and 10,000 cached sessions, with heap set to 70% of the container
+memory limit and about 300 MB of non-heap memory on top. For CPU it allows 1 vCPU for every 15
+password-based logins per second, every 120 client credential grants per second, or every 120
+refresh token requests per second, plus 150% headroom for spikes. Those figures come from a test
+setup with 1,000,000 users and 20,000 clients on OpenJDK 21. Keycloak's container guide recommends a
+2 GB memory limit for smaller production deployments.
+
+**Seamless Auth.** Measured on 2026-10-20 for `ghcr.io/fells-code/seamless-auth-api:v0.19.1`:
+
+- **Image size:** about 120 MB compressed for both `linux/amd64` and `linux/arm64`, from the sum of
+  layer sizes in `docker manifest inspect` for each platform manifest. The pulled `linux/arm64` image
+  is about 687 MB uncompressed, from `docker image inspect`. The image includes the admin console.
+- **Memory:** about 73 MiB for the API container, idle, about three minutes after start, and about
+  138 MiB in the first seconds after start. The Postgres container used about 36 MiB. Measured with
+  `docker stats` on Docker Desktop for macOS (arm64), running the API repository's
+  `docker-compose.yml` (development mode, no traffic, empty database).
+
+<Aside type="caution">
+  These numbers are not a like-for-like comparison. Keycloak's figure is sizing guidance for a
+  loaded production pod with cached sessions; the Seamless Auth figure is one idle measurement with
+  no users and no load. Under load both will use more. Size either one by testing it with your own
+  traffic.
+</Aside>
+
+---
+
+## Setup
+
+**Keycloak** is distributed as a zip or tar.gz (which needs a Java runtime) and as a container image,
+with a Kubernetes operator. `start-dev` runs with development defaults that Keycloak says to avoid in
+production; production mode (`start`) uses HTTPS only, and Keycloak recommends running
+the `build` step when building your image so each container start is faster. The default
+`dev-file` database is for development only, so production needs one of the supported databases.
+You then create a realm, register each application as a client, and configure its authentication
+flows, identity providers, and themes.
+
+**Seamless Auth** is one container image and a Postgres database. `docker compose up` in the API
+repository starts both with development defaults; a production deployment sets environment variables
+for the database, signing keys, origins, and secrets. Environment variables seed the runtime
+configuration (`system_config` in Postgres) on first boot, after which it is edited through the admin
+console or admin API. Your backend mounts an adapter at `/auth` and your frontend adds an SDK. See
+[Deploy](/operate/deploy) and the [Production Checklist](/operate/production-checklist).
+
+Configuration changes behave differently in each. In Seamless Auth, a `system_config` write clears
+the cache only on the instance that handled it; other instances keep the previous values (roles,
+origins, login methods, lockout policy, token lifetimes) for up to five minutes, the per-process cache
+lifetime. Restart the instances when a change must apply everywhere at once.
+
+---
+
+## Theming And Sign-In UI
+
+**Keycloak** themes cover the login, account, admin, email, and welcome pages, and are built from
+FreeMarker templates that the server renders. A custom theme usually extends a built-in theme and is
+deployed by copying it into the `themes` directory or packaging it as a JAR in `providers/`.
+Keycloak's own theme guide notes that if you override HTML templates you may need to update them
+when upgrading, and its upgrading guide includes a theme migration step: compare each customized
+template, message, and stylesheet against the new release's base theme and apply the changes.
+
+**Seamless Auth** has no server-rendered pages for end users. The React SDK ships built-in auth
+screens that you theme with `--seamless-*` CSS custom properties (accent, surface, border, text, and
+status colours), and the headless client and hooks let you build every screen yourself. Upgrading
+the server does not change your sign-in UI; upgrading the SDK is an ordinary package update in your
+app. See [Custom Auth UI](/build/custom-auth-ui).
+
+---
+
+## Upgrades
+
+**Keycloak**'s upgrading guide asks you to back up the installation (configuration, themes, and
+providers) and the database, and to shut down all nodes before a minor or major upgrade; rolling
+updates are supported for patch releases from 26.6.0. The database schema migrates automatically on
+the first start of the new version, or you can switch to a manual strategy that writes the SQL for
+you to review. Keycloak does not support rolling back database changes: to go back, you restore the
+old installation and the database backup. Custom themes and providers are copied across and
+reviewed against the new release.
+
+**Seamless Auth** applies its database migrations when the container starts, unless you set
+`RUN_MIGRATIONS=false` and run the image's `migrate` command once per deploy. The server refuses to
+start while any migration is pending, so new code never runs against an old schema. Back up Postgres
+before upgrading. Because the sign-in UI lives in your app, there are no server templates to migrate,
+but adapter and SDK versions must stay compatible with the API version; see the
+[compatibility matrix](/build/ecosystem#compatibility-matrix).
+
+---
+
+## Architecture Difference
+
+**Keycloak** is a separate identity server that your applications redirect to. Users enter
+credentials on Keycloak's pages, and applications receive signed ID and access tokens (OIDC) or
+assertions (SAML). Keycloak can sit in front of existing directories and external identity
+providers, so it often becomes the central identity hub for many applications.
+
+**Seamless Auth** is a service your backend fronts:
+
+```txt
+browser or native app
+  -> your backend's /auth routes   (@seamless-auth/express, fastify, nextjs, or the Python/Go/Rust adapter)
+  -> seamless-auth-api             (your infrastructure, or Seamless Auth managed)
+  -> Postgres
+```
+
+There is no redirect to a separate login domain. Your backend forwards auth calls with a service
+token, keeps the browser session in signed `httpOnly` cookies (native apps use bearer tokens in the
+platform keystore), and verifies sessions against the auth API's JWKS. See
+[What Is Seamless Auth?](/start/overview#how-the-pieces-connect).
+
+---
+
+## Migrating From Keycloak
+
+Keycloak's `kc.sh export` writes realms and users to JSON files and must run while the server is
+stopped. Seamless Auth imports no passwords or credentials of any kind, so a migration imports
+identities (email, external id, phone, roles, organization memberships) with `seamless migrate csv`,
+then gets each user onto a passkey through enrollment prompts and invites. Passkeys and OTP devices
+registered with Keycloak do not carry over, and applications that rely on Keycloak as an OIDC or SAML
+provider need a different integration, since Seamless Auth is neither.
+
+Follow [Migrate Users From Another Identity System](/operate/migrate-users); the
+[Auth0 migration guide](/operate/migrate-from-auth0) shows the full pattern for one provider.
+
+---
+
+## Sources
+
+Keycloak details, each page checked on 2026-10-20:
+
+- [Keycloak downloads](https://www.keycloak.org/downloads) (checked 2026-10-20): latest release 26.8.1; zip, tar.gz, container image on Quay, and operator
+- [Keycloak blog](https://www.keycloak.org/blog) (checked 2026-10-20): 26.8.0 released 2026-10-01, 26.8.1 released 2026-10-13
+- [Keycloak release notes](https://www.keycloak.org/docs/latest/release_notes/index.html) (checked 2026-10-20): [SCIM API supported in 26.8.0](https://www.keycloak.org/docs/latest/release_notes/index.html#scim-api-supported), [SCIM preview in 26.7.0](https://www.keycloak.org/docs/latest/release_notes/index.html#automate-user-provisioning-with-the-scim-api-preview), [passkeys supported in 26.4.0](https://www.keycloak.org/docs/latest/release_notes/index.html#passkeys-integration-supported), [organizations supported in 26.0.0](https://www.keycloak.org/docs/latest/release_notes/index.html#organizations-supported)
+- [Concepts for sizing CPU and memory resources](https://www.keycloak.org/high-availability/multi-cluster/concepts-memory-and-cpu-sizing) (checked 2026-10-20): 1250 MB base, heap and non-heap, vCPU per request rate, test setup
+- [Running Keycloak in a container](https://www.keycloak.org/server/containers) (checked 2026-10-20): `build` step, `-XX:MaxRAMPercentage=70`, 2 GB recommended memory limit for smaller production deployments, `start-dev` not for production
+- [Getting started with the zip distribution](https://www.keycloak.org/getting-started/getting-started-zip) (checked 2026-10-20): OpenJDK 25 prerequisite
+- [Configuring the database](https://www.keycloak.org/server/db) (checked 2026-10-20): supported databases and versions, `dev-file` not for production
+- [Upgrading Guide, 26.8.1](https://www.keycloak.org/docs/latest/upgrading/index.html#_upgrading) (checked 2026-10-20): backups, shutting down nodes, rolling updates for patch releases from 26.6.0, automatic and manual database migration, no database rollback, [migrating themes](https://www.keycloak.org/docs/latest/upgrading/index.html#_migrate_themes)
+- [Working with themes](https://www.keycloak.org/ui-customization/themes) (checked 2026-10-20): theme types, FreeMarker templates, deployment, overridden templates may need updating on upgrade
+- [Enabling and disabling features](https://www.keycloak.org/server/features) (checked 2026-10-20): `passkeys`, `organization`, and `scim-api` listed as supported features enabled by default
+- [Server Administration Guide, 26.8.1](https://www.keycloak.org/docs/latest/server_admin/index.html) (checked 2026-10-20): [features](https://www.keycloak.org/docs/latest/server_admin/index.html#features), [SSO protocols](https://www.keycloak.org/docs/latest/server_admin/index.html#sso-protocols), [user storage federation](https://www.keycloak.org/docs/latest/server_admin/index.html#_user-storage-federation), [passkeys](https://www.keycloak.org/docs/latest/server_admin/index.html#passkeys_server_administration_guide), [organizations](https://www.keycloak.org/docs/latest/server_admin/index.html#_managing_organizations), [SCIM](https://www.keycloak.org/docs/latest/server_admin/index.html#_managing_scim)
+- [Importing and exporting realms](https://www.keycloak.org/server/importExport) (checked 2026-10-20): `kc.sh export`, server must not be running
+- [keycloak/keycloak on GitHub](https://github.com/keycloak/keycloak) (checked 2026-10-20): Apache-2.0 license
+
+Seamless Auth details (Seamless Auth API v0.19.1):
+
+- [What Is Seamless Auth?](/start/overview), including [When Seamless Auth Is Not The Right Choice](/start/overview#when-seamless-auth-is-not-the-right-choice)
+- [System Config Reference](/reference/system-config) and [Environment Variables](/reference/environment-variables)
+- [How To Use Organizations And Memberships](/build/organizations-memberships)
+- [OAuth Login](/build/oauth-login)
+- [Custom Auth UI](/build/custom-auth-ui)
+- Source: [fells-code on GitHub](https://github.com/fells-code)
