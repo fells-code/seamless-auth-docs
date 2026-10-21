@@ -22,7 +22,7 @@ This page is for an engineer or technical lead deciding whether to move off Fire
 Authentication, or whether to start on it. Every Firebase detail links to a Google page
 (firebase.google.com or Google Cloud's Identity Platform docs), and the [Sources](#sources) section
 gives the date each one was checked. Seamless Auth details were checked against the source
-repositories at Seamless Auth API v0.19.1. Prices, plan contents, and limits change, so confirm them
+repositories at Seamless Auth API v0.19.3. Prices, plan contents, and limits change, so confirm them
 on [firebase.google.com/pricing](https://firebase.google.com/pricing) and the
 [Identity Platform pricing page](https://cloud.google.com/identity-platform/pricing) before you
 decide.
@@ -58,7 +58,7 @@ decide.
 
 ## Choose Seamless Auth If
 
-- **You want passkeys as the primary sign-in method.** As of 2026-10-20, Firebase Authentication's
+- **You want passkeys as the primary sign-in method.** As of 2026-10-21, Firebase Authentication's
   documentation lists no passkey or WebAuthn sign-in method. The only passkey mention we found on
   Google's Firebase pages is mock passkey support added to the Authentication emulator in Firebase
   CLI v15.21.0 (June 2026), a local testing tool. In Seamless Auth, passkeys are the default sign-in
@@ -106,7 +106,7 @@ Authentication with Identity Platform, the paid upgrade.
 | Organizations | Yes: memberships, per-organization roles and scopes, active organization on the session | No organizations feature in the docs checked; tenants with Identity Platform |
 | Extensibility | Logic in your own backend, behind the server adapter | Blocking functions with Identity Platform (before create, before sign-in, before email and SMS); must respond within 7 seconds |
 | Prebuilt UI | Built-in auth routes (`AuthRoutes` in React; equivalents in Angular, Vue, Svelte), or headless | FirebaseUI, open source drop-in UI, or the SDK with your own UI |
-| User import | `seamless migrate csv`, `POST /admin/users/import`; identities only, no credentials | `firebase auth:import`, including password hashes in many algorithms |
+| User import | `seamless migrate csv`, `seamless migrate entra-id`, `POST /admin/users/import`; identities only, no credentials | `firebase auth:import`, including password hashes in many algorithms |
 | User export | No bulk export endpoint; self-hosted, the data is in your own Postgres. Paginated admin user list and a passkey coverage report (CSV) | `firebase auth:export` to JSON or CSV, including scrypt password hashes and salts; hash parameters in the console |
 | Audit trail | Append-only, hash-chained auth events; NDJSON export with an integrity check | Admin activity and user activity audit logs in Cloud Logging, with Identity Platform |
 | Third-party compliance attestations | None for Seamless Auth itself | ISO 27001/27017/27018 and SOC 1/2/3; BAA, PCI DSS, and TISAX with Identity Platform |
@@ -115,7 +115,7 @@ Authentication with Identity Platform, the paid upgrade.
 | Pricing model | Free to self-host; managed plans in the portal | Spark (no cost) and Blaze (pay as you go) plans; Identity Platform priced per MAU, SAML and OIDC users higher, SMS per message |
 
 <Aside type="note">
-  As checked on 2026-10-20, Firebase's pricing page lists 50,000 monthly active users and 50 SAML or
+  As checked on 2026-10-21, Firebase's pricing page lists 50,000 monthly active users and 50 SAML or
   OIDC MAUs at no cost on both the Spark and Blaze plans, phone sign-in on Blaze only, billed per SMS,
   and links to Identity Platform pricing for anything above. Identity Platform's pricing page lists
   email, phone, anonymous, and social users free up to 50,000 MAU, then $0.0055 per MAU to 100,000,
@@ -196,8 +196,8 @@ and you should plan one as you would any identity migration, with a dry run.
 What the docs do support today is the generic identity import in
 [Migrate Users From Another Identity System](/operate/migrate-users): a CSV of email, external id,
 phone, roles, and organizations, imported with `seamless migrate csv`. Firebase's
-`firebase auth:export` writes JSON, or a CSV with fixed column positions and no header row, holding
-each user's UID, email, and phone number among other fields. Those are the kind of fields the import
+`firebase auth:export` writes JSON, or a CSV with fixed column positions, holding each user's UID,
+email, and phone number among other fields. Those are the kind of fields the import
 reads, but the export has to be converted into the import's CSV first, and this page does not
 provide that conversion. Seamless Auth imports no credentials of any kind, so the password hashes in
 a Firebase export are not used (the import ignores every column it does not map), and each user
@@ -215,22 +215,22 @@ Fells Code, which maintains Seamless Auth, offers hands-on migration help:
 
 Firebase Authentication and Identity Platform details, each checked on the date shown:
 
-- [Firebase pricing](https://firebase.google.com/pricing), checked 2026-10-20: Spark and Blaze, 50,000 MAU and 50 SAML or OIDC MAU at no cost, phone sign-in on Blaze only and billed per SMS, overage at Identity Platform rates
-- [Identity Platform pricing](https://cloud.google.com/identity-platform/pricing), checked 2026-10-20: tier 1 and tier 2 per-MAU prices, per-SMS prices by country, first ten SMS a day not billed
-- [Firebase Authentication](https://firebase.google.com/docs/auth), checked 2026-10-20: sign-in methods, SDK platforms, FirebaseUI, custom auth system integration, Security Rules, Identity Platform upgrade features (MFA, blocking functions, SAML and OIDC, audit logging, multi-tenancy, SLA), Spark limit of 3,000 DAU after upgrading, Blaze per-MAU range
-- [Differences between Identity Platform and Firebase Authentication](https://cloud.google.com/identity-platform/docs/product-comparison), checked 2026-10-20: features only in Identity Platform, compliance table (ISO 27001, SOC 1/2/3, TISAX, BAA, PCI DSS), 99.95% SLA
-- [Identity Platform multi-tenancy](https://cloud.google.com/identity-platform/docs/multi-tenancy), checked 2026-10-20: tenants and what each one has, supported providers, limitations
-- [Extend Firebase Authentication with blocking functions](https://firebase.google.com/docs/auth/extend-with-blocking-functions), checked 2026-10-20: events, 7-second limit, Identity Platform required
-- [Authenticate using SAML in web apps](https://firebase.google.com/docs/auth/web/saml), checked 2026-10-20: Identity Platform required, service-provider initiated flow only
-- [Add multi-factor authentication to your web app](https://firebase.google.com/docs/auth/web/multi-factor) and [Add TOTP multi-factor authentication](https://firebase.google.com/docs/auth/web/totp-mfa), checked 2026-10-20: SMS and TOTP MFA after the Identity Platform upgrade
-- [Email link authentication](https://firebase.google.com/docs/auth/web/email-link-auth), checked 2026-10-20: email/password provider must be enabled
-- [Authentication limits](https://firebase.google.com/docs/auth/limits), checked 2026-10-20: email link sign-in emails per day on Spark and Blaze, SMS on Blaze only
-- [auth:import and auth:export](https://firebase.google.com/docs/cli/auth), checked 2026-10-20: JSON and CSV export, password hash and salt fields, hash parameters in the console, modified scrypt
-- [Connect your app to the Authentication emulator](https://firebase.google.com/docs/emulator-suite/connect_auth), checked 2026-10-20: local emulation, unsigned ID tokens rejected by production
-- [Firebase CLI release notes](https://firebase.google.com/support/release-notes/cli), checked 2026-10-20: v15.21.0 (June 17, 2026) added mock passkey (WebAuthn) support to the Authentication emulator
-- [Privacy and security in Firebase](https://firebase.google.com/support/privacy), checked 2026-10-20: Firebase Authentication runs only from US data centers; ISO 27001/27017/27018 and SOC 1/2/3 for Firebase Authentication
+- [Firebase pricing](https://firebase.google.com/pricing), checked 2026-10-21: Spark and Blaze, 50,000 MAU and 50 SAML or OIDC MAU at no cost, phone sign-in on Blaze only and billed per SMS, overage at Identity Platform rates
+- [Identity Platform pricing](https://cloud.google.com/identity-platform/pricing), checked 2026-10-21: tier 1 and tier 2 per-MAU prices, per-SMS prices by country, first ten SMS a day not billed
+- [Firebase Authentication](https://firebase.google.com/docs/auth), checked 2026-10-21: sign-in methods, SDK platforms, FirebaseUI, custom auth system integration, Security Rules, Identity Platform upgrade features (MFA, blocking functions, SAML and OIDC, audit logging, multi-tenancy, SLA), Spark limit of 3,000 DAU after upgrading, Blaze per-MAU range
+- [Differences between Identity Platform and Firebase Authentication](https://cloud.google.com/identity-platform/docs/product-comparison), checked 2026-10-21: features only in Identity Platform, compliance table (ISO 27001, SOC 1/2/3, TISAX, BAA, PCI DSS), 99.95% SLA
+- [Identity Platform multi-tenancy](https://cloud.google.com/identity-platform/docs/multi-tenancy), checked 2026-10-21: tenants and what each one has, supported providers, limitations
+- [Extend Firebase Authentication with blocking functions](https://firebase.google.com/docs/auth/extend-with-blocking-functions), checked 2026-10-21: events, 7-second limit, Identity Platform required
+- [Authenticate using SAML in web apps](https://firebase.google.com/docs/auth/web/saml), checked 2026-10-21: Identity Platform required, service-provider initiated flow only
+- [Add multi-factor authentication to your web app](https://firebase.google.com/docs/auth/web/multi-factor) and [Add TOTP multi-factor authentication](https://firebase.google.com/docs/auth/web/totp-mfa), checked 2026-10-21: SMS and TOTP MFA after the Identity Platform upgrade
+- [Email link authentication](https://firebase.google.com/docs/auth/web/email-link-auth), checked 2026-10-21: email/password provider must be enabled
+- [Authentication limits](https://firebase.google.com/docs/auth/limits), checked 2026-10-21: email link sign-in emails per day on Spark and Blaze, SMS on Blaze only
+- [auth:import and auth:export](https://firebase.google.com/docs/cli/auth), checked 2026-10-21: JSON and CSV export, CSV fields by column position, password hash and salt fields, hash parameters in the console, modified scrypt
+- [Connect your app to the Authentication emulator](https://firebase.google.com/docs/emulator-suite/connect_auth), checked 2026-10-21: local emulation, unsigned ID tokens rejected by production
+- [Firebase CLI release notes](https://firebase.google.com/support/release-notes/cli), checked 2026-10-21: v15.21.0 (June 17, 2026) added mock passkey (WebAuthn) support to the Authentication emulator
+- [Privacy and security in Firebase](https://firebase.google.com/support/privacy), checked 2026-10-21: Firebase Authentication runs only from US data centers; ISO 27001/27017/27018 and SOC 1/2/3 for Firebase Authentication
 
-Seamless Auth details (Seamless Auth API v0.19.1):
+Seamless Auth details (Seamless Auth API v0.19.3):
 
 - [What Is Seamless Auth?](/start/overview), including [When Seamless Auth Is Not The Right Choice](/start/overview#when-seamless-auth-is-not-the-right-choice)
 - [Migrate Users From Another Identity System](/operate/migrate-users)

@@ -19,7 +19,7 @@ Cognito, and it is not tied to AWS.
 This page is for an engineer or technical lead deciding whether to move off Cognito, or whether to
 start on it. Every Cognito detail links to an AWS page, and the [Sources](#sources) section gives
 the date each one was checked. Seamless Auth details were checked against the source repositories
-at Seamless Auth API v0.19.1. Prices, plan contents, and feature limits change, so confirm them on
+at Seamless Auth API v0.19.3. Prices, plan contents, and feature limits change, so confirm them on
 [aws.amazon.com/cognito/pricing](https://aws.amazon.com/cognito/pricing/) before you decide.
 
 ---
@@ -102,7 +102,7 @@ pool feature plans.
 | Extensibility | Logic in your own backend, behind the server adapter | Lambda triggers on sign-up, authentication, token generation, migration, and messages |
 | Prebuilt UI | Built-in auth routes (`AuthRoutes` in React; equivalents in Angular, Vue, Svelte), or headless | Managed login on a user pool domain (Essentials and Plus); classic hosted UI on all plans |
 | AWS integration | None; your backend verifies sessions with a server adapter | Identity pools for AWS credentials, API Gateway authorizers, Amplify |
-| User import | `seamless migrate csv`, `POST /admin/users/import`; identities only, no credentials | CSV import jobs (up to 500,000 users per file), optionally with password hashes; user migration Lambda trigger |
+| User import | `seamless migrate csv`, `seamless migrate entra-id`, `POST /admin/users/import`; identities only, no credentials | CSV import jobs (up to 500,000 users per file), optionally with password hashes; user migration Lambda trigger |
 | User export | No bulk export endpoint; self-hosted, the data is in your own Postgres. Paginated admin user list and a passkey coverage report (CSV) | No bulk export job; `ListUsers`, 60 users per call, with no password field |
 | Audit trail | Append-only, hash-chained auth events; NDJSON export with an integrity check | User activity and risk logs with export on Plus |
 | Third-party compliance attestations | None for Seamless Auth itself | In scope for AWS programs including SOC, PCI, FedRAMP, and HIPAA |
@@ -110,7 +110,7 @@ pool feature plans.
 | Pricing model | Free to self-host; managed plans in the portal | Per MAU by plan, federated MAUs priced separately, M2M billed per token request, add-ons for multi-Region replication and higher quotas |
 
 <Aside type="note">
-  As checked on 2026-10-20, Cognito's pricing page lists a free tier of 10,000 monthly active users
+  As checked on 2026-10-21, Cognito's pricing page lists a free tier of 10,000 monthly active users
   per account or AWS organization on Lite and Essentials, with no free tier on Plus. Above it,
   Essentials is $0.015 per MAU and Plus is $0.020 per MAU. Lite is tiered; the page's worked example
   charges $0.0055 per MAU up to 100,000 and $0.0046 from 100,001 to 1,000,000. Users who sign in
@@ -201,21 +201,21 @@ enrolls a new passkey. Fells Code, which maintains Seamless Auth, offers hands-o
 
 Amazon Cognito details, each checked on the date shown:
 
-- [Amazon Cognito pricing](https://aws.amazon.com/cognito/pricing/), checked 2026-10-20: Lite, Essentials, and Plus; free tiers; per-MAU prices; federated MAU price; machine-to-machine billing per token request and example rate; multi-Region replication and quota add-ons; SMS and email billed through SNS and SES; GovCloud exclusion; plan descriptions (Essentials adds managed login and passwordless sign-in with passkeys, email, or SMS)
-- [User pool feature plans](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-sign-in-feature-plans.html), checked 2026-10-20: features by plan, including passkeys and passwordless codes on Essentials and Plus, federation, authorization server, M2M, user import, MFA factors, Lambda triggers, managed login, and Plus activity logs and export
-- [Authentication flows](https://docs.aws.amazon.com/cognito/latest/developerguide/amazon-cognito-user-pools-authentication-flow-methods.html), checked 2026-10-20: passkeys not on Lite, `WEB_AUTHN` must be accompanied by another option, user verification preferred by default, no attestation enforcement, 20 passkeys per user, passwordless email and SMS codes, SRP
-- [Managed login](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-managed-login.html), checked 2026-10-20: authorization server and hosted pages on a user pool domain, classic hosted UI the only option on Lite, no passkeys in the classic hosted UI, Amplify
-- [Third-party sign-in](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-identity-federation.html), checked 2026-10-20: social, SAML, and OIDC providers; Cognito as an OIDC and OAuth 2.0 IdP
-- [SAML identity providers](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-saml-idp.html), checked 2026-10-20: SAML 2.0 IdPs, Cognito as a service provider
-- [Scopes, M2M, and resource servers](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-define-resource-servers.html), checked 2026-10-20: resource servers, custom scopes, client credentials, API Gateway authorizers, M2M billing model
-- [Lambda triggers](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-working-with-lambda-triggers.html), checked 2026-10-20: trigger types, five-second response limit
-- [Importing users from a CSV file](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-using-import-tool.html), checked 2026-10-20: password hash import and supported algorithms, 500,000 users per file
-- [`ListUsers`](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_ListUsers.html) and [`UserType`](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_UserType.html), checked 2026-10-20: at most 60 users per call; user record fields, none of them a password
-- [Cognito user profiles export guidance: limitations](https://docs.aws.amazon.com/solutions/latest/cognito-user-profiles-export-reference-architecture/guidance-components.html#limitations), checked 2026-10-20: passwords not backed up, users reset passwords in the new pool; MFA tokens not replicated
-- [Data protection in Amazon Cognito](https://docs.aws.amazon.com/cognito/latest/developerguide/data-protection.html), checked 2026-10-20: encryption at rest with AWS owned or customer managed keys in the user pool's Region
-- [Compliance validation for Amazon Cognito](https://docs.aws.amazon.com/cognito/latest/developerguide/compliance-validation.html), checked 2026-10-20: SOC, PCI, FedRAMP, HIPAA, AWS Artifact
+- [Amazon Cognito pricing](https://aws.amazon.com/cognito/pricing/), checked 2026-10-21: Lite, Essentials, and Plus; free tiers; per-MAU prices; federated MAU price; machine-to-machine billing per token request and example rate; multi-Region replication and quota add-ons; SMS and email billed through SNS and SES; GovCloud exclusion; plan descriptions (Essentials adds managed login and passwordless sign-in with passkeys, email, or SMS)
+- [User pool feature plans](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-sign-in-feature-plans.html), checked 2026-10-21: features by plan, including passkeys and passwordless codes on Essentials and Plus, federation, authorization server, M2M, user import, MFA factors, Lambda triggers, managed login, and Plus activity logs and export
+- [Authentication flows](https://docs.aws.amazon.com/cognito/latest/developerguide/amazon-cognito-user-pools-authentication-flow-methods.html), checked 2026-10-21: passkeys not on Lite, `WEB_AUTHN` must be accompanied by another option, user verification preferred by default, no attestation enforcement, 20 passkeys per user, passwordless email and SMS codes, SRP
+- [Managed login](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-managed-login.html), checked 2026-10-21: authorization server and hosted pages on a user pool domain, classic hosted UI the only option on Lite, no passkeys in the classic hosted UI, Amplify
+- [Third-party sign-in](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-identity-federation.html), checked 2026-10-21: social, SAML, and OIDC providers; Cognito as an OIDC and OAuth 2.0 IdP
+- [SAML identity providers](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-saml-idp.html), checked 2026-10-21: SAML 2.0 IdPs, Cognito as a service provider
+- [Scopes, M2M, and resource servers](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-define-resource-servers.html), checked 2026-10-21: resource servers, custom scopes, client credentials, API Gateway authorizers, M2M billing model
+- [Lambda triggers](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-working-with-lambda-triggers.html), checked 2026-10-21: trigger types, five-second response limit
+- [Importing users from a CSV file](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-using-import-tool.html), checked 2026-10-21: password hash import and supported algorithms, 500,000 users per file
+- [`ListUsers`](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_ListUsers.html) and [`UserType`](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_UserType.html), checked 2026-10-21: at most 60 users per call; user record fields, none of them a password
+- [Cognito user profiles export guidance: limitations](https://docs.aws.amazon.com/solutions/latest/cognito-user-profiles-export-reference-architecture/guidance-components.html#limitations), checked 2026-10-21: passwords not backed up, users reset passwords in the new pool; MFA tokens not replicated
+- [Data protection in Amazon Cognito](https://docs.aws.amazon.com/cognito/latest/developerguide/data-protection.html), checked 2026-10-21: encryption at rest with AWS owned or customer managed keys in the user pool's Region
+- [Compliance validation for Amazon Cognito](https://docs.aws.amazon.com/cognito/latest/developerguide/compliance-validation.html), checked 2026-10-21: SOC, PCI, FedRAMP, HIPAA, AWS Artifact
 
-Seamless Auth details (Seamless Auth API v0.19.1):
+Seamless Auth details (Seamless Auth API v0.19.3):
 
 - [What Is Seamless Auth?](/start/overview), including [When Seamless Auth Is Not The Right Choice](/start/overview#when-seamless-auth-is-not-the-right-choice)
 - [Migrating Off Amazon Cognito](/operate/migrate-from-cognito), including [What You Give Up Or Must Plan For](/operate/migrate-from-cognito#what-you-give-up-or-must-plan-for)
