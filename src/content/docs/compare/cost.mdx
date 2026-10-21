@@ -1,0 +1,143 @@
+---
+title: "Identity Cost Calculator"
+description: "Compare the published list prices of Auth0 and Okta Customer Identity plans with the cost of self-hosting Seamless Auth on one container and managed Postgres, by monthly active users, B2B or B2C, enterprise connections, and MFA. List prices only, each dated and sourced."
+sidebar:
+  order: 20
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import CostCalculator from '../../../components/cost-calculator/CostCalculator.astro';
+import { selfHost, selfHostMonthlyUsd, usd } from '../../../components/cost-calculator/pricing';
+
+The bill is often the first reason a team looks past its identity provider. This page puts a number
+on it: enter your monthly active users (MAU), whether you sell to consumers (B2C) or businesses
+(B2B), how many enterprise connections you need, and what kind of MFA, and it shows the published
+list price of each Auth0 and Okta Customer Identity plan next to the cost of running Seamless Auth
+yourself.
+
+These are **list prices only**, read from each vendor's own pricing page on the date given in
+[Sources](#sources). They leave out discounts, annual commitments, negotiated contracts, taxes,
+and usage charges a page does not print. Where a vendor publishes no price, the calculator says
+"Contact sales" and links to the vendor. It never estimates one.
+
+---
+
+## Calculator
+
+<CostCalculator />
+
+<Aside type="note">
+  Without JavaScript, the tables above still list every published Auth0 price by MAU step, the
+  Okta starting price, and the Seamless Auth hosting cost. The interactive part only picks the
+  rows that match your inputs.
+</Aside>
+
+---
+
+## How The Numbers Are Read
+
+**Auth0.** Auth0's pricing page has a MAU slider with steps at 500, 1,000, 2,500, 5,000, 7,500,
+10,000, 20,000, and 30,000+, and separate B2C and B2B prices. The calculator uses the price the
+page shows for each plan at each step, on monthly billing, and rounds your MAU up to the next step
+(so 6,000 MAU uses the "up to 7,500" price). It does not interpolate between steps. Where a plan
+shows "Get in touch" at a step, or your MAU is above 30,000, the calculator shows "Contact sales".
+Free covers up to 25,000 MAU and has no paid path above that. Enterprise has no published price.
+
+**Enterprise connections.** Auth0's Free plan includes 1 enterprise connection (plus unlimited
+Okta enterprise connections), B2B Essentials includes 3, and B2B Professional includes 5. The B2C plans
+list none on Essentials or Professional; the pricing page tells B2C customers to move to a B2B
+plan for enterprise connections. On the B2B plans, extra connections are an add-on that the page
+lists at "starting at $100 monthly per active connection", so any result that uses it is shown as
+"From" the starting price. The page publishes no add-on for extra connections on Free.
+
+**MFA.** The pricing page lists Pro MFA (one-time password apps and Duo) on every paid plan but not
+on Free, and Enterprise MFA (SMS, voice, email, WebAuthn, and push through Auth0 Guardian) as
+included on Professional, an add-on on B2B Essentials "starting at $100 monthly", and not listed on
+B2C Essentials or Free. The page notes that SMS for MFA is charged separately by carriers. Where a
+plan does not list the MFA you pick, the calculator says so rather than guessing a price.
+
+**Okta Customer Identity.** Okta's own pricing page has a Customer Identity tab, separate from the
+Auth0 pricing page it also links to. It lists an Enterprise base platform starting at $3,000 per
+month, billed annually, with add-ons (including MFA and Inbound Federation) priced on usage such as
+MAU and quoted by sales, and a B2C Suite and a B2B Suite with no published price. The calculator
+shows the base platform as "From $3,000" whatever your inputs, because the page does not say how
+MAU, MFA, or federation change it. See also
+[Okta Customer Identity](/compare/auth0#okta-customer-identity) on the Auth0 comparison page.
+
+---
+
+## The Seamless Auth Number
+
+Self-hosted Seamless Auth has no per-user, per-connection, or per-factor fee. You pay for the
+infrastructure, so the cost is flat as MAU grows until you choose to add capacity. The calculator
+uses one typical setup, priced from DigitalOcean's own pricing pages on 2026-10-21:
+
+| | Basis | List price |
+| --- | --- | --- |
+| Provider | DigitalOcean; the pricing pages list one price, not a price per region | |
+| Auth API container | Basic Droplet, Regular CPU: 2 GiB memory, 1 vCPU, 50 GiB SSD, 2,000 GiB transfer | {usd(selfHost.app.monthlyUsd)} per month |
+| Managed Postgres | Managed PostgreSQL, Standard Edition, Basic node: 1 GiB memory, 1 vCPU, single node, 10 GiB storage | {usd(selfHost.database.monthlyUsd)} per month |
+| **Total** | | **{usd(selfHostMonthlyUsd)} per month** |
+
+DigitalOcean's PostgreSQL pricing details page says single node clusters are not highly available
+and recommends them for development and testing, and that high availability clusters begin at
+$30.00 per month for the primary node plus at least one matching standby node at $30.00 per month.
+The same page says that from 15 October 2026 for new accounts, and 30 November 2026 for all
+accounts, new Standard Edition clusters cannot add standby nodes, so a new high availability
+cluster needs a different edition. The single node plan the calculator uses is not affected.
+Extra storage on a Standard Edition cluster costs $0.215 per GiB per month. That page gives
+round starting prices (single node clusters from $15.00 per month); the calculator uses the
+$15.15 that the Managed Databases pricing page lists for the plan.
+
+This is a starting point, not a measured capacity. Seamless Auth has not published a benchmark of
+how many users or sign-ins a given size handles. The one measurement on record is an idle API
+container using about 73 MiB of memory with an empty database (see the
+[Keycloak comparison's Footprint section](/compare/keycloak#footprint)). Size your deployment by
+testing it with your own traffic.
+
+The Seamless Auth number does **not** include:
+
+- your time to deploy, upgrade, monitor, and secure it, which is the main cost of self-hosting
+- backups beyond what your database provider includes, and their storage
+- monitoring, logging, and alerting
+- email and SMS delivery, which your providers (for example Twilio or AWS SNS) bill you for
+- a load balancer, a second app instance, or a high availability database
+- domain names and TLS certificates, if you pay for them
+
+Seamless Auth also does less than Auth0 and Okta. It has no SAML, no per-customer enterprise
+connections, no SCIM, and no push or SMS second factor, so if your inputs need those, a lower price
+does not mean the same product. The calculator notes this against the Seamless Auth row. See
+[Seamless Auth vs Auth0](/compare/auth0) for the full comparison.
+
+The managed Seamless Auth service is priced in the portal at
+[dashboard.seamlessauth.com](https://dashboard.seamlessauth.com); this page does not quote it.
+
+---
+
+## Sources
+
+Each page was checked on the date shown. All prices are in US dollars.
+
+- [Auth0 pricing](https://auth0.com/pricing), checked 2026-10-21: Free up to 25,000 MAU; monthly
+  B2C and B2B prices at each MAU step; "Get in touch" steps; enterprise connection allowances and
+  the "starting at $100 monthly per active connection" add-on; Pro MFA and Enterprise MFA by plan,
+  the B2B Essentials Enterprise MFA add-on "starting at $100 monthly", and SMS charged separately;
+  Enterprise by contact
+- [Auth0 contact sales](https://auth0.com/contact-us), checked 2026-10-21
+- [Okta plans and pricing](https://www.okta.com/pricing/), Customer Identity tab, checked
+  2026-10-21: Enterprise base platform starting at $3,000 per month billed annually, B2C and B2B
+  Suites by inquiry, add-ons priced on usage, annual contract required
+- [Okta contact sales](https://www.okta.com/contact-sales/), checked 2026-10-21
+- [DigitalOcean Droplet pricing](https://www.digitalocean.com/pricing/droplets), checked
+  2026-10-21: Basic Droplet, Regular CPU, 2 GiB, 1 vCPU, $12.00 per month
+- [DigitalOcean Managed Databases pricing](https://www.digitalocean.com/pricing/managed-databases),
+  checked 2026-10-21: PostgreSQL Standard, Basic node, 1 GiB, 1 vCPU, $15.15 per month, storage
+  range 10 to 30 GiB
+- [DigitalOcean PostgreSQL pricing details](https://docs.digitalocean.com/products/databases/postgresql/details/pricing/),
+  checked 2026-10-21: single node clusters not highly available, high availability from $30.00 per
+  month per node, no standby nodes on new Standard Edition clusters from 2026-10-15 (new accounts)
+  and 2026-11-30 (all accounts), extra Standard Edition storage at $0.215 per GiB per month
+
+The calculator's prices all live in one file,
+[`src/components/cost-calculator/pricing.ts`](https://github.com/fells-code/seamless-auth-docs/blob/main/src/components/cost-calculator/pricing.ts),
+with the source and checked date next to each, so they can be re-checked in one place.

@@ -1,0 +1,278 @@
+---
+// The static tables are the no-JavaScript version of the calculator, so they print every
+// published price in pricing.ts and nothing the script could not also show.
+import {
+  type Auth0Plan,
+  auth0MauSteps,
+  auth0Plans,
+  okta,
+  selfHost,
+  selfHostMonthlyUsd,
+  sources,
+  usd,
+} from './pricing'
+
+const plansFor = (useCase: 'b2c' | 'b2b') => auth0Plans.filter((plan) => plan.useCase === useCase)
+
+type Cell = { text: string; salesUrl?: string }
+
+const cell = (plan: Auth0Plan, mau: number): Cell => {
+  const tier = plan.tiers.find((t) => mau <= t.upToMau)
+  if (tier) return { text: usd(tier.monthlyUsd) }
+  if (plan.aboveTiers === 'unavailable') return { text: 'Not on plan' }
+  return { text: 'Contact sales', salesUrl: sources.auth0Sales.url }
+}
+
+const steps = [
+  ...auth0MauSteps.map((mau) => ({ label: mau.toLocaleString('en-US'), mau })),
+  { label: 'Above 30,000', mau: Number.POSITIVE_INFINITY },
+]
+
+const selfHostSummary = `${usd(selfHostMonthlyUsd)} per month at any MAU (${selfHost.provider} ${usd(
+  selfHost.app.monthlyUsd,
+)} Droplet plus ${usd(selfHost.database.monthlyUsd)} managed PostgreSQL, checked ${
+  selfHost.app.source.checked
+})`
+---
+
+<div class="cost-calc not-content">
+  <form class="cost-calc-form" data-cost-calc hidden>
+    <label>
+      <span>Monthly active users</span>
+      <input name="mau" type="number" min="1" step="1" value="5000" inputmode="numeric" required />
+    </label>
+    <fieldset>
+      <legend>Use case</legend>
+      <label><input type="radio" name="useCase" value="b2c" checked /> B2C</label>
+      <label><input type="radio" name="useCase" value="b2b" /> B2B</label>
+    </fieldset>
+    <label>
+      <span>Enterprise connections (SAML, AD/LDAP, and similar)</span>
+      <input
+        name="enterpriseConnections"
+        type="number"
+        min="0"
+        step="1"
+        value="0"
+        inputmode="numeric"
+      />
+    </label>
+    <label>
+      <span>MFA</span>
+      <select name="mfa">
+        <option value="none">None</option>
+        <option value="otp">Authenticator app (OTP) or Duo</option>
+        <option value="enterprise">SMS, voice, email, push, or WebAuthn keys</option>
+      </select>
+    </label>
+  </form>
+
+  <div class="cost-calc-results" data-cost-calc-results aria-live="polite" hidden></div>
+
+  <div data-cost-calc-static>
+    <p>
+      Auth0 list prices per month, monthly billing, from <a href={sources.auth0.url}
+        >auth0.com/pricing</a
+      > (checked {sources.auth0.checked}). A MAU count between two steps uses the next step up.
+    </p>
+    {
+      (['b2c', 'b2b'] as const).map((useCase) => (
+        <table>
+          <caption>Auth0 {useCase === 'b2c' ? 'B2C' : 'B2B'} plans</caption>
+          <thead>
+            <tr>
+              <th scope="col">MAU up to</th>
+              {plansFor(useCase).map((plan) => (
+                <th scope="col">{plan.name}</th>
+              ))}
+              <th scope="col">Enterprise</th>
+            </tr>
+          </thead>
+          <tbody>
+            {steps.map(({ label, mau }) => (
+              <tr>
+                <th scope="row">{label}</th>
+                {plansFor(useCase).map((plan) => {
+                  const { text, salesUrl } = cell(plan, mau)
+                  return <td>{salesUrl ? <a href={salesUrl}>{text}</a> : text}</td>
+                })}
+                <td>
+                  <a href={sources.auth0Sales.url}>Contact sales</a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ))
+    }
+    <p>
+      Okta Customer Identity, from <a href={sources.okta.url}>okta.com/pricing</a> (checked {
+        sources.okta.checked
+      }): the Enterprise base platform starts at {usd(okta.basePlatformFromUsd)} per month, {
+        okta.billing
+      }, with usage-priced add-ons quoted by sales. The B2C Suite and B2B Suite are <a
+        href={sources.oktaSales.url}>contact sales</a
+      >.
+    </p>
+    <p>Seamless Auth self-hosted: {selfHostSummary}.</p>
+  </div>
+</div>
+
+<script>
+  import { calculate, type Inputs, type Mfa, type Row, usd, type UseCase } from './pricing'
+
+  const form = document.querySelector<HTMLFormElement>('[data-cost-calc]')
+  const results = document.querySelector<HTMLElement>('[data-cost-calc-results]')
+
+  const priceText = (row: Row): string => {
+    switch (row.quote.kind) {
+      case 'price':
+        return `${usd(row.quote.usd)} / month`
+      case 'from':
+        return `From ${usd(row.quote.usd)} / month`
+      case 'contact':
+        return 'Contact sales'
+      case 'unavailable':
+        return 'Not on this plan'
+    }
+  }
+
+  const readInputs = (data: FormData): Inputs => {
+    const whole = (value: FormDataEntryValue | null, min: number) =>
+      Math.max(min, Math.floor(Number(value) || 0))
+    return {
+      mau: whole(data.get('mau'), 1),
+      useCase: (data.get('useCase') === 'b2b' ? 'b2b' : 'b2c') as UseCase,
+      enterpriseConnections: whole(data.get('enterpriseConnections'), 0),
+      mfa: (['none', 'otp', 'enterprise'].includes(String(data.get('mfa')))
+        ? data.get('mfa')
+        : 'none') as Mfa,
+    }
+  }
+
+  const render = () => {
+    if (!form || !results) return
+    const rows = calculate(readInputs(new FormData(form)))
+    const table = document.createElement('table')
+    table.innerHTML =
+      '<caption>Monthly list price for these inputs</caption>' +
+      '<thead><tr><th scope="col">Vendor</th><th scope="col">Plan</th>' +
+      '<th scope="col">Price</th><th scope="col">Basis</th></tr></thead>'
+    const body = document.createElement('tbody')
+    for (const row of rows) {
+      const tr = document.createElement('tr')
+      tr.dataset.kind = row.quote.kind
+      const vendor = document.createElement('td')
+      vendor.textContent = row.vendor
+      const plan = document.createElement('td')
+      plan.textContent = row.plan
+      const price = document.createElement('td')
+      if (row.quote.kind === 'contact' && row.salesUrl) {
+        const link = document.createElement('a')
+        link.href = row.salesUrl
+        link.textContent = priceText(row)
+        price.append(link)
+      } else {
+        price.textContent = priceText(row)
+      }
+      const notes = document.createElement('td')
+      notes.textContent = row.quote.notes.join(' ')
+      tr.append(vendor, plan, price, notes)
+      body.append(tr)
+    }
+    table.append(body)
+    results.replaceChildren(table)
+  }
+
+  if (form && results) {
+    form.hidden = false
+    results.hidden = false
+    form.addEventListener('input', render)
+    form.addEventListener('submit', (event) => event.preventDefault())
+    render()
+  }
+</script>
+
+<style>
+  .cost-calc {
+    margin-block: 1.5rem;
+  }
+  .cost-calc-form {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    padding: 1rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    background: var(--sl-color-bg-nav);
+  }
+  .cost-calc-form[hidden],
+  .cost-calc-results[hidden] {
+    display: none;
+  }
+  .cost-calc-form label,
+  .cost-calc-form fieldset {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-2);
+  }
+  .cost-calc-form fieldset {
+    border: 0;
+    margin: 0;
+    padding: 0;
+  }
+  .cost-calc-form fieldset label {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .cost-calc-form input[type='number'],
+  .cost-calc-form select {
+    padding: 0.4rem 0.5rem;
+    border: 1px solid var(--sl-color-gray-4);
+    border-radius: 0.25rem;
+    background: var(--sl-color-black);
+    color: var(--sl-color-white);
+    font: inherit;
+  }
+  .cost-calc :global(table) {
+    width: 100%;
+    margin-block: 1rem;
+    border-collapse: collapse;
+    font-size: var(--sl-text-sm);
+  }
+  .cost-calc :global(caption) {
+    text-align: start;
+    font-weight: 600;
+    color: var(--sl-color-white);
+    padding-block-end: 0.5rem;
+  }
+  .cost-calc :global(th),
+  .cost-calc :global(td) {
+    padding: 0.45rem 0.6rem;
+    border-bottom: 1px solid var(--sl-color-gray-5);
+    text-align: start;
+    vertical-align: top;
+  }
+  .cost-calc :global(a) {
+    color: var(--sl-color-text-accent);
+  }
+  .cost-calc p {
+    font-size: var(--sl-text-sm);
+    margin-block: 0.75rem;
+  }
+  .cost-calc :global([data-kind='unavailable']) td:nth-child(3) {
+    color: var(--sl-color-gray-3);
+  }
+  .cost-calc-results :global(tr:last-child td) {
+    font-weight: 600;
+  }
+  .cost-calc-results {
+    overflow-x: auto;
+  }
+  [data-cost-calc-static] {
+    overflow-x: auto;
+  }
+</style>

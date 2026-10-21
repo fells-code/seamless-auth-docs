@@ -65,7 +65,8 @@ on [auth0.com/pricing](https://auth0.com/pricing) before you decide.
   plan.
 - **You prefer not to pay per active user or per enterprise connection.** Self-hosting has no per-user
   fee; you pay for the infrastructure you run. Auth0 plans scale with monthly active users, and its
-  pricing page lists a charge for each enterprise SSO connection above a plan's allowance.
+  pricing page lists a charge for each enterprise SSO connection above a plan's allowance. The
+  [Identity Cost Calculator](/compare/cost) puts both side by side for your numbers.
 - **You want your user data in a database you can query.** Self-hosted, users, memberships, and
   auth events are rows in a Postgres database you run, and the auth event trail exports as a
   hash-chained file you can verify. Auth0's bulk user export is not on its Free plan, and a password
@@ -107,12 +108,13 @@ page.
 | Pricing model | Free to self-host; managed plans in the portal | Free plan up to 25,000 MAU; paid plans priced by MAU tier, separate B2C and B2B prices, add-ons for enterprise connections, MFA, and M2M tokens |
 
 <Aside type="note">
-  As checked on 2026-10-20, Auth0's pricing page lists a Free plan up to 25,000 monthly active
+  As checked on 2026-10-21, Auth0's pricing page lists a Free plan up to 25,000 monthly active
   users, Essentials from $35 per month (B2C) or $150 per month (B2B), Professional from $240 per
   month (B2C) or $800 per month (B2B), and Enterprise on request. Those starting prices are for 500
-  MAU, and the price rises with the MAU tier. Extra enterprise SSO connections on B2B plans are listed at $100 per
-  month each, up to 30 in total. Check [auth0.com/pricing](https://auth0.com/pricing) for current
-  figures.
+  MAU, and the price rises with the MAU tier. Extra enterprise SSO connections on B2B plans are
+  listed at a starting price of $100 per month each. Check [auth0.com/pricing](https://auth0.com/pricing)
+  for current figures, or use the [Identity Cost Calculator](/compare/cost) to see the published
+  price at your MAU next to the cost of self-hosting Seamless Auth.
 </Aside>
 
 ---
@@ -203,7 +205,7 @@ maintains Seamless Auth, offers hands-on migration help (see the end of that gui
 
 Auth0 and Okta details, each checked on the date shown:
 
-- [Auth0 pricing](https://auth0.com/pricing), checked 2026-10-20: plans and starting prices, B2C and B2B split, MAU limits, passkeys on all plans, MFA tiers, Organizations, enterprise connection allowances and add-on price, SCIM, Actions counts, SLA
+- [Auth0 pricing](https://auth0.com/pricing), checked 2026-10-20: plans and starting prices, B2C and B2B split, MAU limits, passkeys on all plans, MFA tiers, Organizations, enterprise connection allowances and add-on starting price, SCIM, Actions counts, SLA
 - [Passkeys](https://auth0.com/docs/authenticate/database-connections/passkeys), checked 2026-10-20: database connections, 20 passkeys per user, existing credentials not replaced
 - [Passwordless connections](https://auth0.com/docs/authenticate/passwordless), checked 2026-10-20: email and SMS codes, magic links in Classic Login only
 - [Multi-factor authentication factors](https://auth0.com/docs/secure/multi-factor-authentication/multi-factor-authentication-factors), checked 2026-10-20: factor list, factors depend on plan
