@@ -1,0 +1,241 @@
+---
+title: "Seamless Auth vs Firebase Authentication"
+description: "Considering a self-hosted, passkey-first alternative to Firebase Authentication? An honest comparison of Seamless Auth and Firebase Authentication (with and without Identity Platform): sign-in methods, passkeys, SAML and OIDC, multi-tenancy, blocking functions, export, hosting, and cost, with dated sources."
+sidebar:
+  order: 7
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Firebase Authentication and Seamless Auth both sign users in to your applications. Firebase
+Authentication is a Google-operated service with client SDKs for Apple platforms, Android, the
+web, C++, Unity, and Flutter, a drop-in UI library (FirebaseUI), and sign-in with passwords, email
+links, phone numbers, anonymous accounts, custom tokens, and federated providers such as Google,
+Apple, Facebook, Twitter, and GitHub. It integrates tightly with other Firebase services. An
+optional upgrade, Firebase Authentication with Identity Platform, adds multi-factor authentication,
+blocking functions, SAML and generic OpenID Connect providers, multi-tenancy, audit logging, and an
+SLA, under a different pricing scheme. Seamless Auth is an open source (Apache-2.0),
+passwordless-only auth server built around passkeys, which you self-host inside your own stack or
+run on the Seamless Auth managed service.
+
+This page is for an engineer or technical lead deciding whether to move off Firebase
+Authentication, or whether to start on it. Every Firebase detail links to a Google page
+(firebase.google.com or Google Cloud's Identity Platform docs), and the [Sources](#sources) section
+gives the date each one was checked. Seamless Auth details were checked against the source
+repositories at Seamless Auth API v0.19.1. Prices, plan contents, and limits change, so confirm them
+on [firebase.google.com/pricing](https://firebase.google.com/pricing) and the
+[Identity Platform pricing page](https://cloud.google.com/identity-platform/pricing) before you
+decide.
+
+---
+
+## Choose Firebase Authentication If
+
+- **Your app is built on Firebase.** Firebase Authentication works with the Security Rules of the
+  Firebase Realtime Database and Cloud Storage, and with other Firebase services, out of the box. Seamless Auth sessions are not Firebase ID tokens; to use them with Security Rules,
+  your backend would have to bridge them, for example through Firebase's custom auth system
+  integration.
+- **You need password sign-in or anonymous accounts.** Firebase supports email and password sign-in
+  and temporary anonymous accounts that can later be upgraded to regular accounts. Seamless Auth has
+  no password flow, by design, and no anonymous accounts.
+- **You need SAML or many isolated tenants.** With the Identity Platform upgrade, Firebase supports
+  SAML (web only, service-provider initiated) and generic OpenID Connect providers, and
+  multi-tenancy: separate silos of users, identity providers, and configuration in one project.
+  Seamless Auth has no SAML, and one instance has a single user directory and a single runtime
+  configuration.
+- **You want to run custom code inside the sign-in flow.** With the Identity Platform upgrade,
+  blocking functions run before a user is created, before a user signs in, and (in Node.js) before
+  an email or SMS is sent. Seamless Auth has no equivalent; that logic goes in your own backend.
+- **You want mobile and game SDKs and a drop-in UI from one vendor.** Firebase ships client SDKs for
+  Apple platforms, Android, web, C++, Unity, and Flutter, plus FirebaseUI. Seamless Auth's frontend
+  SDKs cover React, Angular, Vue, Svelte, and React Native.
+- **You need a vendor's compliance reports or an SLA.** Google lists ISO 27001, 27017, and 27018
+  and SOC 1, 2, and 3 for Firebase Authentication; with Identity Platform it adds BAA coverage,
+  PCI DSS scope, TISAX, and a 99.95% uptime SLA. Seamless Auth has no third-party compliance
+  attestations of its own.
+- **You want nothing to run yourself and a large, established product.** Google operates Firebase
+  Authentication. Seamless Auth is 0.x, with a much smaller community.
+
+## Choose Seamless Auth If
+
+- **You want passkeys as the primary sign-in method.** As of 2026-10-20, Firebase Authentication's
+  documentation lists no passkey or WebAuthn sign-in method. The only passkey mention we found on
+  Google's Firebase pages is mock passkey support added to the Authentication emulator in Firebase
+  CLI v15.21.0 (June 2026), a local testing tool. In Seamless Auth, passkeys are the default sign-in
+  method, and the `phishing_resistant_only` setting accepts only a passkey to start a session.
+- **Users and sessions must stay inside your own boundary, or outside the United States.** Google
+  states that the Firebase Authentication service runs only from US data centers and processes data
+  exclusively in the United States. Self-hosted, the Seamless Auth API and its Postgres database run
+  wherever you deploy them.
+- **You want the auth server's source under a permissive license.** The auth API, server adapters,
+  frontend SDKs, admin dashboard, and CLI are all Apache-2.0. Firebase Authentication is a
+  proprietary Google service.
+- **You want MFA, an audit trail, and organizations without a paid upgrade.** In Firebase,
+  multi-factor authentication (SMS or TOTP), audit logging, and multi-tenancy need the Identity
+  Platform upgrade. Seamless Auth ships TOTP as a second factor, passkey step-up, organizations and
+  memberships with per-organization roles and scopes, and an append-only, hash-chained auth event
+  trail, all in the open source release.
+- **You prefer not to pay per active user or per SMS.** Self-hosting has no per-user fee; you pay for
+  the infrastructure you run and your own SMS provider (Twilio or AWS SNS). Identity Platform
+  charges per monthly active user above its free tier, more for SAML and OIDC users, and per SMS.
+- **You want your user data in a database you can query.** Self-hosted, users, memberships, and auth
+  events are rows in a Postgres database you run.
+
+---
+
+## Feature Comparison
+
+Firebase column as checked on the dates in [Sources](#sources). "Identity Platform" means Firebase
+Authentication with Identity Platform, the paid upgrade.
+
+| | Seamless Auth | Firebase Authentication |
+| --- | --- | --- |
+| License | Apache-2.0 for the server, SDKs, dashboard, and CLI | Proprietary Google service |
+| Hosting | Self-host (Docker, Postgres) or Seamless Auth managed hosting | Operated by Google; the Authentication emulator is for local testing and issues unsigned tokens that production rejects |
+| Where user data lives | Your Postgres when self-hosted; Fells Code's infrastructure on the managed path | Google, US data centers only |
+| Passkeys | Yes, primary sign-in method (WebAuthn via SimpleWebAuthn); passkey-only mode | No passkey sign-in method in the docs as checked; mock passkey support in the Authentication emulator only |
+| Magic links | Yes | Yes, email link sign-in (the email/password provider must be enabled); 5 sign-in emails a day on Spark |
+| Email OTP | Yes | Not listed among the sign-in methods |
+| SMS OTP | Yes (Twilio or AWS SNS, configured by you) | Yes, phone sign-in on the Blaze plan only, billed per SMS |
+| MFA | TOTP and passkey (WebAuthn) step-up as a second factor | SMS and TOTP, with Identity Platform only |
+| Passwords | No, by design | Yes |
+| Anonymous accounts | No | Yes |
+| Social and OIDC login | Yes, instance-wide; CLI presets for Google, GitHub, Microsoft (Entra ID), GitLab | Google, Apple, Facebook, Twitter, GitHub, and more; generic OIDC with Identity Platform |
+| SAML enterprise SSO | No | With Identity Platform; web only, service-provider initiated |
+| Multi-tenancy | One user directory and one configuration per instance | With Identity Platform: tenants with their own users, providers, and configuration |
+| Organizations | Yes: memberships, per-organization roles and scopes, active organization on the session | No organizations feature in the docs checked; tenants with Identity Platform |
+| Extensibility | Logic in your own backend, behind the server adapter | Blocking functions with Identity Platform (before create, before sign-in, before email and SMS); must respond within 7 seconds |
+| Prebuilt UI | Built-in auth routes (`AuthRoutes` in React; equivalents in Angular, Vue, Svelte), or headless | FirebaseUI, open source drop-in UI, or the SDK with your own UI |
+| User import | `seamless migrate csv`, `POST /admin/users/import`; identities only, no credentials | `firebase auth:import`, including password hashes in many algorithms |
+| User export | No bulk export endpoint; self-hosted, the data is in your own Postgres. Paginated admin user list and a passkey coverage report (CSV) | `firebase auth:export` to JSON or CSV, including scrypt password hashes and salts; hash parameters in the console |
+| Audit trail | Append-only, hash-chained auth events; NDJSON export with an integrity check | Admin activity and user activity audit logs in Cloud Logging, with Identity Platform |
+| Third-party compliance attestations | None for Seamless Auth itself | ISO 27001/27017/27018 and SOC 1/2/3; BAA, PCI DSS, and TISAX with Identity Platform |
+| SLA | None | 99.95% uptime with Identity Platform |
+| Maturity | 0.x, small community | Established Google product |
+| Pricing model | Free to self-host; managed plans in the portal | Spark (no cost) and Blaze (pay as you go) plans; Identity Platform priced per MAU, SAML and OIDC users higher, SMS per message |
+
+<Aside type="note">
+  As checked on 2026-10-20, Firebase's pricing page lists 50,000 monthly active users and 50 SAML or
+  OIDC MAUs at no cost on both the Spark and Blaze plans, phone sign-in on Blaze only, billed per SMS,
+  and links to Identity Platform pricing for anything above. Identity Platform's pricing page lists
+  email, phone, anonymous, and social users free up to 50,000 MAU, then $0.0055 per MAU to 100,000,
+  $0.0046 to 1,000,000, $0.0032 to 10,000,000, and $0.0025 above. SAML and OIDC users are free up to
+  50 MAU and $0.015 per MAU after that. SMS for phone sign-in and MFA is priced per message by
+  country (for example $0.01 for the United States and Canada, $0.04 for the United Kingdom, and
+  $0.07 for India), and the first ten SMS a day are not billed. Firebase's docs add that once a
+  project is upgraded to Identity Platform, Spark projects are limited to 3,000 daily active users
+  (2 for SAML and OIDC). Check
+  [firebase.google.com/pricing](https://firebase.google.com/pricing) and
+  [cloud.google.com/identity-platform/pricing](https://cloud.google.com/identity-platform/pricing)
+  for current figures.
+</Aside>
+
+---
+
+## Architecture Difference
+
+**Firebase Authentication** is a Google-operated backend that your client SDK talks to directly.
+The app collects credentials (or an OAuth token from a federated provider), passes them to the
+Firebase Authentication SDK, and Firebase returns an ID token. Firebase services enforce Security
+Rules against that token, and your own backend can verify it. Users live in Firebase's user
+database, and with Identity Platform, blocking functions can change the outcome of sign-up and
+sign-in.
+
+**Seamless Auth** is a service you run next to your backend:
+
+```txt
+browser or native app
+  -> your backend's /auth routes   (@seamless-auth/express, fastify, nextjs, or the Python/Go/Rust adapter)
+  -> seamless-auth-api             (your infrastructure, or Seamless Auth managed)
+  -> Postgres
+```
+
+Clients never call the auth API directly. Your backend mounts the adapter routes, forwards calls
+with a service token, and keeps the session in signed `httpOnly` cookies on your domain (native
+apps use bearer tokens in the platform keystore). Your backend verifies sessions locally against the
+auth API's JWKS. Authorization stays in your own code. See
+[What Is Seamless Auth?](/start/overview#how-the-pieces-connect).
+
+The practical consequence: Firebase Authentication is a client-first service designed to sit in
+front of Firebase's own data products; Seamless Auth needs a backend of yours in the path, and the
+session lives on your domain.
+
+---
+
+## When Not To Use Seamless Auth
+
+Be direct with yourself about these before planning a move off Firebase Authentication. If any is a
+hard requirement today, stay on Firebase or choose another product.
+
+- **Your data access depends on Firebase Security Rules.** Realtime Database and Cloud Storage rules
+  see Firebase-authenticated users, not Seamless Auth sessions. Moving means routing that
+  access through your backend or bridging identities with custom tokens.
+- **Your app has no backend.** Seamless Auth's clients go through a server adapter in your backend;
+  there is no direct client-to-auth-server mode.
+- **Your users sign in with passwords, or you rely on anonymous accounts.** Neither exists in
+  Seamless Auth, and no password hashes are imported.
+- **A customer requires SAML SSO into your app, or you need tenants with separate configuration.**
+  Seamless Auth has no SAML and no multi-tenancy. Its OAuth and OpenID Connect providers are
+  configured instance-wide.
+- **You depend on blocking functions to shape tokens or gate sign-in.** There is no hook system; you
+  move that logic into your backend.
+- **You need a vendor's SOC 2 report, BAA, or SLA for the auth service itself.** Seamless Auth has no
+  third-party attestations. Self-hosted, it is covered by your own controls.
+- **You need a 1.0 stability guarantee.** Every Seamless Auth package is still 0.x.
+
+The full list is in
+[When Seamless Auth Is Not The Right Choice](/start/overview#when-seamless-auth-is-not-the-right-choice).
+
+---
+
+## Migrating From Firebase Authentication
+
+There is no Firebase migration guide yet. This page does not describe a tested Firebase migration,
+and you should plan one as you would any identity migration, with a dry run.
+
+What the docs do support today is the generic identity import in
+[Migrate Users From Another Identity System](/operate/migrate-users): a CSV of email, external id,
+phone, roles, and organizations, imported with `seamless migrate csv`. Firebase's
+`firebase auth:export` writes JSON, or a CSV with fixed column positions and no header row, holding
+each user's UID, email, and phone number among other fields. Those are the kind of fields the import
+reads, but the export has to be converted into the import's CSV first, and this page does not
+provide that conversion. Seamless Auth imports no credentials of any kind, so the password hashes in
+a Firebase export are not used (the import ignores every column it does not map), and each user
+proves their email once and enrolls a new passkey. The generic guide's optional
+step of signing users in through the old provider during cutover needs the old system to act as an
+OpenID Connect provider for Seamless Auth; this page does not cover whether or how that applies to
+Firebase.
+
+Fells Code, which maintains Seamless Auth, offers hands-on migration help:
+[fellscode.com](https://fellscode.com).
+
+---
+
+## Sources
+
+Firebase Authentication and Identity Platform details, each checked on the date shown:
+
+- [Firebase pricing](https://firebase.google.com/pricing), checked 2026-10-20: Spark and Blaze, 50,000 MAU and 50 SAML or OIDC MAU at no cost, phone sign-in on Blaze only and billed per SMS, overage at Identity Platform rates
+- [Identity Platform pricing](https://cloud.google.com/identity-platform/pricing), checked 2026-10-20: tier 1 and tier 2 per-MAU prices, per-SMS prices by country, first ten SMS a day not billed
+- [Firebase Authentication](https://firebase.google.com/docs/auth), checked 2026-10-20: sign-in methods, SDK platforms, FirebaseUI, custom auth system integration, Security Rules, Identity Platform upgrade features (MFA, blocking functions, SAML and OIDC, audit logging, multi-tenancy, SLA), Spark limit of 3,000 DAU after upgrading, Blaze per-MAU range
+- [Differences between Identity Platform and Firebase Authentication](https://cloud.google.com/identity-platform/docs/product-comparison), checked 2026-10-20: features only in Identity Platform, compliance table (ISO 27001, SOC 1/2/3, TISAX, BAA, PCI DSS), 99.95% SLA
+- [Identity Platform multi-tenancy](https://cloud.google.com/identity-platform/docs/multi-tenancy), checked 2026-10-20: tenants and what each one has, supported providers, limitations
+- [Extend Firebase Authentication with blocking functions](https://firebase.google.com/docs/auth/extend-with-blocking-functions), checked 2026-10-20: events, 7-second limit, Identity Platform required
+- [Authenticate using SAML in web apps](https://firebase.google.com/docs/auth/web/saml), checked 2026-10-20: Identity Platform required, service-provider initiated flow only
+- [Add multi-factor authentication to your web app](https://firebase.google.com/docs/auth/web/multi-factor) and [Add TOTP multi-factor authentication](https://firebase.google.com/docs/auth/web/totp-mfa), checked 2026-10-20: SMS and TOTP MFA after the Identity Platform upgrade
+- [Email link authentication](https://firebase.google.com/docs/auth/web/email-link-auth), checked 2026-10-20: email/password provider must be enabled
+- [Authentication limits](https://firebase.google.com/docs/auth/limits), checked 2026-10-20: email link sign-in emails per day on Spark and Blaze, SMS on Blaze only
+- [auth:import and auth:export](https://firebase.google.com/docs/cli/auth), checked 2026-10-20: JSON and CSV export, password hash and salt fields, hash parameters in the console, modified scrypt
+- [Connect your app to the Authentication emulator](https://firebase.google.com/docs/emulator-suite/connect_auth), checked 2026-10-20: local emulation, unsigned ID tokens rejected by production
+- [Firebase CLI release notes](https://firebase.google.com/support/release-notes/cli), checked 2026-10-20: v15.21.0 (June 17, 2026) added mock passkey (WebAuthn) support to the Authentication emulator
+- [Privacy and security in Firebase](https://firebase.google.com/support/privacy), checked 2026-10-20: Firebase Authentication runs only from US data centers; ISO 27001/27017/27018 and SOC 1/2/3 for Firebase Authentication
+
+Seamless Auth details (Seamless Auth API v0.19.1):
+
+- [What Is Seamless Auth?](/start/overview), including [When Seamless Auth Is Not The Right Choice](/start/overview#when-seamless-auth-is-not-the-right-choice)
+- [Migrate Users From Another Identity System](/operate/migrate-users)
+- [System Config Reference](/reference/system-config) and [Environment Variables](/reference/environment-variables) (`LOGIN_METHODS`, SMS providers)
+- [How To Use Organizations And Memberships](/build/organizations-memberships)
+- [OAuth Login](/build/oauth-login)
+- [Auth Events and Auditing](/understand/authevents)
+- Source: [fells-code on GitHub](https://github.com/fells-code)
