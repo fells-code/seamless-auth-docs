@@ -67,7 +67,7 @@ Provider config fields:
 | `name`                    | Display name returned to the UI                                                                                      |
 | `enabled`                 | Whether the provider is visible and usable                                                                           |
 | `clientId`                | OAuth client ID                                                                                                      |
-| `clientSecretEnv`         | Env var name that contains the client secret                                                                         |
+| `clientSecretEnv`         | Env var name that contains the client secret. Must end in `_CLIENT_SECRET` (API v0.19.4)                             |
 | `authorizationUrl`        | Provider authorization endpoint                                                                                      |
 | `tokenUrl`                | Provider token endpoint                                                                                              |
 | `userInfoUrl`             | Provider userinfo endpoint                                                                                           |
@@ -87,6 +87,10 @@ Provider config fields:
 | `externalIdSource`        | Import source whose users a first sign-in can link to                                                                |
 | `externalIdJsonPath`      | ID token claim holding the imported user's external id, such as `oid`                                                |
 | `promptPasskeyEnrollment` | Default `false`. When `true`, a user with no passkey who signs in through it gets `nextStep: 'enroll_passkey'`       |
+
+In production, provider URLs must use `https` and connect only to public addresses; the server does
+not follow redirects from them. For an identity provider on your own network, list its host in
+`OAUTH_PROVIDER_PRIVATE_HOSTS`. Link-local addresses are refused even when listed.
 
 In production, set `OAUTH_STATE_SECRET`. Development can fall back, but production should not rely
 on derived local state secrets.

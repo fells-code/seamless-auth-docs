@@ -68,7 +68,7 @@ Through the Express adapter, browser apps call these routes at `/auth/organizati
 | `PATCH`  | `/auth/organizations/:organizationId`                 | Update an organization                          |
 | `POST`   | `/auth/organizations/:organizationId/switch`          | Set active organization for the current session |
 | `GET`    | `/auth/organizations/:organizationId/members`         | List members                                    |
-| `POST`   | `/auth/organizations/:organizationId/members`         | Add a member                                    |
+| `POST`   | `/auth/organizations/:organizationId/members`         | Add a member (`admin:write` only)               |
 | `PATCH`  | `/auth/organizations/:organizationId/members/:userId` | Update member roles and scopes                  |
 | `DELETE` | `/auth/organizations/:organizationId/members/:userId` | Remove a member                                 |
 
@@ -220,13 +220,19 @@ export function MemberList() {
 ```
 
 Members can be listed by users with `members:read`, organization managers, or global admin read
-access.
+access. A member's phone number and global roles are shown only to callers with `admin:read`;
+everyone else sees `phone: null` and `roles: []`, with the organization roles and scopes intact.
+
+Adding a member needs `admin:write` from v0.19.4. Adding someone by email without their consent let
+any account learn which addresses have accounts and attach strangers to an organization, so
+self-service adds return as invitations the member accepts in v0.20.
 
 ---
 
 ## Step 5: Add Or Update Members
 
-Add a member by `userId` or `email`.
+An administrator (`admin:write`) can add a member by `userId` or `email`. For anyone else the call
+answers `403`.
 
 ```ts
 await authClient.addOrganizationMember(activeOrganization.id, {
