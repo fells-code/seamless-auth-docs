@@ -1,0 +1,158 @@
+---
+title: 'v0.20 Release Notes'
+description: 'What changed in Seamless Auth v0.20: recovery codes, self-service account recovery, break-glass admins, staged sign-in policy, admin step-up, required auth secrets, and upgrade steps.'
+sidebar:
+  order: 9
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+v0.20 is "never locked out, and hardened". Users who lose every passkey have a way back in, admins
+cannot be locked out by their own sign-in policy, and every public repo was hardened after a source
+review. It shipped as auth API 0.20.0 on 2026-10-28, with matching releases of the SDKs, server
+adapters, admin dashboard, templates, and CLI. The versions that go together are in the
+[Compatibility Matrix](/build/ecosystem#compatibility-matrix). Full details are in each package's
+changelog and GitHub release.
+
+<Aside type="caution">
+  Auth API 0.20.0 refuses to start in production until its own secrets are set, refuses every OAuth
+  callback without the state binding, and requires a fresh step-up on every admin write. Set the
+  secrets before you upgrade and move the CLI to 0.26.0 with the API. See [Upgrading](#upgrading).
+</Aside>
+
+---
+
+## Never Locked Out
+
+- **Recovery codes.** `POST /recovery-codes` returns ten single-use codes (`XXXXX-XXXXX`), shown
+  once and stored as keyed hashes. `POST /recovery-codes/redeem` signs in with one on the pre-auth
+  token from `/login`. It is rate limited like an OTP, is not subject to account lockout, and works
+  whatever `login_methods` or `phishing_resistant_only` say. On by default (`RECOVERY_CODES`).
+  Replacing a set needs a fresh step-up, and using a code notifies the account's verified email and
+  phone.
+- **Restricted recovery sessions.** A session from a recovery code or account recovery carries
+  `recovery: true`, in the response, the access token, and `GET /users/me`. Until the user enrolls a
+  passkey or an authenticator app, every access route except enrollment, recovery codes,
+  `GET /users/me` and logout answers `403 enrollment_required`. The Express and Fastify `requireAuth`
+  answer it the same way, and the Next.js session helpers treat it as signed out, unless
+  `allowRecoverySession: true` is passed. The Go, Python and Rust adapters refuse it too.
+- **Self-service account recovery.** `/recovery/*` sends a code to a verified email or phone, and
+  the request completes only after a delay (`ACCOUNT_RECOVERY`, default 24 hours, 1 hour to 30 days).
+  The account's verified email and phone are told when it opens, with a cancel link, and when it
+  completes. If no notice reaches the owner, the request is voided (`503 recovery_notice_failed`).
+  Completing signs out every session and issues a recovery session. Off by default, and unavailable
+  in `phishing_resistant_only` mode, since it proves only an address.
+- **Break-glass admins.** Accounts listed in `BREAK_GLASS_EMAILS` that hold `admin:write` are exempt
+  from `login_methods`, `phishing_resistant_only`, `passkey_login_fallback_enabled`,
+  `recovery_codes.enabled` and, for enrollment, `authenticator_policy`. They still need a passkey,
+  TOTP or a recovery code; email and SMS codes, magic links and OAuth are refused for them. Each exempt sign-in or
+  enrollment records a high-severity auth event and emails every admin.
+- **Staged sign-in policy.** Policy changes can be saved as a draft, dry-run against recent sign-ins
+  (up to 10,000 accounts), published as a new version, and rolled back. Every policy change is
+  versioned, including a whole-config `PATCH /system-config/admin`, and the first boot records the
+  policy in force as version 1. The admin dashboard has a Sign-in Policy page for all of it.
+
+## Admin Step-Up
+
+- **Every admin write steps up (API 0.20.0).** System config, OAuth provider, user, session,
+  organization admin and member writes answer `403 step_up_required` without a WebAuthn or TOTP
+  step-up on the calling session in the last five minutes. A user deleting their own account needs
+  one too. Admin reads and enrollment invites are unchanged.
+- **The dashboard prompts (0.11.0).** Every admin write steps up first, and a
+  `403 step_up_required` opens the prompt and retries once.
+- **The CLI prompts (0.26.0).** Admin write commands ask for an authenticator app code, verify it on
+  the same session, and retry once. Without a terminal, `SEAMLESS_TOTP_CODE` supplies the code.
+
+## Authenticator Apps In Every UI SDK
+
+- The React, Angular, Vue and Svelte bundled screens add authenticator app (TOTP) enrollment
+  (`/register-authenticator`, with a QR code and setup key) and sign-in (`/authenticator-code`),
+  plus a settings section to set one up or turn it off.
+- A recovery session's passkey step offers an authenticator app, which is the way forward on a
+  device without passkeys. Enrolling one lifts the restriction, and the client refreshes the session.
+- The React SDK's prebuilt UI also covers recovery codes, account recovery and its cancel link
+  (`/recovery-code`, `/recovery-codes`, `/account-recovery`, `/recovery/cancel`), and passkey
+  management. `@seamless-auth/client` 0.8.0 and `@seamless-auth/react-native` 0.4.0 add the
+  recovery methods for custom screens.
+
+## Secrets And OAuth
+
+- **No more service token fallback.** In production, `REFRESH_TOKEN_LOOKUP_SECRET` and
+  `DECOY_SUBJECT_SECRET` are always required, `TOTP_SECRET_ENCRYPTION_KEY` once any TOTP credential
+  exists, and `OAUTH_STATE_SECRET` once an OAuth provider is configured. The server refuses to start
+  without the ones it needs and names each. Adding an OAuth provider or starting TOTP enrollment
+  answers `409 secret_required` while its secret is unset. See
+  [Service And Security Secrets](/reference/environment-variables#service-and-security-secrets).
+- **`OAUTH_ALLOW_UNBOUND_STATE` is removed.** Every OAuth callback must carry the `binding` from
+  `/start`. A callback without one is refused with `400 Invalid OAuth state`, and a deployment that
+  still sets the variable gets a boot warning that it is ignored.
+
+## Hardened
+
+- **Auth API.** OTP and magic link limits are scoped to the sign-in attempt, one-time codes are
+  consumed atomically, OAuth sign-in respects the per-account passkey requirement, log out
+  everywhere cannot miss a session a concurrent refresh was creating, only a verified phone signs in
+  by phone OTP, and an admin changing a user's email or phone signs the user out and tells them.
+  The bundled Docker Compose stack serves on `127.0.0.1` and no longer grants admin to a fixed
+  address, and the image builds the console from a pinned dashboard commit. It includes the 0.19.4
+  and 0.19.5 security fixes.
+- **Server adapters.** Every adapter refuses known placeholder secrets at startup and keeps the
+  API's framing headers on the console proxy. The JavaScript and Go adapters no longer follow
+  upstream redirects. The JavaScript adapters also check a token's type before trusting it, check
+  `allowedOrigins` even when `Sec-Fetch-Site` is present, and, with `authServerUrl` and `audience`
+  set, verify the access token inside the cookie against the JWKS.
+- **Client SDKs.** The bearer transport refuses redirects on `/refresh` and to untrusted origins,
+  OAuth redirects open only `https` (or local `http`) URLs, and the React callback screens remove
+  one-time values from the address bar.
+- **Templates (v0.21.0).** Every API starter binds Postgres and the API to `127.0.0.1`.
+- **CLI (0.26.0).** `seamless init` keeps every secret out of `docker-compose.yml`, writes a
+  `.gitignore` for env files and keys, generates `DECOY_SUBJECT_SECRET`, and writes every `.env`
+  file with mode 0600.
+
+---
+
+## Upgrading
+
+Upgrade the auth server first, then the server adapters, then the client SDKs. Clients must already
+be on `@seamless-auth/client` 0.7.1 or later (`@seamless-auth/react` 0.18.1,
+`@seamless-auth/react-native` 0.3.3), as in [v0.19](/reference/release-v0-19#upgrading), or their
+OAuth sign-ins fail.
+
+1. **Set the secrets before upgrading.** Set `REFRESH_TOKEN_LOOKUP_SECRET` and
+   `DECOY_SUBJECT_SECRET`, plus `TOTP_SECRET_ENCRYPTION_KEY` if any user has TOTP and
+   `OAUTH_STATE_SECRET` if any OAuth provider is configured. Set each one you have not set yet to the
+   current `SEAMLESS_SERVICE_TOKEN` value, so existing sessions, TOTP enrollments and OAuth sign-ins
+   in flight stay valid. Give each its own value before the service token is next rotated.
+2. **Remove `OAUTH_ALLOW_UNBOUND_STATE`.** It is ignored from 0.20.0.
+3. **Upgrade the auth API** to 0.20.0. It runs its migrations on start unless
+   `RUN_MIGRATIONS=false`. If you set that, run them first, because the first boot records the
+   policy in force as version 1. The console at `/console` is dashboard 0.11.0. A separately deployed dashboard should
+   move to 0.11.0 too.
+4. **Handle `403 step_up_required`.** Scripts and backends that call admin write routes with a plain
+   admin access token must step up first (`POST /totp/verify-mfa` or `/step-up/webauthn/*` on the
+   same session), then retry. See [TOTP And Step-Up](/build/totp-step-up).
+5. **Move the CLI to 0.26.0.** Older versions fail admin writes. Enroll an authenticator app on the
+   admin account the CLI uses, and set `SEAMLESS_TOTP_CODE` in scripts. `seamless users
+   prepare-device-replacement` now requires `--proofing <in_person|remote_exception>` and
+   `--evidence-ref <ref>`, with an optional `--approver <name>`.
+6. **Upgrade the server adapters**: `@seamless-auth/express` 0.22.0, `@seamless-auth/fastify`
+   0.13.0, `@seamless-auth/nextjs` 0.6.0, or the Go, Python or Rust adapter 0.3.0. If you set
+   `allowedOrigins`, list every sibling subdomain that calls the adapter.
+7. **Upgrade the client SDKs**: `@seamless-auth/client` 0.8.0, `@seamless-auth/react` 0.19.0,
+   `@seamless-auth/react-native` 0.4.0, `@seamless-auth/angular` 0.4.0, or `@seamless-auth/vue` and
+   `@seamless-auth/svelte` 0.3.0. With SvelteKit, mount the two new authenticator screens at their
+   paths. With React, mount `AuthRoutes` at the root of `FRONTEND_URL` so the recovery cancel link
+   resolves.
+8. **Handle `403 enrollment_required`.** A route behind `requireAuth` answers it to a recovery
+   session. Send the user to passkey or authenticator app enrollment, which the bundled screens do.
+   Pass `allowRecoverySession: true` only on routes your app uses to drive that enrollment.
+
+## Not In v0.20
+
+- The Go, Python and Rust adapters do not yet check `allowedOrigins` alongside `Sec-Fetch-Site` or
+  verify the access token inside the cookie ([seamless-auth-go#13](https://github.com/fells-code/seamless-auth-go/issues/13),
+  [seamless-auth-python#15](https://github.com/fells-code/seamless-auth-python/issues/15),
+  [seamless-auth-rust#14](https://github.com/fells-code/seamless-auth-rust/issues/14)).
+- Starter production images still run as root ([seamless-templates#133](https://github.com/fells-code/seamless-templates/issues/133)).
+- FIDO certification is deferred to v1.0, and the OAuth state replay cache is still per instance
+  ([#414](https://github.com/fells-code/seamless-auth-api/issues/414), v0.21).

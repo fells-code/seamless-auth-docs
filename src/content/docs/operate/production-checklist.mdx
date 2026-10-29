@@ -95,10 +95,13 @@ Run it once for each of these, and use a different value for every one:
 | `OAUTH_STATE_SECRET`          | Signs OAuth `state`                                                        |
 | `DECOY_SUBJECT_SECRET`        | Derives the decoy subjects `/login` returns for unknown identifiers        |
 
-The last four fall back to the service token when unset, and the server logs a warning at boot for
-each one that does. That fallback is deprecated and each becomes required from v0.20. More
-importantly, while they share the service token you cannot rotate it without signing everyone out
-and making every stored TOTP secret unreadable.
+From auth API v0.20 the last four no longer fall back to the service token. In production the
+server refuses to start without `REFRESH_TOKEN_LOOKUP_SECRET` and `DECOY_SUBJECT_SECRET`, without
+`TOTP_SECRET_ENCRYPTION_KEY` once any user has TOTP, and without `OAUTH_STATE_SECRET` once an OAuth
+provider is configured. Upgrading from v0.19 or earlier, set each one you had not set to the current
+service token value first, so existing sessions and TOTP secrets stay valid, then give it a value of
+its own before the service token is next rotated. See
+[v0.20 Release Notes](/reference/release-v0-20#upgrading).
 
 Do not set `API_SERVICE_TOKEN` as well. It is the older name, still accepted, and the server refuses
 to start when both are set to different values.

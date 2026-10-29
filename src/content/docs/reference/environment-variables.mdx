@@ -49,6 +49,8 @@ boot to rows that were never changed through the admin API. See
 | `OAUTH_PROVIDERS`                | JSON array of OAuth provider configs                                              |
 | `LOCKOUT_POLICY`                 | JSON login lockout policy                                                         |
 | `AUTHENTICATOR_POLICY` | JSON passkey authenticator policy, such as `{"syncedPasskeys":"allow"}` |
+| `RECOVERY_CODES` | JSON recovery code policy, default `{"enabled":true,"requireAtEnrollment":false}` (v0.20) |
+| `ACCOUNT_RECOVERY` | JSON self-service account recovery, default `{"enabled":false,"delay":"24h"}`; `delay` is `1h` to `30d` (v0.20) |
 | `ACCESS_TOKEN_TTL`               | Access token lifetime, such as `30m`                                              |
 | `REFRESH_TOKEN_TTL`              | Refresh token lifetime, such as `1h`                                              |
 | `SESSION_IDLE_TTL` | Session idle timeout, such as `8h` (the default) |
@@ -91,16 +93,32 @@ one.
 
 ## Service And Security Secrets
 
-| Variable                      | Purpose                                               |
-| ----------------------------- | ----------------------------------------------------- |
-| `API_SERVICE_TOKEN`           | Shared service token for trusted server-to-auth calls |
-| `REFRESH_TOKEN_LOOKUP_SECRET` | Secret for indexed refresh-token lookup fingerprints  |
-| `TOTP_SECRET_ENCRYPTION_KEY`  | Encryption key for TOTP secrets at rest               |
-| `OAUTH_STATE_SECRET`          | Signing secret for OAuth state                        |
+| Variable                      | Required                             | Purpose                                                        |
+| ----------------------------- | ------------------------------------ | -------------------------------------------------------------- |
+| `SEAMLESS_SERVICE_TOKEN`      | Yes                                  | Shared service token for trusted server-to-auth calls          |
+| `API_SERVICE_TOKEN`           | No                                   | Older name for `SEAMLESS_SERVICE_TOKEN`, used only when it is unset |
+| `REFRESH_TOKEN_LOOKUP_SECRET` | Production                           | HMAC key for indexed refresh-token lookup fingerprints         |
+| `DECOY_SUBJECT_SECRET`        | Production                           | HMAC key for the decoy subjects `POST /login` returns for unknown identifiers |
+| `TOTP_SECRET_ENCRYPTION_KEY`  | Production, once TOTP is used        | Encryption key for TOTP secrets at rest                        |
+| `OAUTH_STATE_SECRET`          | Production, once OAuth is configured | Signing secret for OAuth state                                 |
+| `BREAK_GLASS_EMAILS`          | No                                   | Comma-separated admin emails exempt from sign-in policy (v0.20) |
 
-Production should define stable dedicated values for `REFRESH_TOKEN_LOOKUP_SECRET`,
-`TOTP_SECRET_ENCRYPTION_KEY`, and `OAUTH_STATE_SECRET`. Development fallbacks exist, but they are not
-a production secret-rotation strategy.
+From auth API v0.20 none of these falls back to the service token. With `NODE_ENV=production` the
+server refuses to start without `REFRESH_TOKEN_LOOKUP_SECRET` and `DECOY_SUBJECT_SECRET`, without
+`TOTP_SECRET_ENCRYPTION_KEY` while any TOTP credential exists, and without `OAUTH_STATE_SECRET` while
+an OAuth provider is configured, and it names each missing one. Adding an OAuth provider or starting
+TOTP enrollment answers `409 { "error": "secret_required", "variable": "..." }` while its secret is
+unset. Development uses a fixed development-only value for each unset secret, with a warning.
+
+Upgrading from a deployment that relied on the fallback (v0.19 and earlier): before upgrading, set
+each missing secret to the current `SEAMLESS_SERVICE_TOKEN` value, so existing sessions, TOTP
+enrollments and OAuth sign-ins in flight stay valid. Changing `REFRESH_TOKEN_LOOKUP_SECRET` later
+signs everyone out, and changing `TOTP_SECRET_ENCRYPTION_KEY` makes stored TOTP secrets unreadable.
+See [v0.20 Release Notes](/reference/release-v0-20#upgrading).
+
+`BREAK_GLASS_EMAILS` exempts a listed account only while it holds a role that satisfies
+`admin:write`. It still needs a passkey, TOTP or a recovery code, and every exempt sign-in emails
+every admin. It is kept out of `system_config` so no policy edit can remove it.
 
 ---
 
@@ -122,8 +140,8 @@ passkey flows even when the rest of the stack looks healthy.
 | -------------------- | ----------------------------------------------- |
 | `LOGIN_METHODS`      | Must include `oauth` to offer OAuth login       |
 | `OAUTH_PROVIDERS`    | JSON provider config array                      |
-| `OAUTH_STATE_SECRET` | OAuth state signing secret                      |
-| `OAUTH_ALLOW_UNBOUND_STATE` | Deprecated, removed in v0.20. `true` accepts an OAuth callback without the `binding` from `/start`, for clients older than `@seamless-auth/client` 0.7.1. It reopens login CSRF while set and warns at boot |
+| `OAUTH_STATE_SECRET` | OAuth state signing secret, required in production once a provider is configured |
+| `OAUTH_ALLOW_UNBOUND_STATE` | Removed in v0.20 and ignored, with a boot warning. Every OAuth callback must carry the `binding` from `/start`, as `@seamless-auth/client` 0.7.1 and later send it. In v0.19 `true` accepted a callback without one |
 | `OAUTH_PROVIDER_PRIVATE_HOSTS` | Comma-separated OAuth provider hosts allowed to resolve to private or loopback addresses in production, for an on-premises IdP. Link-local is always refused |
 | Provider secret vars | Values referenced by provider `clientSecretEnv`; names must end in `_CLIENT_SECRET` |
 
