@@ -606,6 +606,14 @@ the current session or `--all` prompts for confirmation and then clears local to
 
 Read and write the instance system configuration. Requires an admin role on the target instance.
 
+Against auth API v0.20 and later, every admin write (`config set` and `apply`, the
+`oauth-providers` writes, `users delete` and `prepare-device-replacement`, the `org` and
+`org members` writes, and each `migrate` batch) needs a fresh step-up. From CLI 0.26.0, when the
+instance answers `403 step_up_required`, the CLI asks for a code from the admin account's
+authenticator app, verifies it on the same session, and retries once. Without a terminal,
+`SEAMLESS_TOTP_CODE` supplies the code for the first step-up of a run. An account with no
+authenticator app enrolled cannot step up from the CLI.
+
 ```bash
 seamless config get [key] [--json]
 seamless config set <key> <value>
@@ -663,7 +671,7 @@ Admin user management. Requires an admin role.
 seamless users list [--limit <n>] [--offset <n>] [--json]
 seamless users delete <id> [--force]
 seamless users credentials <id> [--json]
-seamless users prepare-device-replacement <id> [--force] [--keep-sessions] [--keep-passkeys] [--keep-totp]
+seamless users prepare-device-replacement <id> --proofing <in_person|remote_exception> --evidence-ref <ref> [--approver <name>] [--force] [--keep-sessions] [--keep-passkeys] [--keep-totp]
 ```
 
 `list` shows 50 users at a time by default. `--limit` takes 1 to 100 and `--offset` 0 or more, and
@@ -671,7 +679,11 @@ the total it prints counts every user, not just the page shown. `delete` asks fo
 
 `prepare-device-replacement` is admin-assisted account recovery and needs an elevated (stepped-up)
 session. By default it revokes the user's sessions, removes their passkeys, and disables TOTP, after
-a confirmation; each `--keep-*` flag leaves that one in place.
+a confirmation; each `--keep-*` flag leaves that one in place. From CLI 0.26.0 it requires
+`--proofing` (`in_person` when you verified the user face to face, `remote_exception` when you did
+it remotely under an approved exception) and `--evidence-ref`, a ticket or case number of up to 200
+characters that is written to the audit trail, so keep personal data out of it. `--approver` is
+optional.
 
 `--force` skips the confirmation on `delete` and `prepare-device-replacement` (`--yes` and `-y` are
 aliases), which also lets them run without a terminal. `--profile <name>` targets another instance.
