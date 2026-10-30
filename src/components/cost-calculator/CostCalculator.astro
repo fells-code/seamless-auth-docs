@@ -5,11 +5,17 @@ import {
   type Auth0Plan,
   auth0MauSteps,
   auth0Plans,
+  clerk,
+  cognito,
+  firebase,
   okta,
+  type RateTier,
   selfHost,
   selfHostMonthlyUsd,
   sources,
   usd,
+  vendorIds,
+  vendorNames,
 } from './pricing'
 
 const plansFor = (useCase: 'b2c' | 'b2b') => auth0Plans.filter((plan) => plan.useCase === useCase)
@@ -28,6 +34,36 @@ const steps = [
   { label: 'Above 30,000', mau: Number.POSITIVE_INFINITY },
 ]
 
+const rate = (value: number) => (value === 0 ? 'Free' : `$${value}`)
+
+const tierRows = (tiers: RateTier[]) => {
+  let floor = 0
+  return tiers.map((tier) => {
+    const from = (floor + 1).toLocaleString('en-US')
+    const to = tier.upTo?.toLocaleString('en-US')
+    const label =
+      to === undefined
+        ? `Above ${floor.toLocaleString('en-US')}`
+        : from === to
+          ? to
+          : `${from} to ${to}`
+    floor = tier.upTo ?? floor
+    return { label, perUserUsd: tier.perUserUsd }
+  })
+}
+
+// Bands follow Lite, the plan with the most tiers; every other plan's tiers break on a Lite boundary.
+const cognitoBands = tierRows(cognito.plans[0].tiers).map(({ label }, index) => {
+  const ceiling = cognito.plans[0].tiers[index].upTo ?? Number.POSITIVE_INFINITY
+  return {
+    label,
+    rates: cognito.plans.map((plan) => {
+      const tier = plan.tiers.find((t) => ceiling <= (t.upTo ?? Number.POSITIVE_INFINITY))
+      return rate(tier?.perUserUsd ?? 0)
+    }),
+  }
+})
+
 const selfHostSummary = `${usd(selfHostMonthlyUsd)} per month at any MAU (${selfHost.provider} ${usd(
   selfHost.app.monthlyUsd,
 )} Droplet plus ${usd(selfHost.database.monthlyUsd)} managed PostgreSQL, checked ${
@@ -37,6 +73,13 @@ const selfHostSummary = `${usd(selfHostMonthlyUsd)} per month at any MAU (${self
 
 <div class="cost-calc not-content">
   <form class="cost-calc-form" data-cost-calc hidden>
+    <label>
+      <span>Compare with</span>
+      <select name="vendor">
+        <option value="all">All vendors</option>
+        {vendorIds.map((id) => <option value={id}>{vendorNames[id]}</option>)}
+      </select>
+    </label>
     <label>
       <span>Monthly active users</span>
       <input name="mau" type="number" min="1" step="1" value="5000" inputmode="numeric" required />
@@ -114,12 +157,138 @@ const selfHostSummary = `${usd(selfHostMonthlyUsd)} per month at any MAU (${self
         href={sources.oktaSales.url}>contact sales</a
       >.
     </p>
+    <p>
+      Amazon Cognito price per monthly active user, from <a href={sources.cognito.url}
+        >aws.amazon.com/cognito/pricing</a
+      > (checked {sources.cognito.checked}, {cognito.region} rates). Each band's rate applies only to
+      the users inside it. The free tier is per AWS account or organization. Users who sign in through
+      SAML or OIDC are priced separately on every plan: the first {cognito.federated.freeMau}
+      free, then {rate(cognito.federated.perMauUsd)} per MAU. SMS and email are billed through Amazon
+      SNS and SES.
+    </p>
+    <table>
+      <caption>Amazon Cognito, direct and social sign-in</caption>
+      <thead>
+        <tr>
+          <th scope="col">MAU</th>
+          {cognito.plans.map((plan) => <th scope="col">{plan.name}</th>)}
+        </tr>
+      </thead>
+      <tbody>
+        {
+          cognitoBands.map(({ label, rates }) => (
+            <tr>
+              <th scope="row">{label}</th>
+              {rates.map((value) => (
+                <td>{value}</td>
+              ))}
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+    <p>
+      Clerk, from <a href={sources.clerk.url}>clerk.com/pricing</a> (checked {
+        sources.clerk.checked
+      }). Clerk bills monthly retained users (MRU) per application. Hobby is free with a {
+        clerk.hobbyMruLimit.toLocaleString('en-US')
+      } MRU limit and no MFA or SSO connections. {
+        clerk.plans
+          .map(
+            (plan) =>
+              `${plan.name} is ${usd(plan.monthlyUsd)} a month (${usd(plan.annualMonthlyUsd)} billed annually)`,
+          )
+          .join(' and ')
+      }, each with 50,000 MRU and 1 SSO connection included per app and MFA included. SMS is {
+        usd(clerk.smsUsCanadaUsd)
+      } per SMS in the US and Canada. Enterprise is <a href={sources.clerkSales.url}
+        >contact sales</a
+      >.
+    </p>
+    <table>
+      <caption>Clerk Pro and Business, usage above the plan price</caption>
+      <thead>
+        <tr>
+          <th scope="col">Item</th>
+          <th scope="col">Band</th>
+          <th scope="col">Price per month</th>
+        </tr>
+      </thead>
+      <tbody>
+        {
+          tierRows(clerk.mruTiers).map(({ label, perUserUsd }) => (
+            <tr>
+              <th scope="row">MRU</th>
+              <td>{label}</td>
+              <td>{perUserUsd === 0 ? 'Included' : `$${perUserUsd} each`}</td>
+            </tr>
+          ))
+        }
+        {
+          tierRows(clerk.ssoTiers).map(({ label, perUserUsd }) => (
+            <tr>
+              <th scope="row">SSO connections</th>
+              <td>{label}</td>
+              <td>{perUserUsd === 0 ? 'Included' : `${usd(perUserUsd)} each`}</td>
+            </tr>
+          ))
+        }
+        <tr>
+          <th scope="row">SSO connections</th>
+          <td>Above {clerk.ssoContactAbove}</td>
+          <td><a href={sources.clerkSales.url}>Contact sales</a></td>
+        </tr>
+      </tbody>
+    </table>
+    <p>
+      Firebase Authentication with Identity Platform, from <a href={sources.firebase.url}
+        >firebase.google.com/pricing</a
+      > and <a href={sources.identityPlatform.url}>cloud.google.com/identity-platform/pricing</a> (both
+      checked {sources.identityPlatform.checked}). Above {
+        firebase.sparkMauLimit.toLocaleString('en-US')
+      } MAU needs the Blaze plan. SAML and OIDC users: the first {firebase.federated.freeMau} free, then
+      {rate(firebase.federated.perMauUsd)} per MAU. Phone sign-in and MFA SMS: {
+        usd(firebase.smsUsCanadaUsd)
+      } per SMS in the US and Canada, other countries priced per country, first {
+        firebase.freeSmsPerDay
+      } SMS a day not billed.
+    </p>
+    <table>
+      <caption
+        >Firebase Authentication with Identity Platform, email, phone, anonymous, and social users</caption
+      >
+      <thead>
+        <tr>
+          <th scope="col">MAU</th>
+          <th scope="col">Price per MAU</th>
+        </tr>
+      </thead>
+      <tbody>
+        {
+          tierRows(firebase.tiers).map(({ label, perUserUsd }) => (
+            <tr>
+              <th scope="row">{label}</th>
+              <td>{rate(perUserUsd)}</td>
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
     <p>Seamless Auth self-hosted: {selfHostSummary}.</p>
   </div>
 </div>
 
 <script>
-  import { calculate, type Inputs, type Mfa, type Row, usd, type UseCase } from './pricing'
+  import {
+    calculate,
+    type Inputs,
+    isVendorId,
+    type Mfa,
+    parseQuery,
+    type Row,
+    usd,
+    type UseCase,
+  } from './pricing'
 
   const form = document.querySelector<HTMLFormElement>('[data-cost-calc]')
   const results = document.querySelector<HTMLElement>('[data-cost-calc-results]')
@@ -140,7 +309,9 @@ const selfHostSummary = `${usd(selfHostMonthlyUsd)} per month at any MAU (${self
   const readInputs = (data: FormData): Inputs => {
     const whole = (value: FormDataEntryValue | null, min: number) =>
       Math.max(min, Math.floor(Number(value) || 0))
+    const vendor = String(data.get('vendor'))
     return {
+      vendor: isVendorId(vendor) ? vendor : 'all',
       mau: whole(data.get('mau'), 1),
       useCase: (data.get('useCase') === 'b2b' ? 'b2b' : 'b2c') as UseCase,
       enterpriseConnections: whole(data.get('enterpriseConnections'), 0),
@@ -184,7 +355,24 @@ const selfHostSummary = `${usd(selfHostMonthlyUsd)} per month at any MAU (${self
     results.replaceChildren(table)
   }
 
+  const applyQuery = (target: HTMLFormElement) => {
+    const query = parseQuery(window.location.search)
+    const set = (name: string, value: string | number | undefined) => {
+      if (value === undefined) return
+      const field = target.elements.namedItem(name)
+      if (field instanceof RadioNodeList) field.value = String(value)
+      else if (field instanceof HTMLInputElement || field instanceof HTMLSelectElement)
+        field.value = String(value)
+    }
+    set('vendor', query.vendor)
+    set('mau', query.mau)
+    set('useCase', query.useCase)
+    set('enterpriseConnections', query.enterpriseConnections)
+    set('mfa', query.mfa)
+  }
+
   if (form && results) {
+    applyQuery(form)
     form.hidden = false
     results.hidden = false
     form.addEventListener('input', render)
