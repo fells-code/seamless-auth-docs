@@ -102,7 +102,7 @@ pool feature plans.
 | Extensibility | Logic in your own backend, behind the server adapter | Lambda triggers on sign-up, authentication, token generation, migration, and messages |
 | Prebuilt UI | Built-in auth routes (`AuthRoutes` in React; equivalents in Angular, Vue, Svelte), or headless | Managed login on a user pool domain (Essentials and Plus); classic hosted UI on all plans |
 | AWS integration | None; your backend verifies sessions with a server adapter | Identity pools for AWS credentials, API Gateway authorizers, Amplify |
-| User import | `seamless migrate csv`, `seamless migrate entra-id`, `POST /admin/users/import`; identities only, no credentials | CSV import jobs (up to 500,000 users per file), optionally with password hashes; user migration Lambda trigger |
+| User import | `seamless migrate cognito` (reads `list-users` output), `csv`, `entra-id`, `POST /admin/users/import`; identities only, no credentials | CSV import jobs (up to 500,000 users per file), optionally with password hashes; user migration Lambda trigger |
 | User export | No bulk export endpoint; self-hosted, the data is in your own Postgres. Paginated admin user list and a passkey coverage report (CSV) | No bulk export job; `ListUsers`, 60 users per call, with no password field |
 | Audit trail | Append-only, hash-chained auth events; NDJSON export with an integrity check | User activity and risk logs with export on Plus |
 | Third-party compliance attestations | None for Seamless Auth itself | In scope for AWS programs including SOC, PCI, FedRAMP, and HIPAA |
@@ -183,9 +183,9 @@ and [What You Give Up Or Must Plan For](/operate/migrate-from-cognito#what-you-g
 ## Migrating From Cognito
 
 The [Cognito migration guide](/operate/migrate-from-cognito) covers the move end to end: export
-users with a paged `aws cognito-idp list-users` loop (and groups with `ListUsersInGroup`), convert
-the export to CSV with `jq`, using each user's `sub` as the external id, import identities with
-`seamless migrate csv --source cognito`, keep Cognito sign-in working by adding the user pool as an
+users with a paged `aws cognito-idp list-users` loop (and groups with `ListUsersInGroup`), check
+readiness with `seamless migrate assess cognito`, import identities straight from the export with
+`seamless migrate cognito`, using each user's `sub` as the external id, keep Cognito sign-in working by adding the user pool as an
 OpenID Connect provider linked by `sub` while users move, get everyone onto a passkey, retire
 Cognito sign-in per organization or all at once, and switch the user pool off.
 
