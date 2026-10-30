@@ -71,7 +71,7 @@ Primary neighboring repos:
 - `../seamless-auth-api`
 - `../seamless-auth-server`
 - `../seamless-auth-admin-dashboard`
-- `../seamless-auth-react`
+- `../seamless-auth-js`
 
 When touching CLI docs, also inspect:
 
