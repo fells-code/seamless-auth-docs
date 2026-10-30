@@ -1,6 +1,6 @@
 ---
 title: "Identity Cost Calculator"
-description: "Compare the published list prices of Auth0 and Okta Customer Identity plans with the cost of self-hosting Seamless Auth on one container and managed Postgres, by monthly active users, B2B or B2C, enterprise connections, and MFA. List prices only, each dated and sourced."
+description: "Compare the published list prices of Auth0, Okta Customer Identity, Amazon Cognito, Clerk, and Firebase Authentication (Identity Platform) plans with the cost of self-hosting Seamless Auth on one container and managed Postgres, by monthly active users, B2B or B2C, enterprise connections, and MFA. List prices only, each dated and sourced."
 sidebar:
   order: 20
 ---
@@ -12,8 +12,8 @@ import { selfHost, selfHostMonthlyUsd, usd } from '../../../components/cost-calc
 The bill is often the first reason a team looks past its identity provider. This page puts a number
 on it: enter your monthly active users (MAU), whether you sell to consumers (B2C) or businesses
 (B2B), how many enterprise connections you need, and what kind of MFA, and it shows the published
-list price of each Auth0 and Okta Customer Identity plan next to the cost of running Seamless Auth
-yourself.
+list price of each Auth0, Okta Customer Identity, Amazon Cognito, Clerk, and Firebase
+Authentication plan next to the cost of running Seamless Auth yourself.
 
 These are **list prices only**, read from each vendor's own pricing page on the date given in
 [Sources](#sources). They leave out discounts, annual commitments, negotiated contracts, taxes,
@@ -28,9 +28,26 @@ and usage charges a page does not print. Where a vendor publishes no price, the 
 
 <Aside type="note">
   Without JavaScript, the tables above still list every published Auth0 price by MAU step, the
-  Okta starting price, and the Seamless Auth hosting cost. The interactive part only picks the
-  rows that match your inputs.
+  Okta starting price, the Cognito, Clerk, and Firebase per-user rates, and the Seamless Auth
+  hosting cost. The interactive part only picks the rows that match your inputs.
 </Aside>
+
+### Linking to a prefilled calculator
+
+The calculator reads its inputs from the page address, so a link can open it already filled in.
+For example, [`/compare/cost?mau=12000&vendor=cognito`](/compare/cost?mau=12000&vendor=cognito)
+opens it at 12,000 MAU compared with Amazon Cognito.
+
+| Parameter | Values |
+| --- | --- |
+| `mau` | A whole number from 1 to 1,000,000,000 |
+| `vendor` | `all`, `auth0`, `okta`, `cognito`, `clerk`, or `firebase` |
+| `useCase` | `b2c` or `b2b` |
+| `enterpriseConnections` | A whole number from 0 to 10,000 |
+| `mfa` | `none`, `otp`, or `enterprise` |
+
+A missing or invalid value is ignored and that input keeps its default. The Seamless Auth row is
+always shown.
 
 ---
 
@@ -63,6 +80,46 @@ MAU and quoted by sales, and a B2C Suite and a B2B Suite with no published price
 shows the base platform as "From $3,000" whatever your inputs, because the page does not say how
 MAU, MFA, or federation change it. See also
 [Okta Customer Identity](/compare/auth0#okta-customer-identity) on the Auth0 comparison page.
+
+**Amazon Cognito.** Cognito's pricing page has three user pool plans, Lite, Essentials, and Plus,
+priced per monthly active user (MAU) for users who sign in directly or through a social provider.
+Lite and Essentials include 10,000 MAU a month free per AWS account or organization; Plus has no
+free tier. Above that, Essentials is $0.015 per MAU, Plus is $0.020, and Lite is tiered: $0.0055
+from 10,001 to 100,000, $0.0046 to 1,000,000, $0.00325 to 10,000,000, and $0.0025 above, each rate
+applying only to the users in its band. The page's tables have a region selector; the calculator
+uses the US East (N. Virginia) rates. Users who sign in through SAML or OIDC federation are priced
+separately on every plan: 50 MAU free, then $0.015 per MAU. The calculator takes a count of
+enterprise connections, not federated users, so with any connection it shows the Cognito price as
+"From" the direct sign-in price. SMS and email are billed through Amazon SNS and Amazon SES, and the
+Cognito page prints no rate for them. The page also describes an older free tier of 50,000 MAU on
+Lite for accounts that had user pools before 22 November 2024, the Advanced Security Features
+add-on for Lite, machine-to-machine token charges, and multi-Region and higher-quota add-ons; the
+calculator leaves these out. See also [Seamless Auth vs Amazon Cognito](/compare/cognito).
+
+**Clerk.** Clerk bills monthly retained users (MRU), a user who returns at least a day after signing
+up, counted per application, not MAU. The calculator uses your MAU as the MRU count, so for an app
+with many one-time sign-ups it shows more than Clerk would charge. Hobby is free up to 50,000 MRU
+per app and lists MFA and SSO connections as not included. Pro is $25 a month and Business $300 a
+month on monthly billing ($20 and $250 billed annually); each includes 50,000 MRU per app, then
+$0.02 per MRU to 100,000, $0.018 to 1,000,000, $0.015 to 10,000,000, and $0.012 above, each rate
+applying only to the users in its band. Pro and Business include MFA (authenticator apps, SMS
+codes, and backup codes) and 1 SSO connection (SAML, OIDC, or EASIE) per app; more connections are
+$75 a month each up to 15 and $60 each up to 100, and the page says "Contact us" above that. SMS is
+$0.01 per SMS in the US and Canada and market rate elsewhere. Clerk prices organizations for B2B
+apps separately (100 monthly retained organizations included per app), and the calculator does not
+count them. Enterprise has no published price. See also [Seamless Auth vs Clerk](/compare/clerk).
+
+**Firebase Authentication.** Firebase's pricing page lists 50,000 MAU, and 50 SAML or OIDC MAU, at
+no cost with Identity Platform on both the Spark (no cost) and Blaze (pay as you go) plans, and
+links to Google Cloud pricing above that, which needs Blaze. The Identity Platform pricing page
+lists email, phone, anonymous, and social users free up to 50,000 MAU, then $0.0055 per MAU to
+100,000, $0.0046 to 1,000,000, $0.0032 to 10,000,000, and $0.0025 above, each rate applying only to
+the users in its band. SAML and OIDC users are free up to 50 MAU and $0.015 per MAU after that, so,
+as with Cognito, any enterprise connection makes the Firebase price a "From" price. Phone sign-in and
+MFA are billed per SMS sent, $0.01 in the US and Canada and priced per country elsewhere, and the
+first ten SMS a day are not billed. Firebase's pricing page also lists "Other Authentication
+services" on both plans with no price; the calculator prices Firebase Authentication with Identity
+Platform only. See also [Seamless Auth vs Firebase Authentication](/compare/firebase-auth).
 
 ---
 
@@ -104,7 +161,7 @@ The Seamless Auth number does **not** include:
 - a load balancer, a second app instance, or a high availability database
 - domain names and TLS certificates, if you pay for them
 
-Seamless Auth also does less than Auth0 and Okta. It has no SAML, no per-customer enterprise
+Seamless Auth also does less than these vendors. It has no SAML, no per-customer enterprise
 connections, no SCIM, and no push or SMS second factor, so if your inputs need those, a lower price
 does not mean the same product. The calculator notes this against the Seamless Auth row. See
 [Seamless Auth vs Auth0](/compare/auth0) for the full comparison.
@@ -128,6 +185,22 @@ Each page was checked on the date shown. All prices are in US dollars.
   2026-10-21: Enterprise base platform starting at $3,000 per month billed annually, B2C and B2B
   Suites by inquiry, add-ons priced on usage, annual contract required
 - [Okta contact sales](https://www.okta.com/contact-sales/), checked 2026-10-21
+- [Amazon Cognito pricing](https://aws.amazon.com/cognito/pricing/), checked 2026-10-29, US East
+  (N. Virginia) rates: Lite, Essentials, and Plus per-MAU prices and tiers; 10,000 MAU free tier on
+  Lite and Essentials per account or organization, none on Plus; SAML and OIDC federated users free
+  to 50 MAU, then $0.015 per MAU; SMS and email billed through Amazon SNS and SES
+- [Clerk pricing](https://clerk.com/pricing), checked 2026-10-29: Hobby, Pro, Business, and
+  Enterprise; monthly and annual plan prices; monthly retained user definition, allowance, and
+  volume rates; MFA and SSO connections by plan and SSO connection rates; SMS at $0.01 per SMS in
+  the US and Canada; B2B organization allowance and Enhanced add-on
+- [Clerk contact sales](https://clerk.com/contact/sales), checked 2026-10-29
+- [Firebase pricing](https://firebase.google.com/pricing), checked 2026-10-29: Authentication with
+  Identity Platform, 50,000 MAU and 50 SAML or OIDC MAU at no cost on Spark and Blaze, Google Cloud
+  pricing above; phone authentication billed per SMS on Blaze
+- [Identity Platform pricing](https://cloud.google.com/identity-platform/pricing), checked
+  2026-10-29: tier 1 (email, phone, anonymous, social) per-MAU tiers; tier 2 (SAML, OIDC) per-MAU
+  price; per-SMS prices by country, $0.01 for the United States and Canada, first ten SMS a day not
+  billed
 - [DigitalOcean Droplet pricing](https://www.digitalocean.com/pricing/droplets), checked
   2026-10-21: Basic Droplet, Regular CPU, 2 GiB, 1 vCPU, $12.00 per month
 - [DigitalOcean Managed Databases pricing](https://www.digitalocean.com/pricing/managed-databases),
