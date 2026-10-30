@@ -152,6 +152,8 @@ The auth API logs system config reads, updates, and validation errors as auth ev
 | `oauth_providers`                | `OAUTH_PROVIDERS`                | JSON array         | OAuth provider metadata                                |
 | `lockout_policy`                 | `LOCKOUT_POLICY`                 | JSON object        | Failed-login lockout policy                            |
 | `authenticator_policy` | `AUTHENTICATOR_POLICY` | JSON object | Which passkey authenticators may register, and how they are verified |
+| `recovery_codes` | `RECOVERY_CODES` | JSON object | Whether users can generate and redeem recovery codes (v0.20) |
+| `account_recovery` | `ACCOUNT_RECOVERY` | JSON object | Self-service account recovery and its delay (v0.20) |
 | `access_token_ttl`               | `ACCESS_TOKEN_TTL`               | duration           | Access token and access cookie TTL                     |
 | `refresh_token_ttl`              | `REFRESH_TOKEN_TTL`              | duration           | Refresh cookie TTL                                     |
 | `session_idle_ttl` | `SESSION_IDLE_TTL` | duration | How long a session may go without a refresh |
@@ -175,6 +177,8 @@ Built-in defaults exist for:
 | `phishing_resistant_only` | `false` |
 | `lockout_policy`                 | enabled, 10 failures, 15-minute window, 15-minute lockout |
 | `authenticator_policy` | see [Authenticator Policy](#authenticator-policy) |
+| `recovery_codes` | `{ "enabled": true, "requireAtEnrollment": false }` |
+| `account_recovery` | `{ "enabled": false, "delay": "24h" }` (`delay` from `1h` to `30d`) |
 | `session_idle_ttl` | `"8h"` |
 | `max_concurrent_sessions` | `null` (no cap) |
 | `flow_rate_limits` | see [Flow Rate Limits](#flow-rate-limits) |
@@ -197,6 +201,8 @@ Other keys must come from env or an existing database row.
 | `LOCKOUT_POLICY`                 | JSON object                               |
 | `AUTHENTICATOR_POLICY` | JSON object |
 | `FLOW_RATE_LIMITS` | JSON object |
+| `RECOVERY_CODES` | JSON object |
+| `ACCOUNT_RECOVERY` | JSON object |
 | `RATE_LIMIT`                     | Number                                    |
 | `DELAY_AFTER`                    | Number                                    |
 | `MAX_CONCURRENT_SESSIONS` | Number; `null`, `none`, or `unlimited` (any case) means no cap; empty counts as unset |
