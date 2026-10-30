@@ -30,7 +30,8 @@ The npm package is named `seamless-cli`. The executable binary is named `seamles
 | `seamless config <sub>`        | Read and write instance system configuration (admin)                                       |
 | `seamless users <sub>`         | Admin user management (admin)                                                              |
 | `seamless org <sub>`           | Admin organization and membership management (admin)                                       |
-| `seamless migrate csv <file>`  | Import users from a CSV export into an instance, as a dry run unless `--apply` (admin)     |
+| `seamless migrate <source>`    | Import users from CSV, Entra ID, Auth0, or Cognito, as a dry run unless `--apply` (admin)  |
+| `seamless migrate assess`      | Write a migration readiness report from the source alone, with no instance or login        |
 | `seamless help [command]`      | Print usage, for every command or for one                                                  |
 | `seamless --help`              | Print usage                                                                                |
 | `seamless --version`           | Print the installed CLI version                                                            |
@@ -39,7 +40,8 @@ The `init`, `add`, `templates`, `check`, and `verify` commands are for building 
 `login` and `apps` use your portal account. `whoami` and `logout` act on the portal session by
 default and on an instance with `--profile <name>`. The `profile`, `sessions`, `config`, `users`,
 `org`, and `migrate` commands act as an authenticated client against a running instance (managed or
-self-hosted), signed in with `seamless profile login`.
+self-hosted), signed in with `seamless profile login`, except `migrate assess`, which reads only the
+source.
 
 There is no `bootstrap-admin` command. The first admin is the account registered with the owner
 email you give `init`, and `owner-code` prints the code that registration asks for. See
@@ -717,11 +719,17 @@ shown. `create` also takes the name as `--name <name>`. `members remove` asks fo
 
 ```bash
 seamless migrate csv <file> [--map <mapping.json>] [--source <name>] [--apply] [--report <path>] [--json]
+seamless migrate entra-id [--group <id>] [--groups <mapping.json>] [--allow-upn] [--include-guests] [--source <name>] [--apply] [--report <path>] [--json]
+seamless migrate auth0 <export.ndjson> [--map <mapping.json>] [--allow-unverified] [--source <name>] [--apply] [--report <path>] [--json]
+seamless migrate cognito <list-users.json>... [--groups <groups.json>] [--map <mapping.json>] [--allow-unverified] [--include-unconfirmed] [--source <name>] [--apply] [--report <path>] [--json]
+seamless migrate assess <csv|entra-id|auth0|cognito> [source args] [--report <path>] [--json]
 ```
 
-Imports users from another identity system's CSV export into the instance. Requires an admin role,
-signed in with `seamless profile login`. `csv` is the only source. The run is a dry run unless you
-pass `--apply`, and it writes a report either way.
+Imports users from another identity system into the instance. Requires an admin role, signed in
+with `seamless profile login`. There are four sources: `csv` (any system's CSV export, described
+first below), `entra-id` (CLI 0.25.0), and `auth0` and `cognito` (CLI 0.27.0). Every source runs as
+a dry run unless you pass `--apply`, and writes a report either way. `migrate assess` (CLI 0.27.0)
+reads any source without an instance.
 
 What it does:
 
@@ -780,7 +788,106 @@ grants an admin role, or that would link an external id to an existing account h
 `organization_not_found`, `duplicate_in_batch`, and `external_id_conflict` per row. An auth server
 without the import route fails with a message to upgrade it.
 
-For the whole migration, from exporting users to getting them onto passkeys, see
+### `migrate assess`
+
+```bash
+seamless migrate assess auth0 auth0-users.json --map auth0-map.json
+seamless migrate assess cognito cognito-users.json --groups cognito-groups.json
+seamless migrate assess csv users.csv
+```
+
+Writes a readiness report from the source alone. It needs no Seamless Auth instance and no login,
+and sends nothing to one (`entra-id` still reads Microsoft Graph). It takes any source and that
+source's arguments, and reuses its parsing and validation. The report covers:
+
+- users found, how many would import, and the reasons the rest would not, including users who share
+  an email
+- contact coverage: verified email, an email the source marks unverified, an email with no
+  verification recorded, phone only, and neither
+- the roles and organization memberships the import would grant, and the export fields it leaves
+  behind
+- features of the source that Seamless Auth does not cover, seen in the export or not visible in
+  one, linked to the matching guide's "What You Give Up" section
+- a link to the [Identity Cost Calculator](/compare/cost) with the user count filled in
+
+| Flag              | Default                                   | Effect                                                     |
+| ----------------- | ----------------------------------------- | ---------------------------------------------------------- |
+| `--report <path>` | `<input>.migrate-assess.md` beside the input, or `<source>.migrate-assess.md` in the current directory | Write the Markdown report to `<path>.md` |
+| `--json`          | off                                       | Print the assessment as JSON instead of the summary        |
+
+The Markdown holds counts and the names of fields, roles, and organizations, never a user's email,
+phone, or id. Roles and organizations are only checked against the instance by a dry run, so the
+dry run can still reject rows the assessment passed. `assess` refuses `--apply` and exits 0.
+
+### `migrate entra-id`
+
+Reads users straight from Microsoft Entra ID through Microsoft Graph, signed in as an app
+registration with the application permissions `User.Read.All`, and `GroupMember.Read.All` for
+`--group` or `--groups`, with admin consent. The tenant id, client id, and secret come from
+`ENTRA_TENANT_ID`, `ENTRA_CLIENT_ID`, and `ENTRA_CLIENT_SECRET`, never flags. The object id is the
+`externalId`, `mail` the email, and `mobilePhone` the phone.
+
+| Flag                      | Effect                                                                                        |
+| ------------------------- | --------------------------------------------------------------------------------------------- |
+| `--group <id>`            | Import only that group's members, nested groups included                                      |
+| `--groups <mapping.json>` | Turn group membership into organizations and roles: `{ "groups": [{ "id": "<group id>", "organization": "engineering", "roles": ["staff"] }] }` |
+| `--allow-upn`             | Use `userPrincipalName` for a user with no `mail`. A UPN is not always a mailbox              |
+| `--include-guests`        | Import guest accounts too                                                                     |
+| `--source <name>`         | Default `entra-id`                                                                            |
+
+Disabled accounts and guests are reported as `skipped`. The report defaults to
+`entra-id.migrate-plan` (or `entra-id.migrate-result`) in the current directory.
+
+### `migrate auth0`
+
+Reads the NDJSON an Auth0 user export job writes, one user per line, gzip-compressed or not (a JSON
+array of users is read too). It reads the file only and needs no Auth0 credentials.
+
+| Auth0 field      | Import                                                                         |
+| ---------------- | ------------------------------------------------------------------------------ |
+| `user_id`        | `externalId`                                                                   |
+| `email`          | `email`. A user with none is `invalid`                                         |
+| `email_verified` | `false` is `skipped`, unless `--allow-unverified`                              |
+| `phone_number`   | `phone`                                                                        |
+| `blocked`        | `true` is `skipped`                                                            |
+| metadata         | Only through `--map`                                                           |
+
+| Flag                   | Default | Effect                                                                                                    |
+| ---------------------- | ------- | --------------------------------------------------------------------------------------------------------- |
+| `--map <mapping.json>` | none    | Read roles and organizations from metadata: `{ "columns": { "roles": "app_metadata.roles", "organizations": "app_metadata.org" } }`. Paths start with `app_metadata` or `user_metadata`. `roles`, `organizationRoles`, `separator`, and `source` work as for `csv` |
+| `--allow-unverified`   | off     | Import users whose email Auth0 never verified. Whoever registers with that address first gets the account |
+| `--source <name>`      | `auth0` | Keep it the same as the cutover provider's `externalIdSource`                                             |
+
+Report rows are numbered by the line of the export. See
+[Migrating Off Auth0](/operate/migrate-from-auth0).
+
+### `migrate cognito`
+
+Reads `aws cognito-idp list-users` output: one response, the `Users` array, an array of responses,
+responses concatenated, or several files (one per exported chunk) in the order given. It reads files
+only and needs no AWS credentials.
+
+| Cognito field              | Import                                                          |
+| -------------------------- | --------------------------------------------------------------- |
+| `sub` attribute            | `externalId`                                                    |
+| `email` attribute          | `email`. A user with none is `invalid`                          |
+| `email_verified` attribute | `"false"` is `skipped`, unless `--allow-unverified`             |
+| `phone_number` attribute   | `phone`                                                         |
+| `Enabled`                  | `false` is `skipped`                                            |
+| `UserStatus`               | `UNCONFIRMED` is `skipped`, unless `--include-unconfirmed`      |
+
+| Flag                     | Default   | Effect                                                                                                      |
+| ------------------------ | --------- | ----------------------------------------------------------------------------------------------------------- |
+| `--groups <groups.json>` | none      | Turn groups into roles, from a map of username to group names: `{ "ada": ["staff"] }`. Cognito's `<pool id>_<provider>` groups are ignored |
+| `--map <mapping.json>`   | none      | Read roles or organizations from an attribute: `{ "columns": { "organizations": "custom:tenant" } }`        |
+| `--allow-unverified`     | off       | Import users whose `email_verified` is `"false"`                                                            |
+| `--include-unconfirmed`  | off       | Import users who never confirmed their sign-up                                                              |
+| `--source <name>`        | `cognito` | Keep it the same as the cutover provider's `externalIdSource`                                               |
+
+With several input files the report defaults to `cognito.migrate-plan` in the current directory.
+See [Migrating Off Amazon Cognito](/operate/migrate-from-cognito).
+
+For the whole migration, from assessing the source to getting users onto passkeys, see
 [Migrate Users From Another Identity System](/operate/migrate-users).
 
 ---

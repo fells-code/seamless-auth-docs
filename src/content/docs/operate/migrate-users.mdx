@@ -1,6 +1,6 @@
 ---
 title: "Migrate Users From Another Identity System"
-description: "Move an existing user base onto Seamless Auth: export identities to CSV, import them with seamless migrate, then track and invite passkey enrollment, optionally signing users in through the old provider during cutover."
+description: "Move an existing user base onto Seamless Auth: assess the source with seamless migrate assess, import identities from CSV, Entra ID, Auth0, or Cognito with seamless migrate, then track and invite passkey enrollment, optionally signing users in through the old provider during cutover."
 sidebar:
   order: 5
 ---
@@ -15,12 +15,14 @@ into.
 
 The steps are:
 
-1. export users from the old system to CSV
-2. prepare the instance: roles and organizations the import refers to
-3. dry run `seamless migrate csv`, read the plan, fix the source data
-4. apply the import and keep the result report
-5. get users onto passkeys: prompts, invites, and coverage tracking
-6. optionally, let users sign in through the old provider while they enroll, then retire it
+1. assess the source with `seamless migrate assess`, which needs no instance and no login
+2. export users from the old system: CSV for most systems, or read Entra ID, an Auth0 export, or
+   Cognito `list-users` output directly
+3. prepare the instance: roles and organizations the import refers to
+4. dry run `seamless migrate`, read the plan, fix the source data
+5. apply the import and keep the result report
+6. get users onto passkeys: prompts, invites, and coverage tracking
+7. optionally, let users sign in through the old provider while they enroll, then retire it
 
 ---
 
@@ -28,7 +30,10 @@ The steps are:
 
 | Step                                             | Needs                                                                                                          |
 | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| Readiness report (`seamless migrate assess`)     | `seamless-cli` 0.27.0 or later. No instance                                                                    |
 | Import (`seamless migrate csv`)                  | `seamless-cli` 0.18.0 or later, `seamless-auth-api` 0.16.0 or later (`POST /admin/users/import`)               |
+| Import (`seamless migrate entra-id`)             | `seamless-cli` 0.25.0 or later, and the same auth API                                                          |
+| Import (`seamless migrate auth0`, `cognito`)     | `seamless-cli` 0.27.0 or later, and the same auth API                                                          |
 | Enrollment directory and invites                 | `seamless-auth-api` 0.17.0 (`/admin/enrollment`, `/admin/enrollment/invites`)                                  |
 | The same, from the admin dashboard               | `seamless-auth-admin-dashboard` 0.8.0, and `@seamless-auth/express` 0.18.0, `fastify` 0.9.0, or `nextjs` 0.2.0 |
 | Enrollment prompt after a code or link sign-in   | `seamless-auth-api` 0.17.0 (`prompt_passkey_enrollment`)                                                       |
@@ -48,21 +53,68 @@ The steps are:
   `seamless migrate` stops with a message to upgrade.
 </Aside>
 
-`seamless migrate` has one source today, `csv`. A direct Microsoft Entra ID source is tracked in
-[fells-code/seamless-cli#213](https://github.com/fells-code/seamless-cli/issues/213) and is not
-shipped; export Entra ID users to CSV instead.
+`seamless migrate` has four sources: `csv` for any system that can export a spreadsheet, `entra-id`
+(reads Microsoft Entra ID through Microsoft Graph), `auth0` (reads an Auth0 user export), and
+`cognito` (reads `aws cognito-idp list-users` output). Every source shares the dry run, the batches,
+and the report described below.
 
 Moving off Auth0? [Migrating Off Auth0 To Passwordless](/operate/migrate-from-auth0) covers the
-Auth0 export, a `jq` conversion to this CSV, and signing in through Auth0 during cutover.
+Auth0 export, `seamless migrate auth0`, and signing in through Auth0 during cutover.
 
 Moving off Amazon Cognito? [Migrating Off Amazon Cognito To Passwordless](/operate/migrate-from-cognito)
-covers the `ListUsers` export, groups, and signing in through Cognito during cutover.
+covers the `ListUsers` export, groups, `seamless migrate cognito`, and signing in through Cognito
+during cutover.
 
 ---
 
-## Step 1: Export Users To CSV
+## Step 1: Assess The Source
 
-Export one row per person from the old system. The import reads five fields, and only `email` is
+Before importing anything, find out whether the move fits. `seamless migrate assess` takes any
+source and its usual arguments, reads the source alone, and writes a Markdown readiness report you
+can hand to a technical lead. It needs no Seamless Auth instance and no login, and sends nothing to
+one:
+
+```bash
+seamless migrate assess csv users.csv --map users.map.json
+seamless migrate assess entra-id                       # reads Microsoft Graph with the ENTRA_* credentials
+seamless migrate assess auth0 auth0-users.json
+seamless migrate assess cognito cognito-users.json --groups cognito-groups.json
+```
+
+The report is written beside the input (`users.csv` gets `users.migrate-assess.md`), or to
+`entra-id.migrate-assess.md` in the current directory for Entra ID, or to `<path>.md` with
+`--report <path>`. It covers:
+
+- users found, how many would import, and why the rest would not (no email, a blocked or disabled
+  account, an unverified email, two users sharing one email, a value the import does not accept)
+- contact coverage: verified email, phone only, or neither, which is who the passkey enrollment
+  campaign in Step 6 can reach
+- the roles and organization memberships the import would grant, and the fields the export carries
+  that would be left behind
+- features of the old system that Seamless Auth does not cover, seen in the export (such as Auth0
+  enterprise connections or Cognito SAML providers) or not visible in one (such as Cognito identity
+  pools), each linked to the guide's "What You Give Up" section
+- a link to the [Identity Cost Calculator](/compare/cost) with the user count filled in
+
+The report holds counts and the names of fields, roles, and organizations, never a user's email,
+phone, or id. `--json` prints the same assessment. Roles and organizations are only checked against
+the instance by the dry run in Step 4, so it can still reject a few rows the assessment passed.
+
+---
+
+## Step 2: Export Users
+
+Entra ID, Auth0, and Cognito have their own sources, so there is nothing to convert:
+
+- **Microsoft Entra ID:** `seamless migrate entra-id` reads the directory through Microsoft Graph,
+  with the object id as the external id. See [`migrate entra-id`](/reference/cli-commands#migrate-entra-id).
+- **Auth0:** export users with the Management API export job and pass the file to
+  `seamless migrate auth0`. See [Migrating Off Auth0](/operate/migrate-from-auth0#export-users-from-auth0).
+- **Amazon Cognito:** export with `aws cognito-idp list-users` and pass the output to
+  `seamless migrate cognito`. See [Migrating Off Amazon Cognito](/operate/migrate-from-cognito#export-users-from-cognito).
+
+For any other system, export to CSV for `seamless migrate csv`. Export one row per person from the
+old system. The import reads five fields, and only `email` is
 required:
 
 | Field           | What to export                                                               |
@@ -124,7 +176,7 @@ The full flag and mapping reference is at [`migrate`](/reference/cli-commands#mi
 
 ---
 
-## Step 2: Prepare The Instance
+## Step 3: Prepare The Instance
 
 Sign in to the target instance as an admin. `migrate` uses the active profile, or `--profile`:
 
@@ -148,7 +200,7 @@ has. See [Roles](/reference/system-config#roles) for the rules on changing it.
 
 ---
 
-## Step 3: Dry Run And Read The Plan
+## Step 4: Dry Run And Read The Plan
 
 Without `--apply`, nothing is written. The CLI still sends every valid row to the instance with
 `dryRun` set, so the plan reflects the instance's real data and rules:
@@ -179,22 +231,26 @@ the most common mistake. The summary prints the first ten problem rows, and the 
 them. Rows go to the instance in batches of 200.
 
 The report is written next to the input (`users.migrate-plan.csv` and `.json`, or the path given by
-`--report`). It has one row per CSV row, numbered as a spreadsheet numbers them, with the header as
-row 1:
+`--report`). It has one row per source row. For a CSV, rows are numbered as a spreadsheet numbers
+them, with the header as row 1. For an Auth0 export, the row is the line of the file, and for Entra
+ID and Cognito it is the user's position in the listing:
 
 | Column       | Meaning                                                                            |
 | ------------ | ---------------------------------------------------------------------------------- |
 | `row`        | The spreadsheet row the outcome belongs to                                         |
 | `email`      | The row's email                                                                    |
 | `externalId` | The row's external id, when it has one                                             |
-| `status`     | `created`, `updated`, `unchanged`, `rejected`, or `invalid`                        |
+| `status`     | `created`, `updated`, `unchanged`, `rejected`, `invalid`, or `skipped`             |
 | `userId`     | The Seamless Auth user the row matched or created                                  |
 | `changes`    | What the row adds, from `created`, `linked`, `phone`, `roles`, and `organizations` |
 | `reason`     | Why the instance rejected the row                                                  |
 | `detail`     | More about the rejection, or the validation error for an `invalid` row             |
 
-`invalid` rows failed validation in the CLI (for example an email that is not an address) and were
-never sent. `rejected` rows were refused by the instance:
+`invalid` rows failed validation in the CLI (for example an email that is not an address, or a user
+with no email) and were never sent. `skipped` rows were left out on purpose and are not an error: a
+disabled or blocked account, a guest, an email the source marks unverified, or a Cognito sign-up
+that was never confirmed. Each says which flag imports it. `rejected` rows were refused by the
+instance:
 
 | `reason`                 | What to fix                                                                                   |
 | ------------------------ | --------------------------------------------------------------------------------------------- |
@@ -215,7 +271,7 @@ Fix the source data or the mapping and repeat the dry run until the plan is what
 
 ---
 
-## Step 4: Apply The Import
+## Step 5: Apply The Import
 
 ```bash
 seamless migrate csv users.csv --map users.map.json --apply
@@ -236,7 +292,7 @@ What the import never does:
 - **It never imports a password, hash, MFA secret, or session.** There is no password login to use
   them with, and carrying them across would move the old system's weakest credential into the new
   one. An imported user stays unverified until they prove control of the email by registering with
-  it, or by signing in through the old provider when [cutover](#step-6-optional-sign-in-through-the-old-provider-during-cutover)
+  it, or by signing in through the old provider when [cutover](#step-7-optional-sign-in-through-the-old-provider-during-cutover)
   is set up.
 - **It never removes access.** Roles and organization memberships are only added, so re-running an
   import after correcting the source data cannot take access away. Remove access with
@@ -247,7 +303,7 @@ What the import never does:
 
 ---
 
-## Step 5: Get Users Onto Passkeys
+## Step 6: Get Users Onto Passkeys
 
 Imported users sign in for the first time by registering with their imported email: an email code
 proves the address, and they can then enroll a passkey. The rest of the migration is getting each
@@ -312,7 +368,7 @@ selected organization, from the same **Passkey enrollment** screen.
 
 ---
 
-## Step 6 (Optional): Sign In Through The Old Provider During Cutover
+## Step 7 (Optional): Sign In Through The Old Provider During Cutover
 
 When the old system is an OpenID Connect provider, such as Microsoft Entra ID, imported users can
 keep signing in through it while they enroll. Their first sign-in links to the imported account by
@@ -343,7 +399,7 @@ time.
    bundled OAuth callback in `@seamless-auth/react` 0.14.0 and later sends the user to passkey
    enrollment, then on to where they were going.
 
-4. **Track and invite** each organization as in [Step 5](#step-5-get-users-onto-passkeys).
+4. **Track and invite** each organization as in [Step 6](#step-6-get-users-onto-passkeys).
 
 5. **Retire the provider for an organization** once its members have enrolled:
 

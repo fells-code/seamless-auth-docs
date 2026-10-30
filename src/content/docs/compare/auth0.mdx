@@ -190,9 +190,9 @@ and [What You Give Up Or Must Plan For](/operate/migrate-from-auth0#what-you-giv
 ## Migrating From Auth0
 
 The [Auth0 migration guide](/operate/migrate-from-auth0) covers the move end to end: export users
-with the Management API's bulk export job, convert the export to CSV with `jq`, import identities
-with `seamless migrate csv --source auth0`, keep Auth0 sign-in working through OpenID Connect while
-users move, get everyone onto a passkey, and switch Auth0 off.
+with the Management API's bulk export job, check readiness with `seamless migrate assess auth0`,
+import identities straight from the export with `seamless migrate auth0`, keep Auth0 sign-in working
+through OpenID Connect while users move, get everyone onto a passkey, and switch Auth0 off.
 
 Seamless Auth imports no credentials of any kind, so you never need Auth0's password hash export,
 and passkeys and MFA factors registered with Auth0 do not carry over. Each user proves their email
