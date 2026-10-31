@@ -1,0 +1,809 @@
+---
+title: 'Use Seamless Auth As An OpenID Provider'
+description: 'Sign users in to any OpenID Connect app with Seamless Auth: deploy the public login edge in front of the private API, register applications and APIs, choose client authentication, request step-up and API tokens, refresh, introspect and revoke, brand the hosted pages, and verify tokens in your own API.'
+sidebar:
+  order: 13
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+From v0.21, Seamless Auth can act as an OpenID Provider. Any app that speaks OpenID Connect or
+OAuth 2.0 (Grafana, GitLab, Argo CD, Auth.js, Spring Security, a reverse proxy, your own backend)
+signs users in through hosted Seamless pages with passkeys and the other methods your instance
+allows, and gets standard ID tokens and access tokens back. The app needs no Seamless SDK.
+
+Use this guide when an app should sign users in with standard OIDC instead of a Seamless adapter,
+when a backend or job needs tokens for an API (client credentials), or when your own API should
+accept tokens the provider issued. For apps you build yourself on a supported framework, the
+[server adapters](/build/server-sdks) are still the shorter path. For native, desktop and CLI apps,
+read this page first and then [Sign-In For Native, Desktop And CLI Apps](/build/native-apps-oidc).
+
+<Aside type="note" title="Status">
+  The OpenID Provider ships in v0.21. It needs `seamless-auth-api` from v0.21 and the new
+  `seamless-auth-oidc-provider` service (npm `@seamless-auth/oidc-provider`, image
+  `ghcr.io/fells-code/seamless-auth-oidc-provider`). Sign-out (RP-initiated logout) and the device
+  authorization grant are still being built. Their sections below are placeholders.
+</Aside>
+
+---
+
+## Architecture
+
+The provider is a separate public service, the **login edge**, in front of the private API. The API
+stays bearer-only and cookie-free, and keeps every key and every piece of provider state.
+
+```text
+any OIDC app ──► seamless-auth-oidc-provider   (public: OIDC endpoints, hosted pages, cookies)
+                      │  its own service token (SEAMLESS_OIDC_SERVICE_TOKEN)
+                      ▼
+               seamless-auth-api                (private, no cookies) ── Postgres
+```
+
+- **The edge** is built on [`oidc-provider`](https://github.com/panva/node-oidc-provider) 9.x. It
+  serves discovery, `/authorize`, `/token`, `/userinfo`, `/jwks`, introspection, revocation and the
+  hosted sign-in and consent pages. It holds no private keys and no database.
+- **The API** stores the provider's grants, codes and tokens in its own `oidc_payloads` table,
+  reached through `/oidc/*` routes that accept only the edge's service token. It signs every token
+  with the provider key set (`OIDC_JWKS_*`) after checking that the user has a live session, that
+  the claims match what the session earned, and that the client may use the audience and scopes.
+- **Sign-in is first-party.** The hosted pages sign users in through the edge's own adapter routes
+  (`/auth/*`), the same way any Seamless app does. A provider sign-in is an ordinary session in the
+  API's `sessions` table, with every first-party protection applied, and ending that session ends
+  provider access at once.
+- **Provider tokens are not first-party tokens.** They carry `iss` equal to `oidc_issuer` (never the
+  API's `ISSUER`) and are signed with a separate key set, so the first-party verifiers in the
+  Seamless adapters reject them, and the verify-only guards reject first-party tokens.
+
+The design is recorded in
+[ADR 0001](https://github.com/fells-code/seamless-auth-api/blob/main/docs/adr/0001-openid-provider.md).
+
+---
+
+## Deploy The Edge
+
+### 1. Pick the issuer hostname
+
+The issuer is the edge's public URL, for example `https://login.example.com`. The API refuses an
+issuer that breaks any of these rules:
+
+- It uses `https` (plain `http` is allowed only on a loopback host outside production).
+- It has no query or fragment.
+- It differs from the API's own `ISSUER`.
+- Its host is `rpid` or a subdomain of it, because passkeys on the hosted pages are bound to
+  `rpid`.
+
+Pick the hostname to fit the `rpid` you have. Changing `rpid` orphans every passkey already
+registered.
+
+### 2. Turn the provider on in the API
+
+Set these on the API (see [Environment Variables](/reference/environment-variables) for the rest):
+
+| Variable                           | Required     | What                                                                                                                         |
+| ---------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `OIDC_PROVIDER_ENABLED`            | yes          | Seeds `oidc_provider_enabled`. While off, every `/oidc/*` route answers 404 and the edge refuses to start.                   |
+| `OIDC_ISSUER`                      | yes          | Seeds `oidc_issuer`, the edge's public URL.                                                                                  |
+| `SEAMLESS_OIDC_SERVICE_TOKEN`      | yes          | The edge's own service token secret. It must differ from `SEAMLESS_SERVICE_TOKEN`, or the API refuses to start.             |
+| `OIDC_JWKS_ACTIVE_KID`             | yes          | The `kid` of the provider key that signs.                                                                                    |
+| `OIDC_JWKS_KEYS`                   | yes          | A JSON JWK set of private RS256 keys, each with a unique `kid`. It must not reuse a `SEAMLESS_JWKS_*` key.                   |
+| `OIDC_ALLOW_CLIENT_SECRETS`        | no           | Seeds `allow_client_secrets`. Lets an admin opt individual applications in to shared secrets. Off by default.                |
+| `OIDC_THIRD_PARTY_CLIENTS_ENABLED` | no           | Seeds `third_party_clients_enabled`. Third-party applications need it, and always see a consent page.                        |
+| `OIDC_HOSTED_UI`                   | no           | Seeds `hosted_ui`, the hosted page branding, as JSON. See [Brand the hosted pages](#brand-the-hosted-pages).               |
+
+These env vars only seed `system_config` rows that do not exist yet. After the first boot, change
+`oidc_provider_enabled`, `oidc_issuer`, `allow_client_secrets`, `third_party_clients_enabled` and
+`hosted_ui` through the admin config routes, the dashboard or the CLI. With
+`oidc_provider_enabled` on, the API refuses to start unless the issuer rules pass and the service
+token and key set are present.
+
+Also add the issuer origin (`https://login.example.com`) to the API's `origins` config. WebAuthn
+ceremonies on the hosted pages are checked against that list.
+
+<Aside type="caution" title="Two service tokens">
+  `SEAMLESS_OIDC_SERVICE_TOKEN` belongs to the edge alone. `/oidc/*` accepts only that token, and
+  external delivery refuses it, so a compromised edge cannot receive anyone's codes or magic links.
+  Never give the edge the adapters' `SEAMLESS_SERVICE_TOKEN`.
+</Aside>
+
+### 3. Run the edge
+
+```bash
+docker run -p 5314:5314 --env-file edge.env ghcr.io/fells-code/seamless-auth-oidc-provider:latest
+```
+
+| Variable                      | Required | What                                                                                                         |
+| ----------------------------- | -------- | ------------------------------------------------------------------------------------------------------------ |
+| `SEAMLESS_API_URL`            | yes      | The private API, as the edge reaches it.                                                                     |
+| `SEAMLESS_API_ISSUER`         | no       | The API's `ISSUER`, when it differs from `SEAMLESS_API_URL`.                                                 |
+| `SEAMLESS_OIDC_SERVICE_TOKEN` | yes      | The same value as on the API. At least 32 characters.                                                        |
+| `SEAMLESS_JWKS_KID`           | no       | The `kid` on the service tokens the edge signs.                                                              |
+| `SEAMLESS_COOKIE_SECRET`      | yes      | Signs the first-party session cookies the hosted pages use. At least 32 characters.                          |
+| `OIDC_COOKIE_KEYS`            | yes      | Comma-separated provider cookie keys, each at least 32 characters. The first signs, the rest still verify. |
+| `TRUST_PROXY`                 | no       | `true` when TLS ends at a proxy in front of the edge.                                                        |
+| `PORT`                        | no       | Defaults to `5314`.                                                                                          |
+
+The issuer is not an edge setting. The edge reads it from the API at startup, along with the
+provider key set and `allow_client_secrets`, and refuses to start when the provider is off or the
+API speaks a different version of the `/oidc/*` contract. The image has a health check on
+`GET /healthz`.
+
+To embed the edge in an existing Express app instead of running the image, mount the router at the
+root of the app that serves the issuer's origin:
+
+```ts
+import express from 'express'
+import { createOidcEdge } from '@seamless-auth/oidc-provider'
+
+const edge = await createOidcEdge({
+  apiUrl: process.env.SEAMLESS_API_URL!,
+  serviceSecret: process.env.SEAMLESS_OIDC_SERVICE_TOKEN!,
+  cookieKeys: process.env.OIDC_COOKIE_KEYS!.split(','),
+  adapterCookieSecret: process.env.SEAMLESS_COOKIE_SECRET!,
+  trustProxy: true,
+})
+
+const app = express()
+app.set('trust proxy', 1)
+app.use(edge.router)
+app.listen(5314)
+```
+
+### 4. Serve it over HTTPS
+
+Every cookie the edge sets is a `__Host-` cookie (host-only, `Secure`, `Path=/`), and the library
+refuses to set a `Secure` cookie on a plain HTTP request, so the edge needs TLS in development too.
+The edge itself listens on plain HTTP: terminate TLS at a proxy or load balancer and set
+`TRUST_PROXY=true` so the forwarded scheme and host are trusted.
+
+The edge answers only requests for the issuer's own scheme and host. Anything else gets
+`421 {"error":"misdirected_request"}`, so a proxy that rewrites the `Host` header, or a missing
+`TRUST_PROXY` behind TLS termination, shows up as a 421.
+
+### 5. Rotate provider keys
+
+The edge reads the provider key set from the API when it starts, so restart it after each step:
+
+1. **Add** the new private JWK to `OIDC_JWKS_KEYS` and deploy the API. The key is published at the
+   edge's `/jwks` and the old key still signs. Wait until relying parties have refreshed their
+   cached JWKS.
+2. **Flip** `OIDC_JWKS_ACTIVE_KID` to the new key and deploy.
+3. **Retire** the old key once the longest provider token lifetime has passed.
+
+### Endpoints
+
+| Path                                | What                                                    |
+| ----------------------------------- | ------------------------------------------------------- |
+| `/.well-known/openid-configuration` | Discovery                                               |
+| `/authorize`                        | Authorization endpoint (code flow with PKCE only)       |
+| `/token`                            | Token endpoint                                          |
+| `/userinfo`                         | UserInfo                                                |
+| `/jwks`                             | The provider's public keys, read from the API           |
+| `/token/introspection`              | Token introspection (RFC 7662)                          |
+| `/token/revocation`                 | Token revocation (RFC 7009)                             |
+| `/auth/*`, `/interaction/*`         | Used by the hosted pages only, not by relying parties   |
+
+Point every relying party at the discovery document and let it read the rest.
+
+---
+
+## Register Applications And APIs
+
+Applications (OIDC clients) and resources (your APIs) live in the API's registry. They are managed
+under `/admin/applications` and `/admin/resources`: reads need `admin:read`, and every write needs
+`admin:write` plus a fresh step-up and is recorded as an `admin_oidc_*` auth event. The routes work
+whether or not the provider is on, so you can register applications before the edge is deployed.
+
+### Applications
+
+An application has a client type and a set of grants:
+
+| Setting                   | Values                                                                                                                                              |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Client type               | `confidential` (a server that can keep a key) or `public` (SPA, native, CLI). Fixed at creation.                                                   |
+| Client authentication     | `private_key_jwt` by default for confidential clients, `none` for public ones. See [Client authentication](#client-authentication).               |
+| Grants                    | `authorization_code`, `refresh_token`, `client_credentials`. The default is `authorization_code` and `refresh_token`.                               |
+| Redirect URIs             | Exact `https` URIs, loopback `http` on `127.0.0.1` or `[::1]`, or a private-use scheme such as `com.example.app:/callback`. Up to 50.               |
+| First-party               | A first-party application skips the consent page. Third-party applications need `third_party_clients_enabled`.                                    |
+| Account notices           | Lets the application email or text its own users through Seamless. See [Account notices](#account-notices-from-an-application).                   |
+| Disabled                  | A disabled application cannot sign anyone in or get tokens, and keeps its settings.                                                               |
+
+The `client_id` is generated when the application is created. The registry refuses settings that
+would weaken the provider, on create and on the merged result of every update:
+
+- Public clients authenticate with PKCE alone: no secret, no keys, no `client_credentials`.
+- `client_secret_jwt` cannot be chosen.
+- `localhost`, fragments and embedded credentials are refused as redirect hosts, and plain `http`
+  is allowed only on `127.0.0.1` and `[::1]`.
+- `refresh_token` needs `authorization_code`, and `authorization_code` needs a redirect URI.
+
+PKCE with `S256`, the code flow as the only response type, and refresh token rotation are fixed in
+the edge's configuration and cannot be changed per application.
+
+### Resources
+
+A resource is an API your applications request access tokens for (RFC 8707). Its **identifier** is
+an absolute `https`, `http` or `urn` URI, such as `https://api.example.com`. It becomes the `aud` of
+every token for that API and cannot change after creation. It cannot be the API's `ISSUER` or
+`oidc_issuer`, and it is never fetched.
+
+A resource declares its scopes (for example `orders:read orders:write`) and optionally an access
+token lifetime between 60 and 86,400 seconds (600 by default). Each application is then linked to
+the resources it may use, with a subset of each resource's scopes. The OIDC scopes (`openid`,
+`profile`, `email`, `phone`, `address`, `offline_access`) and `seamless` belong to the provider and
+cannot be declared by a resource. Removing a scope from a resource removes it from every
+application.
+
+### From the admin dashboard
+
+The [admin dashboard](/build/admin-dashboard) has an **Applications** page and a **Resources** page.
+
+- **Applications** lists every application. Creating or editing one opens a form with the settings
+  above, with each redirect URI checked as you type. Selecting an application shows its details,
+  its credentials (register keys, or rotate a shared secret) and the resources and scopes it may
+  use.
+- **Resources** creates, edits and deletes resources and their scopes.
+
+A shared secret is shown once, when the application is created or the secret is rotated. Only an
+HMAC of it is stored, so a lost secret is rotated, never recovered.
+
+### From the CLI
+
+`seamless clients` manages applications and `seamless resources` manages resources. Both need an
+admin role, and their writes prompt for a step-up code when the instance asks for one. (`seamless
+apps` is a different command, for managed applications in the portal.)
+
+```bash
+# A confidential server-side app, authenticating with private_key_jwt
+seamless clients create Docs --redirect-uri https://docs.example.com/callback \
+  --jwks-uri https://docs.example.com/jwks.json
+
+# A public desktop app
+seamless clients create Desk --public \
+  --redirect-uri http://127.0.0.1/callback --redirect-uri com.example.desk:/callback
+
+seamless clients list
+seamless clients get <id>
+seamless clients update <id> --grants authorization_code,refresh_token --first-party
+seamless clients keys <id> --jwks-file jwks.json
+seamless clients rotate-secret <id>      # confirms, prints the secret once
+seamless clients delete <id>             # confirms first
+
+# An API and its scopes, then link an application to it
+seamless resources create https://api.example.com --name "Orders API" \
+  --scopes orders:read,orders:write --access-token-ttl 300
+seamless resources list
+seamless resources update <id> --scopes orders:read
+seamless clients resources <id> --set https://api.example.com=orders:read
+```
+
+`create` and `update` also take `--name`, `--auth-method`, `--post-logout-uri`,
+`--first-party`/`--third-party`, `--notices`/`--no-notices`, and the token lifetime flags.
+`update` also takes `--disable`/`--enable`. Most commands take `--json`.
+
+### From the API
+
+The same operations are plain admin routes on the API, for automation:
+
+| Route                                   | What                                                               |
+| --------------------------------------- | ------------------------------------------------------------------ |
+| `GET`/`POST /admin/applications`        | List or create applications                                        |
+| `GET`/`PATCH`/`DELETE /admin/applications/:id` | Read, change or delete one (deleting also drops its grants and tokens) |
+| `POST /admin/applications/:id/secret`   | Issue or rotate a shared secret                                    |
+| `PUT /admin/applications/:id/keys`      | Register the JWKS or JWKS URI of a `private_key_jwt` client        |
+| `GET`/`PUT /admin/applications/:id/resources` | Read or replace the resources and scopes an application may use |
+| `GET`/`POST /admin/resources`           | List or create resources                                           |
+| `GET`/`PATCH`/`DELETE /admin/resources/:id` | Read, change or delete one                                     |
+
+---
+
+## Client Authentication
+
+| Client                                    | Authentication at `/token`                    |
+| ----------------------------------------- | --------------------------------------------- |
+| Confidential (server-side apps, services) | `private_key_jwt`, each assertion used once   |
+| Public (SPA, native, CLI)                 | `none`, with PKCE                             |
+| Confidential, opted in to a shared secret | `client_secret_basic` or `client_secret_post` |
+
+**`private_key_jwt` is the default.** Register the client's public keys as a JWKS or a JWKS URI
+(https), and have the client sign an assertion with the private key at the token, introspection and
+revocation endpoints. RS256, PS256, ES256 and EdDSA keys are accepted. A replayed assertion is
+refused as `invalid_client`. With [`openid-client`](https://github.com/panva/openid-client):
+
+```ts
+import * as oidc from 'openid-client'
+
+const config = await oidc.discovery(
+  new URL('https://login.example.com'),
+  'CLIENT_ID',
+  undefined,
+  oidc.PrivateKeyJwt({ key: privateKey, kid: 'docs-2026' }),
+)
+```
+
+**Shared secrets are an exception for apps that support nothing else.** They need two switches:
+`allow_client_secrets` on the instance, which the edge reads when it starts (restart the edge after
+changing it), and the shared-secret method on that application. The edge never holds a client's
+secret: it asks the API to check the presented one. `client_secret_jwt` and the HS\* algorithms are
+never offered.
+
+---
+
+## Sign Users In: Code Flow With PKCE
+
+The authorization code flow with PKCE (`S256`) is the only flow, for every client, confidential or
+public. The implicit and hybrid flows, plain PKCE and the password grant are refused.
+
+```ts
+const verifier = oidc.randomPKCECodeVerifier()
+const url = oidc.buildAuthorizationUrl(config, {
+  redirect_uri: 'https://docs.example.com/callback',
+  scope: 'openid email',
+  code_challenge: await oidc.calculatePKCECodeChallenge(verifier),
+  code_challenge_method: 'S256',
+  state: oidc.randomState(),
+})
+// Redirect the browser to `url`. On the callback:
+const tokens = await oidc.authorizationCodeGrant(config, currentUrl, {
+  pkceCodeVerifier: verifier,
+  expectedState: state,
+})
+```
+
+The user lands on the hosted sign-in page and signs in with any method enabled in `login_methods`.
+A user already signed in to the edge goes straight back to the app. First-party applications have
+consent implied. Third-party applications show a consent page with the application's name, the host
+it returns to and the requested scopes on every authorization.
+
+### Scopes and claims
+
+| Scope            | Claims                                                 |
+| ---------------- | ------------------------------------------------------ |
+| `openid`         | `sub`, `acr`, `amr`, `auth_time`                       |
+| `email`          | `email`, `email_verified`                              |
+| `phone`          | `phone_number`, `phone_number_verified`                |
+| `seamless`       | `roles`, `org_id` (the user's default organization)    |
+| `offline_access` | A refresh token. See [Refresh tokens](#refresh-tokens) |
+
+`sub` is the user's Seamless user ID. Every ID token carries the `acr`, `amr` and `auth_time` the
+API recorded for the session, whether or not the app asked for them. The claims are also in the ID
+token itself, not only at `/userinfo`, because many apps read the profile from the ID token.
+
+| Token                    | Lifetime                                                                 |
+| ------------------------ | ------------------------------------------------------------------------ |
+| Authorization code       | 60 seconds, single use                                                   |
+| ID token                 | 600 seconds                                                              |
+| Access token             | 600 seconds, or the resource's own lifetime                              |
+| Grant and edge session   | At most 14 days, and never longer than the user's first-party session    |
+
+Without a `resource`, the access token is an opaque token for `/userinfo`. To call your own API,
+ask for a token for it (see [Access tokens for your API](#access-tokens-for-your-api)).
+
+### Authentication levels: `acr` and `amr`
+
+| `acr`  | Earned by                                                                 |
+| ------ | ------------------------------------------------------------------------- |
+| `phr`  | A passkey sign-in with user verification                                  |
+| `phrh` | A device-bound passkey with user verification (not a synced passkey)      |
+| absent | Any sign-in without a user-verified passkey, such as an email code alone |
+
+`phrh` satisfies a request for `phr`. `amr` lists the methods used, from `hwk` (device-bound
+passkey), `swk` (synced passkey), `user` (user verification), `otp`, `sms` and `mfa` (two
+different methods in one session, or a user-verified passkey).
+
+---
+
+## Step-Up: `acr_values`, `max_age` And `prompt=login`
+
+Discovery lists `acr_values_supported: ["phr", "phrh"]`. An app asks for a stronger or fresher
+sign-in on the authorization request:
+
+| Parameter          | Met when                                                                                     |
+| ------------------ | -------------------------------------------------------------------------------------------- |
+| `acr_values=phr`   | The session's `acr` is `phr` or `phrh`. Several values mean the weakest one listed is enough. |
+| `acr_values=phrh`  | The session's `acr` is `phrh`                                                                |
+| `max_age=300`      | The session's `auth_time` is at most 300 seconds old, or the user authenticated just now     |
+| `prompt=login`     | The user authenticated during this authorization request                                     |
+
+The edge decides from the session's auth context as the API reports it on every authorization, so a
+step-up done in another app counts. The claims request parameter is not enabled, so `acr_values` is
+the only way to ask for an `acr`.
+
+When a requirement is not met, the hosted page asks the user to confirm on the same session: with a
+passkey, or with an authenticator app code when only freshness is missing on a session that has no
+`acr` (an app code never earns an `acr`). The new `acr`, `amr` and `auth_time` go into the tokens
+unchanged. If the step-up still falls short, for example a synced passkey when `phrh` was asked
+for, the app gets the error `unmet_authentication_requirements` instead of a token with a lower
+`acr`.
+
+```ts
+const url = oidc.buildAuthorizationUrl(config, {
+  redirect_uri: 'https://docs.example.com/callback',
+  scope: 'openid',
+  acr_values: 'phr',
+  max_age: '300',
+  code_challenge,
+  code_challenge_method: 'S256',
+})
+```
+
+The `acr`, `amr` and `auth_time` an app can rely on are the ones in the ID token. Access tokens for
+an API do not carry them yet (see [Verify tokens in your API](#verify-tokens-in-your-api)).
+
+---
+
+## Access Tokens For Your API
+
+An app that calls an API of its own asks for a token for it with `resource` (RFC 8707), using the
+identifier of a resource the application is linked to:
+
+```ts
+const url = oidc.buildAuthorizationUrl(config, {
+  redirect_uri: 'https://docs.example.com/callback',
+  scope: 'openid orders:read',
+  resource: 'https://api.example.com',
+  code_challenge,
+  code_challenge_method: 'S256',
+})
+```
+
+The access token is then an RFC 9068 JWT (header `typ: at+jwt`, RS256) with:
+
+- `aud` equal to the resource identifier, exactly as registered.
+- `scope` cut to the scopes the application is allowed on that resource.
+- `client_id`, `sub`, `iss`, `iat`, `exp` and `jti`.
+- The resource's own lifetime.
+
+The API checks the same links again before it signs, so a token for one resource can never carry
+another resource's audience or scopes.
+
+- A resource the application is not linked to is refused with `invalid_target`.
+- An app that named one resource at authorization gets its token without repeating `resource` at
+  the token endpoint, which many RP libraries never do.
+- A token for a resource is not accepted at `/userinfo`.
+- First-party applications get the resource scopes with the sign-in. Third-party applications list
+  them on the consent page.
+
+---
+
+## Refresh Tokens
+
+An application registered for the `refresh_token` grant gets a refresh token when it asks for
+`offline_access`. The library honours `offline_access` only on a request with `prompt=consent`
+(OpenID Connect Core section 11), so send both:
+
+```ts
+const url = oidc.buildAuthorizationUrl(config, {
+  redirect_uri: 'https://docs.example.com/callback',
+  scope: 'openid offline_access',
+  prompt: 'consent',
+  code_challenge,
+  code_challenge_method: 'S256',
+})
+// Later:
+const refreshed = await oidc.refreshTokenGrant(config, tokens.refresh_token!)
+```
+
+- **Rotation is always on.** Every refresh returns a new refresh token and the old one stops
+  working.
+- **Reuse ends the session.** A used refresh token presented again revokes the grant and every token
+  under it, and the API ends the first-party session it was issued under, so every app on that
+  session has to sign in again.
+- **Refreshed ID tokens are current.** They carry the session's current `acr`, `amr` and
+  `auth_time`, so a step-up since the sign-in shows up on the next refresh.
+- **The session bounds it.** A refresh token works only while the user's first-party session is
+  live, so ending that session in Seamless ends it.
+
+---
+
+## Client Credentials
+
+A confidential application registered for `client_credentials` can get tokens for itself, with no
+user, for a backend job or a service-to-service call. The token is always for a resource: the one
+named with `resource`, or the application's only linked resource. An application linked to several
+resources must name one.
+
+```ts
+const machine = await oidc.discovery(
+  new URL('https://login.example.com'),
+  'MACHINE_CLIENT_ID',
+  undefined,
+  oidc.PrivateKeyJwt({ key: privateKey, kid: 'jobs-2026' }),
+)
+const { access_token } = await oidc.clientCredentialsGrant(machine, {
+  resource: 'https://api.example.com',
+  scope: 'orders:read',
+})
+```
+
+The token is an RFC 9068 JWT whose `sub` and `client_id` are both the application. It has no user
+claims, so it can pass a scope check but never a role or step-up check. Public clients cannot use
+this grant.
+
+---
+
+## Introspection And Revocation
+
+`/token/introspection` (RFC 7662) and `/token/revocation` (RFC 7009) are listed in discovery and take
+the same client authentication as `/token`. Both are limited to 1,200 requests a minute per client
+IP, per edge instance.
+
+**Introspection.** An application may introspect its own tokens. A resource server registers as a
+confidential application linked to its resource, and may then introspect tokens whose `aud` is that
+resource. Any other caller gets `{ "active": false }`. Every answer is read from the API's store, so
+a token whose first-party session has ended is inactive at once.
+
+```ts
+const rs = await oidc.discovery(
+  new URL('https://login.example.com'),
+  'ORDERS_API_CLIENT_ID',
+  undefined,
+  oidc.PrivateKeyJwt({ key: rsPrivateKey, kid: 'orders-api-2026' }),
+)
+const status = await oidc.tokenIntrospection(rs, accessToken)
+if (!status.active) throw new Error('token is no longer valid')
+```
+
+JWT access tokens can be introspected and revoked too: the edge records each one under its `jti`
+when it is issued. A resource server that verifies JWTs locally still accepts a revoked token until
+it expires. One that introspects sees the revocation immediately. Keep resource token lifetimes
+short when that gap matters.
+
+**Revocation.** An application revokes its own refresh or access token:
+
+```ts
+await oidc.tokenRevocation(config, tokens.refresh_token!)
+```
+
+<Aside type="caution" title="Revocation ends the app's grant, not the user's session">
+  Revoking a refresh token ends that application's grant and every token under it. It does not end
+  the user's first-party session, so the user's other apps stay signed in, and the next sign-in to
+  this app can be silent. To sign the user out of Seamless itself, use sign-out (below). Each
+  revocation is recorded in the audit log as `token_revoked`.
+</Aside>
+
+---
+
+## Sign-Out (RP-Initiated Logout)
+
+<Aside type="note" title="In progress">
+  RP-initiated logout is being built in
+  [seamless-auth-oidc-provider#5](https://github.com/fells-code/seamless-auth-oidc-provider/issues/5)
+  and is not enabled on the edge yet. This section will cover the end session endpoint,
+  `post_logout_redirect_uris` (already part of the application settings), and what ending a session
+  does to the user's other apps. Until it ships, revoke the app's tokens (above) and end the
+  first-party session through your Seamless sign-out.
+</Aside>
+
+---
+
+## Device Authorization Grant
+
+<Aside type="note" title="In progress">
+  The device authorization grant (RFC 8628) is being built in
+  [seamless-auth-oidc-provider#7](https://github.com/fells-code/seamless-auth-oidc-provider/issues/7)
+  and is not enabled on the edge yet. The registry already has the setting (`deviceFlowEnabled`,
+  first-party applications only). This section will cover registering a device client, the
+  verification page and the polling flow.
+</Aside>
+
+---
+
+## Brand The Hosted Pages
+
+The sign-in, step-up and consent pages are served by the edge, built on `@seamless-auth/react`.
+Their branding comes from the API's `hosted_ui` config, read each time a page is served (the edge
+caches the config for up to 30 seconds), so a change needs no build and no restart.
+
+| Field        | Rules                                                                                                     |
+| ------------ | --------------------------------------------------------------------------------------------------------- |
+| `appName`    | 1 to 100 characters. Defaults to the instance's `app_name`.                                               |
+| `logoUrl`    | An `https` URL where the image is already hosted, on a plain hostname. The instance does not store uploads. |
+| `colors`     | `primary`, `onPrimary`, `background`, `surface`, `text`, `muted`, each `#rgb`, `#rrggbb` or `#rrggbbaa`.  |
+| `fontFamily` | A comma-separated list of installed font names. Web fonts cannot load under the pages' CSP.               |
+
+Setting any color turns off the pages' dark palette. The API does not check contrast, so check your
+colors against WCAG AA yourself (the dashboard warns when a pair falls short).
+
+- **Dashboard:** the **System** page, section **Hosted Page Branding**, with a preview. Saves and resets
+  apply immediately.
+- **CLI:**
+
+  ```bash
+  seamless config hosted-ui get
+  seamless config hosted-ui set --app-name Acme --logo https://cdn.example.com/acme.svg
+  seamless config hosted-ui set --primary '#0b5fff' --on-primary '#fff'
+  seamless config hosted-ui reset colors.primary logoUrl
+  ```
+
+- **API:** `PATCH /system-config/admin` with `{ "hosted_ui": { ... } }` (the whole object is
+  replaced, not merged) or `{ "hosted_ui": null }`. It needs `admin:write` and a fresh step-up.
+- **Env:** `OIDC_HOSTED_UI` seeds it on first boot.
+
+The pages send a strict CSP (`script-src 'self'`, `frame-ancestors 'none'`), `no-store`, `nosniff`
+and `no-referrer`. The logo's origin is added to `img-src`.
+
+---
+
+## Account Notices From An Application
+
+An application can tell one of its users something (an export is ready, a payment failed) on the
+user's verified email or phone, without ever holding the address. The API sends the text inside a
+fixed template that names the application and the instance, so a notice cannot pose as a Seamless
+security message.
+
+1. Turn on **account notices** for the application (`--notices` in the CLI, or the checkbox in the
+   dashboard) and register it for `client_credentials`.
+2. Get a client credentials token for the built-in resource `<oidc_issuer>/seamless` with scope
+   `notices:send`. The API lists that resource for every application with notices on, so you do not
+   create it.
+3. Call `POST /applications/account-notices` **on the API** with that token as a bearer token.
+
+```ts
+const { access_token } = await oidc.clientCredentialsGrant(machine, {
+  resource: 'https://login.example.com/seamless',
+  scope: 'notices:send',
+})
+
+await fetch('https://auth-api.internal.example.com/applications/account-notices', {
+  method: 'POST',
+  headers: { authorization: `Bearer ${access_token}`, 'content-type': 'application/json' },
+  body: JSON.stringify({
+    userId: '6f1c...', // the user's `sub`
+    subject: 'Your export is ready',
+    text: 'The export you asked for is ready to download.',
+    actionUrl: 'https://docs.example.com/exports/42',
+  }),
+})
+```
+
+| Field       | Rules                                                                                          |
+| ----------- | ---------------------------------------------------------------------------------------------- |
+| `userId`    | The user's `sub`. The user must hold a grant with this application.                            |
+| `subject`   | One line, 1 to 120 characters.                                                                 |
+| `text`      | Plain text, 1 to 2,000 characters.                                                             |
+| `actionUrl` | Optional. `https`, on the origin of one of the application's registered redirect URIs.         |
+| `channels`  | Optional, `email` and/or `sms`. Every verified channel when omitted.                           |
+
+The response lists channels and their status, never addresses. Errors are `notice_invalid_token`
+(401), `notice_not_enabled` (403), `notice_unknown_user` (404, which also covers a user with no grant
+for the application, so an app cannot learn who else has an account), `notice_action_url_not_allowed`
+(400), `notice_no_channel` (422) and `notice_rate_limited` (429). The limits are 300 notices an hour
+per application and 10 an hour per application and user.
+
+---
+
+## Verify Tokens In Your API
+
+An API that receives the provider's access tokens as `Authorization: Bearer` needs only the
+issuer and its own resource identifier. The verify-only guards in every Seamless adapter check
+those tokens the same way, held to shared signed test vectors, with no cookie secret, service secret
+or auth routes:
+
+- RS256 only, header `typ` `at+jwt`, a `kid` from the issuer's key set, and no `crit` header.
+- `iss` equal to the issuer exactly, the audience in `aud`, `exp` required, 5 seconds of clock skew.
+- `sub` and `client_id` present. A first-party Seamless session token never passes.
+- A sender-constrained token (`cnf`) is refused unless you pass a confirmation hook.
+- Keys come from `<issuer>/.well-known/openid-configuration` (its `issuer` must match, and its
+  `jwks_uri` must be https when the issuer is), or from a `jwks_uri` you set. If either cannot be
+  fetched the request gets `401 invalid_token`. Nothing fails open.
+
+| Refusal                    | Status | Body `error`                       | `WWW-Authenticate`                                                    |
+| -------------------------- | ------ | ---------------------------------- | --------------------------------------------------------------------- |
+| No bearer token            | 401    | `missing_token`                    | `Bearer`                                                              |
+| Token fails verification   | 401    | `invalid_token`                    | `Bearer error="invalid_token"`                                        |
+| Missing scope (all needed) | 403    | `insufficient_scope`, plus `scope` | `Bearer error="insufficient_scope", scope="..."`                      |
+| Missing role (any one)     | 403    | `insufficient_role`                | none                                                                  |
+| Step-up not met            | 401    | `insufficient_user_authentication` | RFC 9470 challenge with `error_description`, `acr_values`, `max_age` |
+
+The step-up guard takes `acr_values` (any of, and `phr` is also met by `phrh`), `amr` (all of) and
+`max_age` (seconds since `auth_time`). A client credentials token verifies, and fails role and
+step-up guards.
+
+<Aside type="caution" title="Role and step-up guards need claims the access tokens do not carry yet">
+  The role guard reads `roles`, and the step-up guard reads `acr`, `amr` and `auth_time`, from the
+  access token. The provider's access tokens for an API carry `iss`, `sub`, `aud`, `client_id`,
+  `scope`, `jti`, `iat` and `exp` only, so today those two guards refuse every provider token. Use
+  scope checks for provider tokens, and read the user's `acr` and roles from the ID token in the app
+  that signed the user in.
+</Aside>
+
+**Express, Fastify and Next.js** (`@seamless-auth/express`, `@seamless-auth/fastify`,
+`@seamless-auth/nextjs`):
+
+```ts
+import { createResourceServer } from '@seamless-auth/express'
+
+const api = createResourceServer({
+  issuer: 'https://login.example.com',
+  audience: 'https://api.example.com',
+})
+
+app.get('/orders', api.requireAuth(), api.requireScope('orders:read'), listOrders)
+app.post(
+  '/payouts',
+  api.requireAuth(),
+  api.requireStepUp({ acrValues: ['phr'], maxAge: 300 }),
+  createPayout,
+)
+```
+
+Next.js uses `api.protect(handler, { scopes, roles, stepUp })` on a route handler.
+
+**Go** (`github.com/fells-code/seamless-auth-go`):
+
+```go
+rs, err := seamlessauth.NewVerifier(seamlessauth.VerifierOptions{
+	Issuer:   "https://login.example.com",
+	Audience: "https://api.example.com",
+})
+if err != nil {
+	log.Fatal(err)
+}
+mux.Handle("GET /orders", rs.RequireToken(rs.RequireScope("orders:read")(http.HandlerFunc(list))))
+```
+
+**Python** (`seamless_auth`, FastAPI and Django):
+
+```python
+from fastapi import Depends, FastAPI
+from seamless_auth import ResourceServer, VerifiedUser, require_scope
+from seamless_auth.fastapi import RequireBearer, add_bearer_error_handler
+
+rs = ResourceServer(issuer="https://login.example.com", audience="https://api.example.com")
+app = FastAPI()
+add_bearer_error_handler(app)
+
+@app.get("/orders")
+def orders(user: VerifiedUser = Depends(RequireBearer(rs, require_scope("orders:read")))):
+    return {"sub": user.sub}
+```
+
+**Rust** (`seamless_auth`, axum):
+
+```rust
+let verifier = Verifier::builder("https://login.example.com")
+    .audience("https://api.example.com")
+    .build()?;
+
+let app: Router = Router::new().route(
+    "/orders",
+    get(list_orders)
+        .route_layer(verifier.require_scope(["orders:read"])?)
+        .route_layer(verifier.require_auth()),
+);
+```
+
+Each adapter's README lists its full verify-only API. See the [Go](/build/go-adapter),
+[Python](/build/python-adapter) and [Rust](/build/rust-adapter) adapter pages for installation.
+
+---
+
+## Security Defaults
+
+The edge's configuration is locked to OAuth 2.1 and RFC 9700. No application setting can loosen
+it:
+
+- The code flow with `S256` PKCE for every client. No implicit, hybrid or password grant.
+- Exact redirect URI matching. The only exception is the port of a native app's loopback redirect.
+- `iss` on every authorization response (RFC 9207).
+- Refresh token rotation, with reuse ending the session.
+- Audience-restricted access tokens for APIs.
+- `private_key_jwt` by default, shared secrets only by opt-in, never `client_secret_jwt`.
+- No dynamic client registration: applications come only from the registry.
+- Errors go only to a registered redirect URI. An unregistered one gets an error page.
+- Hosted pages cannot be framed, and their state-changing routes need a same-origin request.
+
+The full matrix, with the test behind each row, is in the edge repo's
+[docs/oauth-security.md](https://github.com/fells-code/seamless-auth-oidc-provider/blob/main/docs/oauth-security.md).
+
+---
+
+## Related Docs
+
+- [Sign-In For Native, Desktop And CLI Apps](/build/native-apps-oidc)
+- [How To Use TOTP And Step-Up](/build/totp-step-up)
+- [Admin Dashboard](/build/admin-dashboard)
+- [CLI Commands](/reference/cli-commands)
+- [System Config](/reference/system-config)
+- [Environment Variables](/reference/environment-variables)
+- [seamless-auth-oidc-provider on GitHub](https://github.com/fells-code/seamless-auth-oidc-provider)
