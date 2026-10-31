@@ -1,0 +1,226 @@
+---
+title: 'Sign-In For Native, Desktop And CLI Apps'
+description: 'Sign users in to desktop apps, CLIs and other native apps through the Seamless Auth OpenID Provider the RFC 8252 way: a public client, the system browser, PKCE, loopback redirects on any port, IPv6 loopback and private-use schemes, and what OAuth 2.1 refuses.'
+sidebar:
+  order: 14
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Desktop apps, CLIs and developer tools sign users in through the Seamless Auth
+[OpenID Provider](/build/openid-provider) as **public clients**, following RFC 8252 (OAuth 2.0 for
+Native Apps). The app opens the user's system browser on the hosted sign-in page, the user signs in
+there (with a passkey or any other enabled method), and the browser hands an authorization code back
+to the app through a loopback address or a private-use URI scheme. The app exchanges the code with
+PKCE. It never sees the user's credentials and never holds a client secret.
+
+Read [Use Seamless Auth As An OpenID Provider](/build/openid-provider) first for the edge service,
+the registry and the token model. This page covers what is different for native apps.
+
+<Aside type="note" title="Status">
+  Ships in v0.21 with the OpenID Provider. Native sign-out and the device authorization grant (for
+  CLIs on machines without a browser) are still being built. Their sections below are placeholders.
+</Aside>
+
+---
+
+## The Rules
+
+1. **Register a public client.** A native app cannot keep a secret: anything in the binary can be
+   extracted. A public client authenticates with PKCE alone, has no secret and no keys, and cannot
+   use `client_credentials`. The registry refuses any other combination.
+2. **Use the system browser, never an embedded webview.** A webview lets the app read what the user
+   types, and the user cannot tell a real sign-in page from a copy. Open the authorization URL in the
+   default browser (or `ASWebAuthenticationSession` on macOS and iOS, Custom Tabs on Android).
+3. **Use PKCE with `S256`.** Every client must. The edge refuses `plain` and requests without PKCE.
+4. **Receive the code on a loopback redirect or a private-use scheme.** See the next section.
+5. **Keep tokens in the OS credential store**: the macOS Keychain, Windows Credential Manager, or the
+   Secret Service API (GNOME Keyring, KWallet) on Linux. Not a plain file, not an environment
+   variable.
+
+---
+
+## Redirect URIs
+
+A public client registers its redirect URIs like any other application. The registry and the edge
+accept three forms:
+
+| Form                | Example                       | Matching                                                                   |
+| ------------------- | ----------------------------- | -------------------------------------------------------------------------- |
+| IPv4 loopback       | `http://127.0.0.1/callback`   | Any port at request time. Scheme, host and path must match exactly.       |
+| IPv6 loopback       | `http://[::1]/callback`       | Any port at request time. Scheme, host and path must match exactly.       |
+| Private-use scheme  | `com.example.desk:/callback`  | Exact. The scheme must be in reverse domain form.                          |
+| Claimed `https` URL | `https://desk.example.com/cb` | Exact, port included. For apps that claim links (universal or app links). |
+
+An application with a loopback or private-use redirect is reported as `applicationType: native`.
+
+### Loopback on any port (RFC 8252 section 7.3)
+
+Register the loopback URI **without a port**. At sign-in, the app listens on whatever port the OS
+gives it and sends that port in `redirect_uri`:
+
+```text
+registered:   http://127.0.0.1/callback
+requested:    http://127.0.0.1:53124/callback     accepted
+requested:    http://[::1]:61000/callback         accepted if http://[::1]/callback is registered
+requested:    http://127.0.0.1:53124/other        refused (path differs)
+requested:    https://127.0.0.1:53124/callback    refused (scheme differs)
+requested:    http://127.0.0.2:53124/callback     refused (host differs)
+requested:    http://localhost:53124/callback     refused (localhost)
+```
+
+Bind the listener to the loopback interface only (`127.0.0.1` or `::1`), never to all interfaces.
+The port exception applies only to these loopback URIs. A web application's `https` redirect never
+matches on a different port.
+
+### Why not `localhost`
+
+`localhost` is refused as a redirect host, at registration and at sign-in (RFC 8252 section 8.3).
+The name can resolve to an address other than the loopback interface, or to the IPv6 address when
+the app listens on IPv4. Use the literal `127.0.0.1` or `[::1]`.
+
+### Private-use schemes (RFC 8252 section 7.1)
+
+A private-use scheme must be in reverse domain form, a name with at least one dot that you control,
+such as `com.example.desk:/callback`. The dot keeps out `javascript:`, `data:` and every other scheme
+a browser acts on. Register the scheme with the OS so the browser hands the redirect to your app.
+Any app can claim the same scheme on most platforms, which is why PKCE is required: an app that
+intercepts the code cannot redeem it without the verifier.
+
+---
+
+## A CLI Example
+
+A complete loopback sign-in for a Node CLI, with [`openid-client`](https://github.com/panva/openid-client).
+Register the client first:
+
+```bash
+seamless clients create "Example CLI" --public --first-party \
+  --redirect-uri http://127.0.0.1/callback \
+  --grants authorization_code,refresh_token
+```
+
+```ts
+import { createServer } from 'node:http'
+import { once } from 'node:events'
+import open from 'open'
+import * as oidc from 'openid-client'
+
+const config = await oidc.discovery(
+  new URL('https://login.example.com'),
+  'CLI_CLIENT_ID',
+  undefined,
+  oidc.None(),
+)
+
+// Port 0: the OS picks a free port on the loopback interface.
+const server = createServer()
+server.listen(0, '127.0.0.1')
+await once(server, 'listening')
+const { port } = server.address() as { port: number }
+const redirectUri = `http://127.0.0.1:${port}/callback`
+
+const verifier = oidc.randomPKCECodeVerifier()
+const state = oidc.randomState()
+const url = oidc.buildAuthorizationUrl(config, {
+  redirect_uri: redirectUri,
+  scope: 'openid offline_access',
+  prompt: 'consent',
+  code_challenge: await oidc.calculatePKCECodeChallenge(verifier),
+  code_challenge_method: 'S256',
+  state,
+})
+
+await open(url.href)
+
+const [request, response] = await once(server, 'request')
+const callbackUrl = new URL(request.url, redirectUri)
+response.end('Signed in. You can close this tab.')
+server.close()
+
+const tokens = await oidc.authorizationCodeGrant(config, callbackUrl, {
+  pkceCodeVerifier: verifier,
+  expectedState: state,
+})
+// Store tokens.refresh_token in the OS credential store.
+```
+
+`offline_access` with `prompt=consent` gets a refresh token, so the CLI does not send the user back
+to the browser every time the access token expires. See [Refresh tokens](/build/openid-provider#refresh-tokens).
+
+---
+
+## Refresh, API Tokens And Sign-Out
+
+- **Refresh.** Refresh tokens rotate on every use. Save the new one each time, before using the new
+  access token. A refresh token used twice revokes the grant and ends the user's Seamless session,
+  so two processes of the same app must not refresh with one token at the same time.
+- **Tokens for your API.** Ask for a token for a named API with `resource=<identifier>` on the
+  authorization request, using a resource the application is linked to. The access token is an RFC
+  9068 JWT whose `aud` is that API. See
+  [Access tokens for your API](/build/openid-provider#access-tokens-for-your-api).
+- **Signing out of the app.** Revoke the refresh token at `/token/revocation` (a public client sends
+  its `client_id`), then delete the stored tokens. That ends this app's grant only. The user stays
+  signed in to Seamless in the browser and in their other apps.
+
+<Aside type="note" title="In progress: full sign-out">
+  Ending the user's Seamless session from a native app (RP-initiated logout through the system
+  browser) is being built in
+  [seamless-auth-oidc-provider#5](https://github.com/fells-code/seamless-auth-oidc-provider/issues/5).
+  This section will cover it once it ships.
+</Aside>
+
+---
+
+## CLIs Without A Browser: Device Authorization Grant
+
+<Aside type="note" title="In progress">
+  The device authorization grant (RFC 8628), for a CLI on a server or container with no browser, is
+  being built in
+  [seamless-auth-oidc-provider#7](https://github.com/fells-code/seamless-auth-oidc-provider/issues/7).
+  It will be available to first-party applications with `deviceFlowEnabled`. This section will cover
+  the flow once it ships. Until then, a CLI needs a machine with a browser for the loopback flow.
+</Aside>
+
+---
+
+## Why Passkeys Run On The Hosted Page
+
+A passkey is bound to a relying party ID, the instance's `rpid` (for example `example.com`), and a
+browser only offers it on a page whose origin is that domain or a subdomain of it. The hosted
+sign-in page runs on the provider's issuer (for example `https://login.example.com`), which the API
+requires to sit under `rpid`, so every passkey the user already has works there.
+
+An app's own webview cannot do the same. Its origin is `tauri://localhost`, `app://`, `file://` or
+similar, which can never match `rpid`, so the WebAuthn ceremony fails, and an embedded webview
+cannot reach the passkeys synced to the user's browser or phone in any case. Sending the user to
+the system browser keeps passkeys, saved sessions and any security keys working, and keeps the app
+out of the credential path.
+
+---
+
+## What OAuth 2.1 Refuses
+
+The provider is locked to OAuth 2.1 and RFC 9700. These are refused for every client, native or
+not:
+
+| Refused                                                       | Answer                                                    |
+| ------------------------------------------------------------- | --------------------------------------------------------- |
+| Implicit and hybrid flows (`response_type=token`, `id_token`) | `unsupported_response_type` or `invalid_request`          |
+| PKCE `plain`, or no PKCE                                      | `invalid_request`                                         |
+| Resource owner password grant (`grant_type=password`)         | `unsupported_grant_type`                                  |
+| A redirect URI that does not match a registered one           | An error page; the code is never sent there               |
+| `localhost` or a non-loopback `http` redirect                 | Refused at registration and at sign-in                    |
+| A client secret on a public client                            | Refused at registration                                   |
+| `client_credentials` for a public client                      | Refused at registration                                   |
+| An authorization code redeemed twice                          | `invalid_grant`, and the tokens from the first use are revoked |
+| Dynamic client registration                                   | Not offered: applications come only from the registry     |
+
+---
+
+## Related Docs
+
+- [Use Seamless Auth As An OpenID Provider](/build/openid-provider)
+- [Mobile Passkeys](/build/mobile-passkeys)
+- [OAuth 2.0 Security Best Current Practice (RFC 9700)](/understand/oauth-rfc9700)
+- [RFC 8252: OAuth 2.0 for Native Apps](https://www.rfc-editor.org/rfc/rfc8252)
