@@ -1,0 +1,144 @@
+---
+title: 'v0.21 Release Notes'
+description: 'What changed in Seamless Auth v0.21: an OpenID Provider for any OIDC app, verify-only resource servers, inbound OAuth from an issuer, application account notices, and upgrade steps.'
+sidebar:
+  order: 8
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+v0.21 makes Seamless Auth an OpenID Provider. Any app that speaks OpenID Connect can sign users in
+with Seamless passkeys through a new service, `seamless-auth-oidc-provider`, with no Seamless SDK.
+It shipped as auth API 0.21.0 and OpenID Provider 0.1.0, with matching releases of the shared types,
+server adapters, admin dashboard and CLI. The versions that go together are in the
+[Compatibility Matrix](/build/ecosystem#compatibility-matrix). Full details are in each package's
+changelog and GitHub release.
+
+<Aside type="note">
+  Upgrading to auth API 0.21.0 needs no new settings. The OpenID Provider is off until you turn it
+  on, and turning it on needs a second service, its own service token and its own signing keys. See
+  [Upgrading](#upgrading).
+</Aside>
+
+---
+
+## OpenID Provider
+
+- **A separate edge service.** `seamless-auth-oidc-provider` is the public login edge in front of
+  the private API. It holds no database and no private keys: the API stores every provider record
+  and signs every token after checking its claims. It runs as an image
+  (`ghcr.io/fells-code/seamless-auth-oidc-provider`) or embeds in an Express app. See
+  [OpenID Provider](/build/openid-provider).
+- **Locked to OAuth 2.1 and RFC 9700.** The code flow with `S256` PKCE, exact redirect matching
+  (RFC 8252 loopback ports for native apps), refresh rotation with reuse detection, `iss` on
+  authorization responses, and `private_key_jwt` for confidential clients. Shared secrets and a
+  per-client PKCE opt-out exist only for confidential apps that support nothing else, and only when
+  an admin turns them on.
+- **Grants.** Authorization code, refresh token, client credentials, and the device authorization
+  grant (RFC 8628) for first-party CLIs and devices. Every device approval asks for a passkey again.
+- **Tokens for your APIs.** Register a resource and its scopes, and an application asking with
+  `resource=` gets an RFC 9068 JWT access token whose `aud` is that API. Per-application token
+  lifetimes apply.
+- **Hosted pages.** Login, consent, step-up, device verification and sign-out pages, branded from
+  the `hosted_ui` system config, served under a strict nonce CSP.
+- **Step-up.** `acr_values`, `max_age` and `prompt=login` are honoured, and `acr` and `amr` reflect
+  how the user signed in, including a later step-up.
+- **Sign-out.** RP-initiated logout at `/session/end`, and OpenID Back-Channel Logout tokens to
+  every app that registered a `backchannelLogoutUri` when the session behind a sign-in ends.
+- **Introspection and revocation** (RFC 7662, RFC 7009).
+- **Admin.** Applications and resources under `/admin/applications` and `/admin/resources` (admin
+  write and step-up, audited), the dashboard's Applications, Resources, OpenID Provider and Hosted
+  Page Branding screens, and `seamless clients`, `seamless resources` and
+  `seamless config hosted-ui` in the CLI.
+
+## Verify-Only Resource Servers
+
+APIs that receive the provider's access tokens check them without a cookie secret, service token or
+auth routes. `createResourceServer({ issuer, audience })` in `@seamless-auth/express` and
+`@seamless-auth/fastify`, and the matching verify-only mode in the Go, Python and Rust adapters, find
+the keys through discovery and check `iss`, `aud`, the `at+jwt` header and the claims, with audience,
+scope, role and step-up guards.
+
+## Inbound OAuth From An Issuer
+
+An inbound OAuth provider can be configured from its issuer alone. Endpoints you leave out are read
+from the issuer's discovery document when the provider is used, cached for an hour, and held to the
+same rules as typed ones. The dashboard's provider form has a "Discover from issuer" option, and the
+CLI takes `seamless config oauth-providers add --issuer <url>`.
+
+OAuth `state` replay records now live in the database, so a replayed `state` is refused by every
+instance and callbacks no longer need sticky routing.
+
+## Account Notices From Applications
+
+`POST /applications/account-notices` lets a registered application tell one of its users something
+on their verified email or phone without holding either. It takes a client credentials token with
+scope `notices:send`, reaches only users who signed in to that application, and is rate limited per
+application and per user. An admin turns it on per application.
+
+## Also In v0.21
+
+- **Server adapters.** A proxied request that silently refreshed the session is served on the same
+  request, instead of failing once with `access session required`. A recovery session is rotated
+  right after it enrolls a passkey or authenticator app.
+- **Go, Python and Rust adapters (0.4.0).** Check `allowedOrigins` alongside `Sec-Fetch-Site` and
+  verify the access token inside the cookie, matching the JavaScript adapters.
+- **CLI (0.27.0).** `seamless migrate assess` writes a readiness report from the source alone, and
+  `seamless migrate auth0` and `migrate cognito` read the vendors' exports directly. `seamless init`
+  scaffolds templates v0.21.1, whose production images run as non-root on port 8080.
+
+---
+
+## Upgrading
+
+Upgrade the auth API first, then the server adapters, the dashboard and the CLI. Clients need no
+change.
+
+1. **Upgrade the auth API** to 0.21.0. It runs three additive migrations on start unless
+   `RUN_MIGRATIONS=false`: the provider tables, two session columns that record how the user signed
+   in, and the per-application PKCE and nonce settings. If you set `RUN_MIGRATIONS=false`, run them
+   first, because the server refuses to start while any migration is pending. The console at
+   `/console` is dashboard 0.12.0.
+2. **Upgrade the server adapters**: `@seamless-auth/express` 0.23.0, `@seamless-auth/fastify`
+   0.14.0, `@seamless-auth/nextjs` 0.7.0, or the Go, Python or Rust adapter 0.4.0. The dashboard's
+   OpenID Provider screens go through the adapter, so it must be one of these versions, or an adapter
+   that reads the live route manifest from API 0.21.0.
+3. **Upgrade the dashboard** to 0.12.0 if you deploy it separately, and the **CLI** to 0.27.0.
+4. **Do not set `OIDC_PROVIDER_ENABLED`** until the edge is ready. With it on, the API refuses to
+   start unless the issuer, `SEAMLESS_OIDC_SERVICE_TOKEN` and the `OIDC_JWKS_*` key set are all
+   valid.
+
+### Turning On The OpenID Provider
+
+Follow [Deploy The Edge](/build/openid-provider#deploy-the-edge). In order:
+
+1. **Pick the issuer hostname.** It must use `https`, differ from the API's `ISSUER`, and be your
+   `rpid` or a subdomain of it, for example `https://login.example.com`.
+2. **Create the edge's secrets.** A new `SEAMLESS_OIDC_SERVICE_TOKEN`, set on both the API and the
+   edge, that differs from `SEAMLESS_SERVICE_TOKEN`. Never give the edge the adapters' token. A
+   provider key set for the API (`OIDC_JWKS_KEYS` and `OIDC_JWKS_ACTIVE_KID`) that shares no key
+   with `SEAMLESS_JWKS_*`. A `SEAMLESS_COOKIE_SECRET` and `OIDC_COOKIE_KEYS` for the edge.
+3. **Deploy the API** with those secrets, and add the issuer origin to its `origins` config.
+4. **Turn the provider on** from an admin session with a fresh step-up: the dashboard's System
+   Configuration, or `seamless config set oidc_issuer <url>` and then
+   `seamless config set oidc_provider_enabled true`. On a new instance, `OIDC_ISSUER` and
+   `OIDC_PROVIDER_ENABLED` seed both on first boot instead.
+5. **Run the edge** (0.1.0, which needs auth API 0.21.0) behind TLS. Every cookie it sets is a
+   `__Host-` cookie, so it needs HTTPS in development too. Terminate TLS at a proxy, set
+   `TRUST_PROXY=true`, and keep the original `Host` header, or requests get
+   `421 misdirected_request`. The edge refuses to start while the provider is off or when the API
+   speaks a different `/oidc/*` contract version, so always deploy the API and the edge from the
+   same release.
+6. **Check** `/.well-known/openid-configuration` and `/jwks` on the issuer, then
+   [register an application](/build/openid-provider#register-applications-and-apis) and sign in
+   once.
+
+## Not In v0.21
+
+- Provider access tokens do not yet carry `roles`, `acr`, `amr` or `auth_time`, so the verify-only
+  role and step-up guards refuse them. Audience and scope checks work.
+- An expired device code gets `invalid_grant` rather than `expired_token`
+  ([#542](https://github.com/fells-code/seamless-auth-api/issues/542)), and ending one application's
+  grant sends no back-channel logout ([#543](https://github.com/fells-code/seamless-auth-api/issues/543)).
+- `seamless init` does not scaffold the OpenID Provider service yet.
+- FIDO and OpenID certification are deferred to v1.0.
