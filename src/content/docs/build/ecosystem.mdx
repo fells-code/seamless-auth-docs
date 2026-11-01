@@ -165,7 +165,7 @@ rather than by assembling every piece manually.
 
 ## Compatibility Matrix
 
-Versions and declared ranges of the latest release of each package as of **2026-10-29**: the npm
+Versions and declared ranges of the latest release of each package as of **2026-11-01**: the npm
 `latest` tag for npm packages, and the latest GitHub Release for `seamless-auth-api` and
 `seamless-auth-admin-dashboard`. Ranges are read from the released `package.json`. Every package
 and the auth API require Node.js 22 or later (`engines.node` is `>=22`), except the messaging
@@ -173,23 +173,24 @@ packages, which require Node.js 18 or later.
 
 | Package                           | Latest release | Declares on other Seamless packages                                                  | Other peer ranges                                                             |
 | --------------------------------- | -------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
-| `seamless-auth-api`               | 0.20.0         | `@seamless-auth/types` ^0.33.0, `@seamless-auth/messaging`, `-aws`, `-twilio` ^0.2.0 | None                                                                          |
-| `@seamless-auth/core`             | 0.22.0         | `@seamless-auth/types` ^0.33.0                                                       | None                                                                          |
-| `@seamless-auth/express`          | 0.22.0         | `@seamless-auth/core` ^0.22.0                                                        | `express` >=5.0.0                                                             |
-| `@seamless-auth/fastify`          | 0.13.0         | `@seamless-auth/core` ^0.22.0                                                        | `fastify` >=5.0.0                                                             |
-| `@seamless-auth/nextjs`           | 0.6.0          | `@seamless-auth/core` ^0.22.0, `@seamless-auth/types` ^0.33.0                        | None                                                                          |
-| `@seamless-auth/client`           | 0.8.0          | `@seamless-auth/types` ^0.33.0                                                       | None                                                                          |
-| `@seamless-auth/react`            | 0.19.0         | `@seamless-auth/client` ^0.8.0, `@seamless-auth/types` ^0.33.0                       | `react` and `react-dom` 18 or 19, optional `react-router-dom` 6.4+ or 7.15.1+ |
-| `@seamless-auth/angular`          | 0.4.0          | `@seamless-auth/client` ^0.8.0                                                       | `@angular/core`, `common`, `router` 20, 21, or 22, and `rxjs` 7               |
-| `@seamless-auth/vue`              | 0.3.0          | `@seamless-auth/client` ^0.8.0                                                       | `vue` 3.5+, optional `vue-router` 4.4+ or 5                                   |
-| `@seamless-auth/svelte`           | 0.3.0          | `@seamless-auth/client` ^0.8.0                                                       | `svelte` 5, optional `@sveltejs/kit` 2.26+ or 3                               |
-| `@seamless-auth/react-native`     | 0.4.0          | `@seamless-auth/client` ^0.8.0, `@seamless-auth/types` ^0.33.0                       | `react` 18 or 19                                                              |
-| `@seamless-auth/types`            | 0.33.0         | None                                                                                 | None                                                                          |
-| `@seamless-auth/messaging`        | 0.2.0          | None                                                                                 | None                                                                          |
-| `@seamless-auth/messaging-aws`    | 0.2.0          | `@seamless-auth/messaging` ^0.2.0                                                    | None                                                                          |
-| `@seamless-auth/messaging-twilio` | 0.2.0          | `@seamless-auth/messaging` ^0.2.0                                                    | None                                                                          |
-| `seamless-cli`                    | 0.26.0         | `@seamless-auth/types` ^0.33.0                                                       | None                                                                          |
-| `seamless-auth-admin-dashboard`   | 0.11.0         | `@seamless-auth/react` ^0.19.0, `@seamless-auth/types` ^0.33.0                       | None                                                                          |
+| `seamless-auth-api`               | 0.21.0         | `@seamless-auth/types` ^0.34.0, `@seamless-auth/messaging`, `-aws`, `-twilio` ^0.2.0 | None                                                                          |
+| `@seamless-auth/oidc-provider`    | 0.1.0          | `@seamless-auth/express` and `core` ^0.22.0, `@seamless-auth/types` ^0.34.0          | None                                                                          |
+| `@seamless-auth/core`             | 0.23.0         | `@seamless-auth/types` ^0.34.0                                                       | None                                                                          |
+| `@seamless-auth/express`          | 0.23.0         | `@seamless-auth/core` ^0.23.0                                                        | `express` >=5.0.0                                                             |
+| `@seamless-auth/fastify`          | 0.14.0         | `@seamless-auth/core` ^0.23.0                                                        | `fastify` >=5.0.0                                                             |
+| `@seamless-auth/nextjs`           | 0.7.0          | `@seamless-auth/core` ^0.23.0, `@seamless-auth/types` ^0.34.0                        | None                                                                          |
+| `@seamless-auth/client`           | 0.8.2          | `@seamless-auth/types` ^0.34.0                                                       | None                                                                          |
+| `@seamless-auth/react`            | 0.19.2         | `@seamless-auth/client` ^0.8.2, `@seamless-auth/types` ^0.34.0                       | `react` and `react-dom` 18 or 19, optional `react-router-dom` 6.4+ or 7.15.1+ |
+| `@seamless-auth/angular`          | 0.4.1          | `@seamless-auth/client` ^0.8.1                                                       | `@angular/core`, `common`, `router` 20, 21, or 22, and `rxjs` 7               |
+| `@seamless-auth/vue`              | 0.3.1          | `@seamless-auth/client` ^0.8.1                                                       | `vue` 3.5+, optional `vue-router` 4.4+ or 5                                   |
+| `@seamless-auth/svelte`           | 0.3.1          | `@seamless-auth/client` ^0.8.1                                                       | `svelte` 5, optional `@sveltejs/kit` 2.26+ or 3                               |
+| `@seamless-auth/react-native`     | 0.4.2          | `@seamless-auth/client` ^0.8.2, `@seamless-auth/types` ^0.34.0                       | `react` 18 or 19                                                              |
+| `@seamless-auth/types`            | 0.34.0         | None                                                                                 | None                                                                          |
+| `@seamless-auth/messaging`        | 0.3.0          | `@seamless-auth/types` ^0.33.0                                                       | None                                                                          |
+| `@seamless-auth/messaging-aws`    | 0.3.0          | `@seamless-auth/messaging` ^0.3.0                                                    | None                                                                          |
+| `@seamless-auth/messaging-twilio` | 0.3.0          | `@seamless-auth/messaging` ^0.3.0                                                    | None                                                                          |
+| `seamless-cli`                    | 0.27.0         | `@seamless-auth/types` ^0.34.0                                                       | None                                                                          |
+| `seamless-auth-admin-dashboard`   | 0.12.0         | `@seamless-auth/react` ^0.19.0, `@seamless-auth/types` ^0.34.0                       | None                                                                          |
 
 How to read it:
 
@@ -198,9 +199,10 @@ How to read it:
   bumped and released.
 - `@seamless-auth/express`, `fastify`, and `nextjs` declare `@seamless-auth/core` as
   `workspace:^`, which pnpm rewrites at publish to a caret on the core version in the same release
-  (`^0.22.0` today).
-- Every package that depends on `@seamless-auth/types` declares ^0.33.0, so an app that installs
-  any mix of the SDKs and adapters resolves a single copy of it.
+  (`^0.23.0` today).
+- Every SDK and adapter that depends on `@seamless-auth/types` declares ^0.34.0, so an app that
+  installs any mix of them resolves a single copy of it. The messaging packages still declare
+  ^0.33.0; only the auth API installs them.
 - The messaging packages are used by `seamless-auth-api` to deliver email and SMS. Your application
   does not install them.
 - The auth API exposes an HTTP contract, not a package range. No package declares a range on
@@ -212,22 +214,22 @@ These are not npm packages, so they sit outside the table above and `npm run che
 declares no range on another Seamless package; it reads the auth API's adapter manifest at runtime
 instead.
 
-| Adapter                              | Latest release | Registry                                     | Needs                                               |
-| ------------------------------------ | -------------- | -------------------------------------------- | --------------------------------------------------- |
-| `seamless-auth` (Python)                 | 0.3.0          | PyPI                           | Python 3.11+, FastAPI 0.115+ or Django 5.2+, auth API v0.18.0+ |
-| `github.com/fells-code/seamless-auth-go` | v0.3.0         | Go module proxy (tag `v0.3.0`) | Go 1.22+, auth API v0.18.0+                                    |
-| `seamless-auth` (Rust)                   | 0.3.0          | crates.io                      | Rust 1.88+, Axum 0.8, auth API v0.18.0+                        |
+| Adapter                                  | Latest release | Registry                       | Needs                                                          |
+| ---------------------------------------- | -------------- | ------------------------------ | -------------------------------------------------------------- |
+| `seamless-auth` (Python)                 | 0.4.0          | PyPI                           | Python 3.11+, FastAPI 0.115+ or Django 5.2+, auth API v0.18.0+ |
+| `github.com/fells-code/seamless-auth-go` | v0.4.0         | Go module proxy (tag `v0.4.0`) | Go 1.22+, auth API v0.18.0+                                    |
+| `seamless-auth` (Rust)                   | 0.4.0          | crates.io                      | Rust 1.88+, Axum 0.8, auth API v0.18.0+                        |
 
 ### What The CLI Scaffolds
 
-`seamless-cli` 0.26.0 does not install the newest of everything. It pins the images and the
+`seamless-cli` 0.27.0 does not install the newest of everything. It pins the images and the
 template tag it scaffolds, so a given CLI version always produces the same project:
 
 | What `seamless init` uses | Pinned to                                                      | Where it is set                                         |
 | ------------------------- | -------------------------------------------------------------- | ------------------------------------------------------- |
-| Auth API image            | `ghcr.io/fells-code/seamless-auth-api:v0.20.0`                 | `seamless-cli` `src/core/images.ts`                     |
-| Admin dashboard image     | `ghcr.io/fells-code/seamless-auth-admin-dashboard:v0.11.0`     | `seamless-cli` `src/core/images.ts`                     |
-| Starter templates         | `fells-code/seamless-templates` at `v0.21.0`                   | `seamless-cli` `src/core/images.ts`                     |
+| Auth API image            | `ghcr.io/fells-code/seamless-auth-api:v0.21.0`                 | `seamless-cli` `src/core/images.ts`                     |
+| Admin dashboard image     | `ghcr.io/fells-code/seamless-auth-admin-dashboard:v0.12.0`     | `seamless-cli` `src/core/images.ts`                     |
+| Starter templates         | `fells-code/seamless-templates` at `v0.21.1`                   | `seamless-cli` `src/core/images.ts`                     |
 | Express API template      | `@seamless-auth/express` ^0.22.0                               | `templates/api/express/package.json`                    |
 | Fastify API template      | `@seamless-auth/fastify` ^0.13.0                               | `templates/api/fastify/package.json`                    |
 | Next.js template          | `@seamless-auth/nextjs` ^0.6.0, `@seamless-auth/react` ^0.19.0 | `templates/fullstack/nextjs/package.json`               |
@@ -240,8 +242,11 @@ template tag it scaffolds, so a given CLI version always produces the same proje
 | Axum API template         | `seamless-auth` 0.3                                            | `templates/api/axum/Cargo.toml`                         |
 | FastAPI API template      | `seamless-auth[fastapi]>=0.3,<0.4`                            | `templates/api/fastapi/pyproject.toml`                  |
 
-Template paths are inside `fells-code/seamless-templates` at `v0.21.0`. A scaffolded project can
-move to newer SDKs by bumping the ranges in its own `package.json`.
+Template paths are inside `fells-code/seamless-templates` at `v0.21.1`. Those templates still
+declare the v0.20 adapters (`@seamless-auth/express` ^0.22.0, `fastify` ^0.13.0, `nextjs` ^0.6.0,
+and the Go, Python and Rust adapters at 0.3), which work against auth API v0.21.0. A scaffolded
+project can move to the v0.21 adapters by bumping the ranges in its own `package.json`, `go.mod`,
+`Cargo.toml` or `pyproject.toml`.
 
 ### Keeping This Matrix Current
 
