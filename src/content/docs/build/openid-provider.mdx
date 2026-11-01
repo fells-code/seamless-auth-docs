@@ -21,8 +21,8 @@ read this page first and then [Sign-In For Native, Desktop And CLI Apps](/build/
 <Aside type="note" title="Status">
   The OpenID Provider ships in v0.21. It needs `seamless-auth-api` from v0.21 and the new
   `seamless-auth-oidc-provider` service (npm `@seamless-auth/oidc-provider`, image
-  `ghcr.io/fells-code/seamless-auth-oidc-provider`). Sign-out (RP-initiated logout) and the device
-  authorization grant are still being built. Their sections below are placeholders.
+  `ghcr.io/fells-code/seamless-auth-oidc-provider`). Deploy the API and the edge together: an edge
+  refuses to start against an API that speaks a different version of the `/oidc/*` contract.
 </Aside>
 
 ---
@@ -180,6 +180,9 @@ The edge reads the provider key set from the API when it starts, so restart it a
 | `/jwks`                             | The provider's public keys, read from the API           |
 | `/token/introspection`              | Token introspection (RFC 7662)                          |
 | `/token/revocation`                 | Token revocation (RFC 7009)                             |
+| `/session/end`                      | RP-initiated logout, confirmed on a hosted page         |
+| `/device/auth`                      | Device authorization (RFC 8628)                         |
+| `/device`                           | The hosted page where the user enters a device code     |
 | `/auth/*`, `/interaction/*`         | Used by the hosted pages only, not by relying parties   |
 
 Point every relying party at the discovery document and let it read the rest.
@@ -204,6 +207,11 @@ An application has a client type and a set of grants:
 | Grants                    | `authorization_code`, `refresh_token`, `client_credentials`. The default is `authorization_code` and `refresh_token`.                               |
 | Redirect URIs             | Exact `https` URIs, loopback `http` on `127.0.0.1` or `[::1]`, or a private-use scheme such as `com.example.app:/callback`. Up to 50.               |
 | First-party               | A first-party application skips the consent page. Third-party applications need `third_party_clients_enabled`.                                    |
+| Post-logout redirect URIs | Where [sign-out](#sign-out) may send the user back to. Same rules as redirect URIs.                                                                |
+| Back-channel logout URI   | An `https` URL that receives a logout token when the user's session ends. See [Back-channel logout](#back-channel-logout).                         |
+| Device flow               | `deviceFlowEnabled`, first-party applications only. See [Device authorization grant](#device-authorization-grant).                                 |
+| Token lifetimes           | The application's own access, ID and refresh token lifetimes. See [Token lifetimes](#token-lifetimes).                                             |
+| PKCE and nonce            | `pkceRequired` and `nonceRequired`, both on by default. See [PKCE and nonce opt-outs](#pkce-and-nonce-opt-outs).                                   |
 | Account notices           | Lets the application email or text its own users through Seamless. See [Account notices](#account-notices-from-an-application).                   |
 | Disabled                  | A disabled application cannot sign anyone in or get tokens, and keeps its settings.                                                               |
 
@@ -214,10 +222,14 @@ would weaken the provider, on create and on the merged result of every update:
 - `client_secret_jwt` cannot be chosen.
 - `localhost`, fragments and embedded credentials are refused as redirect hosts, and plain `http`
   is allowed only on `127.0.0.1` and `[::1]`.
-- `refresh_token` needs `authorization_code`, and `authorization_code` needs a redirect URI.
+- `refresh_token` needs `authorization_code` or the device flow, and `authorization_code` needs a
+  redirect URI.
+- The device flow is for first-party applications only.
+- Only a confidential client may turn PKCE off, and the nonce requirement can be turned off only
+  once PKCE is.
 
-PKCE with `S256`, the code flow as the only response type, and refresh token rotation are fixed in
-the edge's configuration and cannot be changed per application.
+The code flow as the only response type and refresh token rotation are fixed in the edge's
+configuration and cannot be changed per application.
 
 ### Resources
 
@@ -277,8 +289,11 @@ seamless clients resources <id> --set https://api.example.com=orders:read
 ```
 
 `create` and `update` also take `--name`, `--auth-method`, `--post-logout-uri`,
-`--first-party`/`--third-party`, `--notices`/`--no-notices`, and the token lifetime flags.
-`update` also takes `--disable`/`--enable`. Most commands take `--json`.
+`--backchannel-logout-uri <url|none>`, `--first-party`/`--third-party`,
+`--device-flow`/`--no-device-flow`, `--notices`/`--no-notices`, and `--access-token-ttl`,
+`--id-token-ttl` and `--refresh-token-ttl` (seconds, or `default`). `update` also takes
+`--disable`/`--enable`. Most commands take `--json`. The CLI has no flag for the PKCE and nonce
+settings: change those through the admin API.
 
 ### From the API
 
@@ -330,8 +345,10 @@ never offered.
 
 ## Sign Users In: Code Flow With PKCE
 
-The authorization code flow with PKCE (`S256`) is the only flow, for every client, confidential or
-public. The implicit and hybrid flows, plain PKCE and the password grant are refused.
+The authorization code flow with PKCE (`S256`) is the sign-in flow for every client, confidential or
+public. The implicit and hybrid flows, plain PKCE and the password grant are refused. (A
+confidential client can be [opted out of PKCE](#pkce-and-nonce-opt-outs), which is not
+recommended.)
 
 ```ts
 const verifier = oidc.randomPKCECodeVerifier()
@@ -368,15 +385,30 @@ it returns to and the requested scopes on every authorization.
 API recorded for the session, whether or not the app asked for them. The claims are also in the ID
 token itself, not only at `/userinfo`, because many apps read the profile from the ID token.
 
-| Token                    | Lifetime                                                                 |
-| ------------------------ | ------------------------------------------------------------------------ |
-| Authorization code       | 60 seconds, single use                                                   |
-| ID token                 | 600 seconds                                                              |
-| Access token             | 600 seconds, or the resource's own lifetime                              |
-| Grant and edge session   | At most 14 days, and never longer than the user's first-party session    |
-
 Without a `resource`, the access token is an opaque token for `/userinfo`. To call your own API,
 ask for a token for it (see [Access tokens for your API](#access-tokens-for-your-api)).
+
+### Token lifetimes
+
+| Token              | Default                                    | Per application (`*TtlSeconds`)         |
+| ------------------ | ------------------------------------------ | --------------------------------------- |
+| Authorization code | 60 seconds, single use                     | Fixed                                   |
+| ID token           | 600 seconds                                | `idTokenTtlSeconds`, 60 to 86,400       |
+| Access token       | 600 seconds, or the resource's lifetime    | `accessTokenTtlSeconds`, 60 to 86,400   |
+| Refresh token      | 14 days                                    | `refreshTokenTtlSeconds`, 300 to 7,776,000 (90 days) |
+| Edge session       | At most 14 days                            | Fixed                                   |
+
+Set an application's lifetimes on create or update (`PATCH /admin/applications/:id`, or the
+`--access-token-ttl`, `--id-token-ttl` and `--refresh-token-ttl` flags of `seamless clients`). Set
+one to `null` (`default` in the CLI) to go back to the default.
+
+- **Access tokens for an API** get the shorter of the resource's lifetime and the application's.
+- **The grant follows the refresh token.** It lives at least as long as the application's refresh
+  tokens, so a refresh lifetime over 14 days is not cut short.
+- **Browser apps without a bound key** (a public web client) keep what was left of the refresh token
+  they rotated, whatever the application's lifetime, so rotating never extends a stolen chain.
+- **The session still bounds them.** When the user's first-party session ends, the API ends every
+  grant and token record under it, whatever its lifetime.
 
 ### Authentication levels: `acr` and `amr`
 
@@ -389,6 +421,30 @@ ask for a token for it (see [Access tokens for your API](#access-tokens-for-your
 `phrh` satisfies a request for `phr`. `amr` lists the methods used, from `hwk` (device-bound
 passkey), `swk` (synced passkey), `user` (user verification), `otp`, `sms` and `mfa` (two
 different methods in one session, or a user-verified passkey).
+
+### PKCE and nonce opt-outs
+
+PKCE is required for every application by default. Two settings relax that, on confidential
+clients only:
+
+| Setting         | Default | Can be `false` when                                  | Effect when `false`                                                                 |
+| --------------- | ------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `pkceRequired`  | `true`  | The client is confidential (it authenticates at `/token`) | A request with `openid` and no `code_challenge` is accepted if it carries a `nonce` |
+| `nonceRequired` | `true`  | `pkceRequired` is already `false`                    | That request is accepted without a `nonce` too                                      |
+
+A request without `openid` still needs PKCE, because a nonce only binds an ID token. A public
+client always needs PKCE, whatever its settings. The registry checks both rules on create and on the
+merged result of every update, so turning PKCE back on while the nonce is off is refused. Set them
+with `PATCH /admin/applications/:id`. Like every application write, the change needs `admin:write`
+and step-up, and is recorded as `admin_oidc_application_pkce_updated` or
+`admin_oidc_application_nonce_updated`.
+
+<Aside type="caution" title="For OpenID certification test clients">
+  These settings exist so the OpenID Foundation's certification test clients, which include clients
+  that send neither PKCE nor a nonce, can run against the provider. They are not recommended for any other application. With both
+  off, the client relies only on `state` and its own client authentication to stop an attacker
+  injecting a stolen authorization code. Keep PKCE on for every real application.
+</Aside>
 
 ---
 
@@ -488,6 +544,9 @@ const refreshed = await oidc.refreshTokenGrant(config, tokens.refresh_token!)
 - **Reuse ends the session.** A used refresh token presented again revokes the grant and every token
   under it, and the API ends the first-party session it was issued under, so every app on that
   session has to sign in again.
+- **Concurrent refreshes count as reuse.** Two refreshes sent at the same time with the same token
+  cannot both rotate. The one that loses is handled as reuse, so both get `invalid_grant` and the
+  session ends. Refresh from one place at a time.
 - **Refreshed ID tokens are current.** They carry the session's current `acr`, `amr` and
   `auth_time`, so a step-up since the sign-in shows up on the next refresh.
 - **The session bounds it.** A refresh token works only while the user's first-party session is
@@ -557,34 +616,146 @@ await oidc.tokenRevocation(config, tokens.refresh_token!)
 <Aside type="caution" title="Revocation ends the app's grant, not the user's session">
   Revoking a refresh token ends that application's grant and every token under it. It does not end
   the user's first-party session, so the user's other apps stay signed in, and the next sign-in to
-  this app can be silent. To sign the user out of Seamless itself, use sign-out (below). Each
+  this app can be silent. To sign the user out of Seamless itself, use [sign-out](#sign-out). Each
   revocation is recorded in the audit log as `token_revoked`.
 </Aside>
 
 ---
 
-## Sign-Out (RP-Initiated Logout)
+## Sign-Out
 
-<Aside type="note" title="In progress">
-  RP-initiated logout is being built in
-  [seamless-auth-oidc-provider#5](https://github.com/fells-code/seamless-auth-oidc-provider/issues/5)
-  and is not enabled on the edge yet. This section will cover the end session endpoint,
-  `post_logout_redirect_uris` (already part of the application settings), and what ending a session
-  does to the user's other apps. Until it ships, revoke the app's tokens (above) and end the
-  first-party session through your Seamless sign-out.
+### RP-initiated logout
+
+`/session/end` (OpenID RP-Initiated Logout 1.0) is listed in discovery as `end_session_endpoint`.
+Send the browser there with the ID token as `id_token_hint` (or the app's `client_id`), and
+optionally a `post_logout_redirect_uri` registered for the application and a `state`:
+
+```ts
+const url = oidc.buildEndSessionUrl(config, {
+  id_token_hint: tokens.id_token!,
+  post_logout_redirect_uri: 'https://docs.example.com/signed-out',
+  state: oidc.randomState(),
+})
+// Clear the app's own session, then redirect the browser to `url`.
+```
+
+A `post_logout_redirect_uri` that is not registered for the application is refused. The hosted
+page names the app and asks before anything ends:
+
+- **Sign out** ends the user's Seamless session: the edge session and the first-party session it
+  was made under. Every other app the user signed in to with that session is signed out too, and
+  apps with a back-channel logout URI are told (below).
+- **Only sign out of** the app ends that app's grant and keeps the session, so the user stays
+  signed in to their other apps.
+
+The browser then goes to the `post_logout_redirect_uri`, with `state`, or to a hosted signed-out
+page. Each sign-out is recorded as an `end_session` auth event.
+
+### Back-channel logout
+
+An application with a back-channel logout URI is told when the user's session ends (OpenID
+Back-Channel Logout 1.0). Discovery lists `backchannel_logout_supported` and
+`backchannel_logout_session_supported`, and ID tokens for such an application always carry `sid`.
+
+The API sends the logout tokens itself, not the edge, because it sees every way a session ends:
+
+| How the session ended                                        | When the token is sent                     |
+| ------------------------------------------------------------ | ------------------------------------------ |
+| Sign out on the hosted page                                  | At once                                    |
+| Sign-out in a first-party app (`/logout`, `/logout/all`)     | A sweep starts at once                     |
+| Any other way, such as an admin revoking the session         | On the next sweep, at most 30 seconds later |
+
+The token is a `logout+jwt` signed with the provider key set (verify it against the edge's
+`/jwks`). It carries `iss`, `aud` (the `client_id`), `sub`, `sid`, `jti`, `iat`, `exp` (2 minutes)
+and the back-channel logout event. It is POSTed as `logout_token` in a form body, and a `200` or
+`204` within 5 seconds counts as delivered. Each application is told once per session. The outcome
+is recorded as `oidc_backchannel_logout_sent` or `oidc_backchannel_logout_failed`.
+
+On receipt, verify the token, then end every local session for that `sid` (or for `sub` if you do
+not track `sid`).
+
+<Aside type="note" title="Not sent when only one app's grant ends">
+  Back-channel logout follows the user's Seamless session. Ending a single application's grant,
+  with **Only sign out of** or token revocation, sends no logout token in v0.21. That is tracked in
+  [seamless-auth-api#543](https://github.com/fells-code/seamless-auth-api/issues/543).
 </Aside>
 
 ---
 
 ## Device Authorization Grant
 
-<Aside type="note" title="In progress">
-  The device authorization grant (RFC 8628) is being built in
-  [seamless-auth-oidc-provider#7](https://github.com/fells-code/seamless-auth-oidc-provider/issues/7)
-  and is not enabled on the edge yet. The registry already has the setting (`deviceFlowEnabled`,
-  first-party applications only). This section will cover registering a device client, the
-  verification page and the polling flow.
+The device authorization grant (RFC 8628) is for apps that cannot open a browser: TVs, consoles, and
+CLIs on a server or in a container. The app shows a short code, and the user approves it on another
+device with a browser.
+
+### Register a device application
+
+The device flow is available only to first-party applications with `deviceFlowEnabled`. A device
+app is usually a public client and needs no redirect URI:
+
+```bash
+seamless clients create "Living Room TV" --public --first-party --device-flow \
+  --grants refresh_token
+```
+
+An application without the device flow is refused at `/device/auth`.
+
+### The flow
+
+1. The app POSTs to `/device/auth` with its `client_id` (and client authentication if it is
+   confidential) and a `scope`. The answer carries `device_code`, `user_code`, `verification_uri`
+   (the edge's `/device` page), `verification_uri_complete`, `expires_in` and `interval: 5`.
+2. The app shows the user the code and the verification URI (or a QR code of
+   `verification_uri_complete`).
+3. The app polls `/token` with `grant_type=urn:ietf:params:oauth:grant-type:device_code` and the
+   `device_code`, waiting `interval` seconds between polls.
+4. The user opens the page, enters the code and approves. The next poll returns the tokens.
+
+With `openid-client`, which handles the polling and `slow_down` for you:
+
+```ts
+const device = await oidc.initiateDeviceAuthorization(config, {
+  scope: 'openid email offline_access',
+})
+console.log(`Go to ${device.verification_uri} and enter ${device.user_code}`)
+const tokens = await oidc.pollDeviceAuthorizationGrant(config, device)
+```
+
+An application registered for `refresh_token` gets a refresh token when it asks for
+`offline_access`. It rotates like every other refresh token.
+
+| Poll answer             | Meaning                                                             |
+| ----------------------- | ------------------------------------------------------------------- |
+| `authorization_pending` | The user has not approved yet. Keep polling.                        |
+| `slow_down`             | The app polled sooner than `interval`. Add 5 seconds and keep going. |
+| `access_denied`         | The user cancelled on the confirmation page.                        |
+| `invalid_grant`         | The device code was already used, or has expired.                   |
+
+<Aside type="note" title="An expired code answers invalid_grant">
+  RFC 8628 names `expired_token` for an expired device code. The edge currently answers
+  `invalid_grant`, which a client should treat the same way: stop polling and start again. The
+  change to `expired_token` is tracked in
+  [seamless-auth-api#542](https://github.com/fells-code/seamless-auth-api/issues/542).
 </Aside>
+
+### The verification page
+
+- **Codes.** The user code is 8 characters from the RFC's base-20 set (no vowels), shown as
+  `BCDF-GHJK`. It is typed case-insensitively, with or without the dash. Codes live 10 minutes and
+  each device code works once. Code entry is limited to 10 tries a minute per address and 600 a
+  minute per edge instance.
+- **Confirmation.** Before any sign-in, the page names the app, shows the code and the scopes, and
+  tells the user to continue only for a device they started themselves (RFC 8628 section 5.4).
+- **Sign-in every time.** Every approval signs in again, so a browser already signed in to Seamless
+  still confirms with the passkey (or another enabled method). Approvals and cancellations are
+  recorded as `device_code_approved` and `device_code_denied`.
+
+### No `acr` on device tokens
+
+Device-flow tokens never carry `acr`, after a refresh too. The passkey proves who approved the code,
+not who holds the device, so a device token cannot satisfy a `phr` or `phrh` check. A device request
+with `acr_values` or `max_age` is refused with `invalid_request`, and the API refuses to sign `acr`
+onto any token from the device grant. `amr` still lists the methods the approver used.
 
 ---
 
@@ -780,10 +951,11 @@ Each adapter's README lists its full verify-only API. See the [Go](/build/go-ada
 
 ## Security Defaults
 
-The edge's configuration is locked to OAuth 2.1 and RFC 9700. No application setting can loosen
-it:
+The edge's configuration is locked to OAuth 2.1 and RFC 9700. The only application setting that
+loosens it is the [PKCE and nonce opt-out](#pkce-and-nonce-opt-outs) for confidential clients:
 
-- The code flow with `S256` PKCE for every client. No implicit, hybrid or password grant.
+- The code flow with `S256` PKCE for every client, unless a confidential client is opted out. No
+  implicit, hybrid or password grant.
 - Exact redirect URI matching. The only exception is the port of a native app's loopback redirect.
 - `iss` on every authorization response (RFC 9207).
 - Refresh token rotation, with reuse ending the session.
