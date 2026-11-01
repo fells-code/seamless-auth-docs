@@ -1,6 +1,6 @@
 ---
 title: "Migrating Off Amazon Cognito To Passwordless With Seamless Auth"
-description: "Move users from an Amazon Cognito user pool to Seamless Auth, the open source (Apache-2.0), self-hosted passwordless auth server: export users with ListUsers, convert the export with jq, import with seamless migrate, keep Cognito sign-in working through OpenID Connect during cutover, then move everyone to passkeys and switch Cognito off."
+description: "Move users from an Amazon Cognito user pool to Seamless Auth, the open source (Apache-2.0), self-hosted passwordless auth server: export users with ListUsers, assess the export with seamless migrate assess, import it with seamless migrate cognito, keep Cognito sign-in working through OpenID Connect during cutover, then move everyone to passkeys and switch Cognito off."
 sidebar:
   order: 7
 ---
@@ -9,8 +9,8 @@ import { Aside } from '@astrojs/starlight/components';
 
 This guide moves an application's users from an Amazon Cognito user pool to Seamless Auth, an open
 source (Apache-2.0) passwordless authentication server you run yourself, with passkeys (WebAuthn),
-magic links, and one-time codes. It covers exporting users from Cognito, converting the export into
-the CSV that `seamless migrate` imports, keeping Cognito sign-in working while users move, getting
+magic links, and one-time codes. It covers exporting users from Cognito, assessing the export and
+importing it with `seamless migrate`, keeping Cognito sign-in working while users move, getting
 everyone onto a passkey, and switching Cognito off. It also lists what Cognito does that Seamless
 Auth does not, so you can decide whether the move fits before starting.
 
@@ -18,8 +18,7 @@ It is written for two readers:
 
 - **A developer or coding agent doing the migration.** The commands, field mappings, and config
   below are exact. The Seamless Auth parts were checked against the `seamless-cli` and
-  `seamless-auth-api` source, and the export loop and `jq` conversion were run against sample
-  `list-users` output.
+  `seamless-auth-api` source, and the export loop was run against sample `list-users` output.
 - **A technical lead deciding whether to move.** Typically at a software company whose government
   or regulated customers now ask for phishing-resistant MFA, or one that has outgrown Cognito.
   Start with [What Changes](#what-changes) and
@@ -68,7 +67,8 @@ Everything on this page is released:
 
 | Capability                                                                    | Needs                                             |
 | ----------------------------------------------------------------------------- | ------------------------------------------------- |
-| `seamless migrate csv` and bulk import (`POST /admin/users/import`)           | `seamless-cli` 0.18.0, `seamless-auth-api` 0.16.0 |
+| `seamless migrate assess` readiness report (no instance needed)               | `seamless-cli` 0.27.0                             |
+| `seamless migrate cognito` and bulk import (`POST /admin/users/import`)       | `seamless-cli` 0.27.0, `seamless-auth-api` 0.16.0 |
 | Sign in through Cognito as an OpenID Connect provider, linked by id           | `seamless-auth-api` 0.16.0                        |
 | Enrollment prompts, directory, invites, coverage report, provider retirement | `seamless-auth-api` 0.17.0                        |
 | `seamless config set prompt_passkey_enrollment`                               | `seamless-cli` 0.21.0                             |
@@ -79,7 +79,12 @@ The full version table for the dashboard and server adapters is in
 
 ---
 
-## Step 1: Export Users From Cognito
+## Step 1: Assess The Move
+
+Export the users, then run a readiness report on the export before touching any Seamless Auth
+instance. The report needs no instance and no login.
+
+### Export Users From Cognito
 
 Cognito has no bulk export job. The export is
 [`ListUsers`](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_ListUsers.html),
@@ -105,8 +110,7 @@ For a small pool, one command is enough, since the CLI follows every page itself
 
 ```bash
 POOL_ID=us-east-1_EXAMPLE
-aws cognito-idp list-users --user-pool-id "$POOL_ID" --page-size 60 \
-  | jq '.Users' > cognito-users.json
+aws cognito-idp list-users --user-pool-id "$POOL_ID" --page-size 60 > cognito-users.json
 ```
 
 For a large pool, export in chunks so a failure part way through can resume from the last token
@@ -134,6 +138,10 @@ done
 jq -s '[.[].Users[]]' cognito-export/users-*.json > cognito-users.json
 ```
 
+The last line joins the chunks into one file. `seamless migrate cognito` also takes the chunk files
+themselves (`cognito-export/users-*.json`), one `list-users` response, the `Users` array, an array
+of responses, or responses concatenated, so any of these shapes works.
+
 The loop runs in both bash and zsh. To resume after a failure, set `token` and `page` to the last
 values it printed and run the loop again.
 
@@ -151,7 +159,7 @@ and [Working with user attributes](https://docs.aws.amazon.com/cognito/latest/de
 | `custom:` attributes           | Where many pools keep a tenant, customer, or team id                                                                                                  |
 
 Use `sub`, not `Username` or `email`, as the external id. `sub` is what Cognito puts in the `sub`
-claim of its ID tokens, which is how the cutover in Step 4 finds each imported user, and Cognito's
+claim of its ID tokens, which is how the cutover in Step 3 finds each imported user, and Cognito's
 documentation calls it the only consistent indicator of a user's identity. `Username` takes a
 different form depending on how the pool and the user were set up, and users can change their own
 email.
@@ -189,109 +197,131 @@ The result maps each username to its groups, for example
 `{"ada": ["staff"], "Google_104857600123456789012": ["staff", "manager"]}`. If you do not use
 groups, write `{}` to `cognito-groups.json`.
 
----
+### Run The Readiness Report
 
-## Step 2: Convert The Export To The Import CSV
-
-`seamless migrate csv` reads a CSV with up to five fields. With these exact headers it needs no
-mapping file:
-
-```csv
-externalId,email,phone,roles,organizations
-```
-
-- `email` is required. `externalId` is the Cognito `sub`.
-- `roles` and `organizations` take several values separated by `;`. Organizations are referenced by
-  slug or id and must already exist, and roles must be in the instance's `available_roles`. The
-  import never grants `admin` or an `admin:*` role.
-- A role name is letters, digits, and hyphens, optionally in `:`-separated segments. A Cognito
-  group name with an underscore or a space fails validation and marks the row invalid in the plan,
-  so rename those roles in `cognito-groups.json` first.
-- Every other column is ignored.
-
-First, find what the import cannot take as-is. A user with no email (a pool that signs in by phone
-number, for example) cannot be imported, and two Cognito users with the same email (a local user
-and a federated `Google_` profile, or two users in a pool with email as an alias rather than the
-username) become one Seamless Auth account, so the import rejects the second row:
+`seamless migrate assess cognito` reads the export and writes `cognito-users.migrate-assess.md`
+beside it, a report you can hand to whoever decides on the move. Pass the groups map and any
+mapping you will import with (Step 2) so the report shows where they land:
 
 ```bash
-# Users with no email
-jq -r '.[] | select(all((.Attributes // [])[]; .Name != "email")) | .Username' cognito-users.json
+seamless migrate assess cognito cognito-users.json --groups cognito-groups.json
+```
 
-# Emails held by more than one Cognito user (compared case-insensitively, as the import does)
-jq -r 'map({username: .Username, email: ((.Attributes // [])[] | select(.Name == "email") | .Value)})
+For a sample pool of eight users it prints:
+
+```txt
+Readiness cognito-users.json as source "cognito"
+8 found  ·  3 would import  ·  5 would not
+      1  disabled in Cognito
+      1  email not verified in Cognito (pass --allow-unverified to import it)
+      1  no email address (a phone-only user; add an email in Cognito before exporting)
+      1  roles: a group or role name that is not a valid role (letters, digits and hyphens, with optional : segments)
+      1  sign-up never confirmed (pass --include-unconfirmed to import it)
+Contact: 5 verified email, 2 other email, 1 phone only, 0 neither
+  Password sign-in (user pool directory): 7 user(s)
+
+Report: cognito-users.migrate-assess.md
+Cost:   https://docs.seamlessauth.com/compare/cost?mau=8&vendor=cognito
+
+Nothing was sent to a Seamless Auth instance.
+```
+
+The Markdown report adds contact coverage, the roles and organizations the import would grant, the
+attributes it would leave behind (such as `custom:` attributes no mapping reads), the Cognito
+features it found that Seamless Auth does not cover (SAML and other federated providers, SMS MFA)
+with those an export cannot show (identity pools, IAM role mapping, API Gateway authorizers, Lambda
+triggers), and a link to the [Identity Cost Calculator](/compare/cost) with the user count filled
+in. It holds counts and attribute, role, and organization names, never a user's email, phone, or
+id. Check the features against [What You Give Up](#what-you-give-up-or-must-plan-for) before going
+further, starting with identity pools. `--json` prints the assessment instead.
+
+---
+
+## Step 2: Import
+
+`seamless migrate cognito` reads the same export. Each user becomes one import row:
+
+| Cognito field              | Import                                                                                                |
+| -------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `sub` attribute            | `externalId`, which the cutover in Step 3 links on                                                    |
+| `email` attribute          | `email`. A user with none (a pool that signs in by phone, for example) is reported `invalid`          |
+| `email_verified` attribute | `"false"` skips the user and lists them in the report. `--allow-unverified` imports them anyway      |
+| `phone_number` attribute   | `phone`, already in the E.164 form the import accepts                                                 |
+| `Enabled`                  | `false` skips the user and lists them in the report                                                   |
+| `UserStatus`               | `UNCONFIRMED` skips the user and lists them in the report. `--include-unconfirmed` imports them      |
+| Groups, with `--groups`    | `roles`, from the username-to-groups map built in Step 1. Cognito's per-provider groups are ignored   |
+| Other attributes           | Nothing, unless a `--map` file names the attribute to read roles or organizations from               |
+
+An unverified address is skipped by default because whoever registers with it first gets the
+account and the roles it was imported with. Federated users often have `email_verified` unset or
+`"false"` unless the pool's attribute mapping sets it; check those users in the report before
+choosing `--allow-unverified`. Abandoned `UNCONFIRMED` sign-ups are harmless to import with
+`--include-unconfirmed`, since every imported user still has to prove their email.
+
+A role name is letters, digits, and hyphens, optionally in `:`-separated segments. A Cognito group
+name with an underscore or a space fails validation and marks the row `invalid`, so rename those
+groups in `cognito-groups.json` first. Roles must be in the instance's `available_roles`, and the
+import never grants `admin` or an `admin:*` role.
+
+Two Cognito users with the same email (a local user and a federated `Google_` profile, or two users
+in a pool with email as an alias rather than the username) become one Seamless Auth account, so keep
+the one whose `sub` the person actually signs in with, since that is the id the cutover links on.
+The readiness report counts them; to list them:
+
+```bash
+jq -r '(if type == "object" then .Users else . end)
+  | map({username: .Username, email: ((.Attributes // [])[] | select(.Name == "email") | .Value)})
   | group_by(.email | ascii_downcase)
   | map(select(length > 1)) | .[][] | [.email, .username] | @tsv' cognito-users.json
 ```
 
-For each duplicate, keep the row whose `sub` the person actually signs in with, since that is the
-id the cutover links on. Then convert, skipping disabled users, users who never confirmed their
-sign-up, and users without an email:
+To import a tenant or team attribute as organization membership, name it in a mapping file,
+`cognito-map.json`. Organizations are referenced by slug or id and must already exist:
 
-```bash
-jq -r --slurpfile groups cognito-groups.json '
-  ["externalId", "email", "phone", "roles", "organizations"],
-  (.[]
-    | ((.Attributes // []) | map({(.Name): .Value}) | add // {}) as $a
-    | select($a.email != null and .Enabled != false and .UserStatus != "UNCONFIRMED")
-    | [ $a.sub,
-        $a.email,
-        ($a.phone_number // ""),
-        (($groups[0][.Username] // []) | join(";")),
-        ($a["custom:tenant"] // "") ])
-  | @csv' cognito-users.json > users.csv
+```json
+{
+  "columns": { "organizations": "custom:tenant" }
+}
 ```
 
-Change `custom:tenant` to wherever your pool keeps team or customer membership, or replace it with
-`""` to leave organizations out. Remove the `UNCONFIRMED` condition if you want to import abandoned
-sign-ups too; they are harmless, since every imported user still has to prove their email. The
-conversion avoids `from_entries`, because older `jq` releases do not read the `Name`/`Value` keys
-Cognito uses. For three sample users (a local user, a federated Google user, and a user with a
-phone and a `custom:tenant`) the output is:
-
-```csv
-"externalId","email","phone","roles","organizations"
-"11111111-aaaa-4bbb-8ccc-000000000001","ada@example.com","","staff",""
-"11111111-aaaa-4bbb-8ccc-000000000002","grace@example.com","","staff;manager",""
-"11111111-aaaa-4bbb-8ccc-000000000003","lin@example.com","+15555550101","staff","platform"
-```
-
-The CLI reads quoted RFC 4180 CSV, so `@csv` output is accepted as-is.
-
----
-
-## Step 3: Import
-
-Sign in to the target instance as an admin, create any roles and organizations the CSV refers to,
-then dry run. Use `--source cognito` on every run, because external ids are matched within a source
-and the cutover provider below refers to it:
+Sign in to the target instance as an admin, create the roles and organizations the export refers
+to, then dry run:
 
 ```bash
 seamless profile login production
 seamless org create "Platform" --slug platform
-seamless migrate csv users.csv --source cognito
+seamless migrate cognito cognito-users.json --groups cognito-groups.json --map cognito-map.json
 ```
 
-The dry run writes nothing but sends every valid row to the instance with `dryRun` set, so the plan
-reflects real data. It writes `users.migrate-plan.csv` and `.json`, with a status per row
-(`created`, `updated`, `unchanged`, `rejected`, `invalid`) and a reason for each problem row, and
-exits 1 if any row is rejected or invalid. Fix the data and repeat until the plan is right, then:
+The source defaults to `cognito`. Keep it on every run, because external ids are matched within a
+source and the cutover provider below refers to it. The dry run writes nothing but sends every
+valid row to the instance with `dryRun` set, so the plan reflects real data. It writes
+`cognito-users.migrate-plan.csv` and `.json`, with a status per row (`created`, `updated`,
+`unchanged`, `rejected`, `invalid`, `skipped`), numbered in export order, and a reason for each
+problem row, and exits 1 if any row is rejected or invalid. Fix the data and repeat until the plan
+is right, then:
 
 ```bash
-seamless migrate csv users.csv --source cognito --apply
+seamless migrate cognito cognito-users.json --groups cognito-groups.json --map cognito-map.json --apply
 ```
 
-Keep `users.migrate-result.csv`: its `userId` column maps each Cognito `sub` to a Seamless Auth
-account. Re-running is safe; a row matches on its external id first, then on email, and only ever
-adds roles and memberships. Rejection reasons and the rest of the report are described in
-[Dry Run And Read The Plan](/operate/migrate-users#step-3-dry-run-and-read-the-plan).
+Keep `cognito-users.migrate-result.csv`: its `userId` column maps each Cognito `sub` to a Seamless
+Auth account. Re-running is safe; a row matches on its external id first, then on email, and only
+ever adds roles and memberships. Rejection reasons and the rest of the report are described in
+[Dry Run And Read The Plan](/operate/migrate-users#step-4-dry-run-and-read-the-plan).
 
 An imported user is unverified until they prove control of the email, either by registering with it
 (an email code) or by signing in through Cognito as set up in the next step.
 
+<Aside type="note">
+  Merging Cognito users with data from another system, or converting the export yourself? Write the
+  CSV described in [Export Users](/operate/migrate-users#step-2-export-users) and import it with
+  `seamless migrate csv --source cognito` instead. The rest of this guide is the same.
+</Aside>
+
 ---
 
-## Step 4: Run Both During Cutover
+## Step 3: Run Both During Cutover
 
 You can let users keep signing in with Cognito while they move. Seamless Auth treats the user pool
 as an OpenID Connect provider: the user signs in on Cognito's managed login (with a password, or
@@ -377,7 +407,7 @@ with no `email` claim is refused as well, which is why the app client needs the 
 
 ---
 
-## Step 5: Invite And Track Enrollment
+## Step 4: Invite And Track Enrollment
 
 Users who do not sign in through Cognito register with their imported email: an email code proves
 the address, then they enroll a passkey. To send code and magic link sign-ins without a passkey
@@ -400,11 +430,11 @@ Then track and chase coverage:
   security questionnaire.
 
 Encourage two passkeys per person, so a lost device is not a lockout. Request bodies and filters are
-in [Get Users Onto Passkeys](/operate/migrate-users#step-5-get-users-onto-passkeys).
+in [Get Users Onto Passkeys](/operate/migrate-users#step-6-get-users-onto-passkeys).
 
 ---
 
-## Step 6: Turn Off Cognito
+## Step 5: Turn Off Cognito
 
 Retire Cognito sign-in per organization once its members are enrolled, or all at once.
 
@@ -412,7 +442,7 @@ Retire Cognito sign-in per organization once its members are enrolled, or all at
   `PUT /admin/organizations/:organizationId/oauth-providers/cognito/retirement` refuses Cognito
   sign-in for that organization's members and revokes their live sessions, so they sign in again
   with a passkey or another enabled method. `DELETE` on the same path rolls it back. Details are in
-  [Sign In Through The Old Provider](/operate/migrate-users#step-6-optional-sign-in-through-the-old-provider-during-cutover).
+  [Sign In Through The Old Provider](/operate/migrate-users#step-7-optional-sign-in-through-the-old-provider-during-cutover).
 - **Everyone:** disable the provider with
   `seamless config oauth-providers update cognito '{"enabled": false}'`, or remove it with
   `seamless config oauth-providers remove cognito`. This does not revoke sessions.

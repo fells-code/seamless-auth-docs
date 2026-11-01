@@ -1,6 +1,6 @@
 ---
 title: "Migrating Off Auth0 To Passwordless With Seamless Auth"
-description: "Move users from Auth0 to Seamless Auth, the open source (Apache-2.0), self-hosted passwordless auth server: export users with the Auth0 Management API, convert the export with jq, import with seamless migrate, keep Auth0 sign-in working through OpenID Connect during cutover, then move everyone to passkeys and switch Auth0 off."
+description: "Move users from Auth0 to Seamless Auth, the open source (Apache-2.0), self-hosted passwordless auth server: export users with the Auth0 Management API, assess the export with seamless migrate assess, import it with seamless migrate auth0, keep Auth0 sign-in working through OpenID Connect during cutover, then move everyone to passkeys and switch Auth0 off."
 sidebar:
   order: 6
 ---
@@ -9,9 +9,9 @@ import { Aside } from '@astrojs/starlight/components';
 
 This guide moves an application's users from Auth0 to Seamless Auth, an open source (Apache-2.0)
 passwordless authentication server you run yourself, with passkeys (WebAuthn), magic links, and
-one-time codes. It covers exporting users from Auth0, converting the export into the CSV that
-`seamless migrate` imports, keeping Auth0 sign-in working while users move, getting everyone onto a
-passkey, and switching Auth0 off. It also lists what Auth0 does that Seamless Auth does not, so you
+one-time codes. It covers exporting users from Auth0, assessing the export and importing it with
+`seamless migrate`, keeping Auth0 sign-in working while users move, getting everyone onto a passkey,
+and switching Auth0 off. It also lists what Auth0 does that Seamless Auth does not, so you
 can decide whether the move fits before starting.
 
 It is written for two readers:
@@ -55,7 +55,8 @@ Everything on this page is released:
 
 | Capability                                                                    | Needs                                             |
 | ----------------------------------------------------------------------------- | ------------------------------------------------- |
-| `seamless migrate csv` and bulk import (`POST /admin/users/import`)           | `seamless-cli` 0.18.0, `seamless-auth-api` 0.16.0 |
+| `seamless migrate assess` readiness report (no instance needed)               | `seamless-cli` 0.27.0                             |
+| `seamless migrate auth0` and bulk import (`POST /admin/users/import`)         | `seamless-cli` 0.27.0, `seamless-auth-api` 0.16.0 |
 | Sign in through Auth0 as an OpenID Connect provider, linked by id             | `seamless-auth-api` 0.16.0                        |
 | Enrollment prompts, directory, invites, coverage report, provider retirement | `seamless-auth-api` 0.17.0                        |
 | `seamless config set prompt_passkey_enrollment`                               | `seamless-cli` 0.21.0                             |
@@ -66,7 +67,12 @@ The full version table for the dashboard and server adapters is in
 
 ---
 
-## Step 1: Export Users From Auth0
+## Step 1: Assess The Move
+
+Export the users, then run a readiness report on the export before touching any Seamless Auth
+instance. The report needs no instance and no login.
+
+### Export Users From Auth0
 
 Use the Management API's export job,
 [`POST /api/v2/jobs/users-exports`](https://auth0.com/docs/api/management/v2/jobs/post-users-exports),
@@ -106,120 +112,143 @@ The response has a job `id`. Poll
 [`GET /api/v2/jobs/{id}`](https://auth0.com/docs/api/management/v2/jobs/get-jobs-by-id) until the
 job completes, then download the file from its `location` URL. Auth0 notes the download link is
 short-lived and the job's data is deleted after 24 hours. The file is gzip-compressed
-([Auth0 support article](https://support.auth0.com/center/s/article/User-Export-Get-users)):
+([Auth0 support article](https://support.auth0.com/center/s/article/User-Export-Get-users)).
+`seamless migrate` reads it compressed or not; this guide calls it `auth0-users.json`:
 
 ```bash
 gunzip -c export.json.gz > auth0-users.json
 ```
 
-The fields that matter, from Auth0's
-[user profile structure](https://auth0.com/docs/manage-users/user-accounts/user-profiles/user-profile-structure):
-
-| Auth0 field    | Use                                                                                              |
-| -------------- | ------------------------------------------------------------------------------------------------ |
-| `user_id`      | The external id. Of the form `<connection>\|<id>`, such as `auth0\|65f1...` or `google-oauth2\|1048...` |
-| `email`        | Required by the import                                                                           |
-| `phone_number` | Only set for users of an Auth0 SMS connection                                                    |
-| `blocked`      | Skip blocked users rather than recreating them                                                   |
-| `app_metadata` | Where many tenants keep roles or a customer or team id                                           |
+A `user_id` has the form `<connection>|<id>`, such as `auth0|65f1...` or `google-oauth2|1048...`, so
+it also tells the readiness report which connection each user signs in with. Which fields the import
+reads is in [Step 2](#step-2-import), from Auth0's
+[user profile structure](https://auth0.com/docs/manage-users/user-accounts/user-profiles/user-profile-structure).
 
 **Roles.** Auth0's RBAC role assignments are stored apart from the user profile, and the export
 job reads profile fields. If you use Auth0 RBAC, list each role's members with
 [`GET /api/v2/roles/{id}/users`](https://auth0.com/docs/api/management/v2/roles/get-role-user) and
-merge them in, or keep roles in `app_metadata` as the example below assumes.
+copy them into `app_metadata` before exporting, or keep roles in `app_metadata` as the example below
+assumes.
+
+### Run The Readiness Report
+
+`seamless migrate assess auth0` reads the export as Auth0 wrote it (gzip-compressed or not) and
+writes `auth0-users.migrate-assess.md` beside it, a report you can hand to whoever decides on the
+move:
+
+```bash
+seamless migrate assess auth0 auth0-users.json
+```
+
+For a sample export of nine users it prints:
+
+```txt
+Readiness auth0-users.json as source "auth0"
+9 found  ·  4 would import  ·  5 would not
+      1  blocked in Auth0
+      1  email not verified in Auth0 (pass --allow-unverified to import it)
+      1  no email address
+      1  no email address (a phone-only user; add an email in Auth0 before exporting)
+      1  shares an email with an earlier user (the import keeps the first)
+Contact: 6 verified email, 1 other email, 1 phone only, 1 neither
+  Password sign-in (database connection): 5 user(s)
+  Enterprise connections (samlp): 1 user(s)
+
+Report: auth0-users.migrate-assess.md
+Cost:   https://docs.seamlessauth.com/compare/cost?mau=9&vendor=auth0
+
+Nothing was sent to a Seamless Auth instance.
+```
+
+The Markdown report adds contact coverage, the roles and organizations the import would grant, the
+profile and metadata fields it would leave behind, the Auth0 features it found that Seamless Auth
+does not cover (enterprise connections, social connections without a preset, MFA enrollments) with
+those it cannot see in an export (Actions, RBAC assignments, machine-to-machine applications), and
+a link to the [Identity Cost Calculator](/compare/cost) with the user count filled in. It holds
+counts and field, role, and organization names, never a user's email, phone, or id. Check the
+features against [What You Give Up](#what-you-give-up-or-must-plan-for) before going further. Pass
+the same `--map` you will import with (Step 2) so the report shows where metadata lands; `--json`
+prints the assessment instead.
 
 ---
 
-## Step 2: Convert The Export To The Import CSV
+## Step 2: Import
 
-`seamless migrate csv` reads a CSV with up to five fields. With these exact headers it needs no
-mapping file:
+`seamless migrate auth0` reads the same export. Each user becomes one import row:
 
-```csv
-externalId,email,phone,roles,organizations
-```
+| Auth0 field      | Import                                                                                         |
+| ---------------- | ---------------------------------------------------------------------------------------------- |
+| `user_id`        | `externalId`, which the cutover in Step 3 links on                                             |
+| `email`          | `email`. A user with none (an Auth0 SMS connection user) is reported `invalid`                 |
+| `email_verified` | `false` skips the user and lists them in the report. `--allow-unverified` imports them anyway |
+| `phone_number`   | `phone`                                                                                        |
+| `blocked`        | `true` skips the user and lists them in the report                                             |
+| `app_metadata`   | Nothing, unless a `--map` file names the paths to read roles and organizations from            |
 
-- `email` is required. `externalId` is the Auth0 `user_id`.
-- `roles` and `organizations` take several values separated by `;`. Organizations are referenced by
-  slug or id and must already exist, and roles must be in the instance's `available_roles`. The
-  import never grants `admin` or an `admin:*` role.
-- Every other column is ignored.
-
-First, find what the import cannot take as-is. A user with no email (an Auth0 SMS connection user)
-cannot be imported, and two Auth0 users with the same email (a database user and a social user, for
-example) become one Seamless Auth account, so the import rejects the second row:
+An unverified address is skipped by default because whoever registers with it first gets the
+account and the roles it was imported with. Two Auth0 users with the same email (a database user and
+a social user, for example) become one Seamless Auth account, so keep the one whose `user_id` the
+person actually signs in with, since that is the id the cutover links on. The readiness report
+counts them; to list them:
 
 ```bash
-# Users with no email
-jq -r 'select(.email == null) | .user_id' auth0-users.json
-
-# Emails held by more than one Auth0 user (compared case-insensitively, as the import does)
 jq -s -r 'map(select(.email)) | group_by(.email | ascii_downcase)
   | map(select(length > 1)) | .[][] | [.email, .user_id] | @tsv' auth0-users.json
 ```
 
-For each duplicate, keep the row whose `user_id` the person actually signs in with, since that is
-the id the cutover links on. Then convert, skipping blocked users and users without an email:
+To import roles and team or customer membership kept in metadata, name the paths in a mapping file,
+`auth0-map.json`. Paths start with `app_metadata` or `user_metadata`, and a value can be a list or a
+`;`-separated string:
 
-```bash
-jq -r -s '
-  ["externalId", "email", "phone", "roles", "organizations"],
-  (.[]
-    | select(.email != null and .blocked != true)
-    | [ .user_id,
-        .email,
-        (.phone_number // ""),
-        ((.app_metadata.roles // []) | join(";")),
-        (.app_metadata.org // "") ])
-  | @csv' auth0-users.json > users.csv
+```json
+{
+  "columns": { "roles": "app_metadata.roles", "organizations": "app_metadata.org" }
+}
 ```
 
-Change the `app_metadata` paths to wherever your tenant keeps roles and team or customer
-membership, or drop those two columns. For three sample users the output is:
+Roles must be in the instance's `available_roles` and organizations are referenced by slug or id and
+must already exist. The import never grants `admin` or an `admin:*` role. The mapping can also add
+`"roles"` to every user and give `"organizationRoles"` in each organization, as described in
+[`migrate`](/reference/cli-commands#migrate-auth0).
 
-```csv
-"externalId","email","phone","roles","organizations"
-"auth0|65f1a2b3c4d5e6f7a8b9c0d1","ada@example.com","","staff","engineering"
-"google-oauth2|104857600123456789012","grace@example.com","","staff;manager","platform"
-"sms|65f1a2b3c4d5e6f7a8b9c0d9","lin@example.com","+15555550101","",""
-```
-
-The CLI reads quoted RFC 4180 CSV, so `@csv` output is accepted as-is.
-
----
-
-## Step 3: Import
-
-Sign in to the target instance as an admin, create any roles and organizations the CSV refers to,
-then dry run. Use `--source auth0` on every run, because external ids are matched within a source
-and the cutover provider below refers to it:
+Sign in to the target instance as an admin, create the roles and organizations the export refers
+to, then dry run:
 
 ```bash
 seamless profile login production
 seamless org create "Engineering" --slug engineering
-seamless migrate csv users.csv --source auth0
+seamless migrate auth0 auth0-users.json --map auth0-map.json
 ```
 
-The dry run writes nothing but sends every valid row to the instance with `dryRun` set, so the plan
-reflects real data. It writes `users.migrate-plan.csv` and `.json`, with a status per row
-(`created`, `updated`, `unchanged`, `rejected`, `invalid`) and a reason for each problem row, and
-exits 1 if any row is rejected or invalid. Fix the data and repeat until the plan is right, then:
+The source defaults to `auth0`. Keep it on every run, because external ids are matched within a
+source and the cutover provider below refers to it. The dry run writes nothing but sends every
+valid row to the instance with `dryRun` set, so the plan reflects real data. It writes
+`auth0-users.migrate-plan.csv` and `.json`, with a status per row (`created`, `updated`,
+`unchanged`, `rejected`, `invalid`, `skipped`), numbered by the line of the export, and a reason for
+each problem row, and exits 1 if any row is rejected or invalid. Fix the data and repeat until the
+plan is right, then:
 
 ```bash
-seamless migrate csv users.csv --source auth0 --apply
+seamless migrate auth0 auth0-users.json --map auth0-map.json --apply
 ```
 
-Keep `users.migrate-result.csv`: its `userId` column maps each Auth0 user to their Seamless Auth
-account. Re-running is safe; a row matches on its external id first, then on email, and only ever
-adds roles and memberships. Rejection reasons and the rest of the report are described in
-[Dry Run And Read The Plan](/operate/migrate-users#step-3-dry-run-and-read-the-plan).
+Keep `auth0-users.migrate-result.csv`: its `userId` column maps each Auth0 user to their Seamless
+Auth account. Re-running is safe; a row matches on its external id first, then on email, and only
+ever adds roles and memberships. Rejection reasons and the rest of the report are described in
+[Dry Run And Read The Plan](/operate/migrate-users#step-4-dry-run-and-read-the-plan).
 
 An imported user is unverified until they prove control of the email, either by registering with it
 (an email code) or by signing in through Auth0 as set up in the next step.
 
+<Aside type="note">
+  Merging Auth0 users with data from another system, or converting the export yourself? Write the
+  CSV described in [Export Users](/operate/migrate-users#step-2-export-users) and import it with
+  `seamless migrate csv --source auth0` instead. The rest of this guide is the same.
+</Aside>
+
 ---
 
-## Step 4: Run Both During Cutover
+## Step 3: Run Both During Cutover
 
 You can let users keep signing in with Auth0 while they move. Seamless Auth treats Auth0 as an
 OpenID Connect provider: the user signs in on Auth0, Seamless Auth verifies the ID token, and the
@@ -282,7 +311,7 @@ The session is a full Seamless Auth session; Auth0 is only proving who the user 
 
 ---
 
-## Step 5: Invite And Track Enrollment
+## Step 4: Invite And Track Enrollment
 
 Users who do not sign in through Auth0 register with their imported email: an email code proves the
 address, then they enroll a passkey. To send code and magic link sign-ins without a passkey straight
@@ -305,11 +334,11 @@ Then track and chase coverage:
   security questionnaire.
 
 Encourage two passkeys per person, so a lost device is not a lockout. Request bodies and filters are
-in [Get Users Onto Passkeys](/operate/migrate-users#step-5-get-users-onto-passkeys).
+in [Get Users Onto Passkeys](/operate/migrate-users#step-6-get-users-onto-passkeys).
 
 ---
 
-## Step 6: Turn Off Auth0
+## Step 5: Turn Off Auth0
 
 Retire Auth0 sign-in per organization once its members are enrolled, or all at once.
 
@@ -317,7 +346,7 @@ Retire Auth0 sign-in per organization once its members are enrolled, or all at o
   `PUT /admin/organizations/:organizationId/oauth-providers/auth0/retirement` refuses Auth0
   sign-in for that organization's members and revokes their live sessions, so they sign in again
   with a passkey or another enabled method. `DELETE` on the same path rolls it back. Details are in
-  [Sign In Through The Old Provider](/operate/migrate-users#step-6-optional-sign-in-through-the-old-provider-during-cutover).
+  [Sign In Through The Old Provider](/operate/migrate-users#step-7-optional-sign-in-through-the-old-provider-during-cutover).
 - **Everyone:** disable the provider with
   `seamless config oauth-providers update auth0 '{"enabled": false}'`, or remove it with
   `seamless config oauth-providers remove auth0`. This does not revoke sessions.
