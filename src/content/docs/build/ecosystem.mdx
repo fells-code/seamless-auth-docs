@@ -173,8 +173,8 @@ packages, which require Node.js 18 or later.
 
 | Package                           | Latest release | Declares on other Seamless packages                                                  | Other peer ranges                                                             |
 | --------------------------------- | -------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
-| `seamless-auth-api`               | 0.21.0         | `@seamless-auth/types` ^0.34.0, `@seamless-auth/messaging`, `-aws`, `-twilio` ^0.2.0 | None                                                                          |
-| `@seamless-auth/oidc-provider`    | 0.1.0          | `@seamless-auth/express` and `core` ^0.22.0, `@seamless-auth/types` ^0.34.0          | None                                                                          |
+| `seamless-auth-api`               | 0.21.1         | `@seamless-auth/types` ^0.34.0, `@seamless-auth/messaging`, `-aws`, `-twilio` ^0.3.1 | None                                                                          |
+| `@seamless-auth/oidc-provider`    | 0.1.1          | `@seamless-auth/express` and `core` ^0.23.0, `@seamless-auth/types` ^0.34.0          | None                                                                          |
 | `@seamless-auth/core`             | 0.23.0         | `@seamless-auth/types` ^0.34.0                                                       | None                                                                          |
 | `@seamless-auth/express`          | 0.23.0         | `@seamless-auth/core` ^0.23.0                                                        | `express` >=5.0.0                                                             |
 | `@seamless-auth/fastify`          | 0.14.0         | `@seamless-auth/core` ^0.23.0                                                        | `fastify` >=5.0.0                                                             |
@@ -186,9 +186,9 @@ packages, which require Node.js 18 or later.
 | `@seamless-auth/svelte`           | 0.3.1          | `@seamless-auth/client` ^0.8.1                                                       | `svelte` 5, optional `@sveltejs/kit` 2.26+ or 3                               |
 | `@seamless-auth/react-native`     | 0.4.2          | `@seamless-auth/client` ^0.8.2, `@seamless-auth/types` ^0.34.0                       | `react` 18 or 19                                                              |
 | `@seamless-auth/types`            | 0.34.0         | None                                                                                 | None                                                                          |
-| `@seamless-auth/messaging`        | 0.3.0          | `@seamless-auth/types` ^0.33.0                                                       | None                                                                          |
-| `@seamless-auth/messaging-aws`    | 0.3.0          | `@seamless-auth/messaging` ^0.3.0                                                    | None                                                                          |
-| `@seamless-auth/messaging-twilio` | 0.3.0          | `@seamless-auth/messaging` ^0.3.0                                                    | None                                                                          |
+| `@seamless-auth/messaging`        | 0.3.1          | `@seamless-auth/types` ^0.34.0                                                       | None                                                                          |
+| `@seamless-auth/messaging-aws`    | 0.3.1          | `@seamless-auth/messaging` ^0.3.1                                                    | None                                                                          |
+| `@seamless-auth/messaging-twilio` | 0.3.1          | `@seamless-auth/messaging` ^0.3.1                                                    | None                                                                          |
 | `seamless-cli`                    | 0.27.1         | `@seamless-auth/types` ^0.34.0                                                       | None                                                                          |
 | `seamless-auth-admin-dashboard`   | 0.12.0         | `@seamless-auth/react` ^0.19.0, `@seamless-auth/types` ^0.34.0                       | None                                                                          |
 
@@ -200,9 +200,8 @@ How to read it:
 - `@seamless-auth/express`, `fastify`, and `nextjs` declare `@seamless-auth/core` as
   `workspace:^`, which pnpm rewrites at publish to a caret on the core version in the same release
   (`^0.23.0` today).
-- Every SDK and adapter that depends on `@seamless-auth/types` declares ^0.34.0, so an app that
-  installs any mix of them resolves a single copy of it. The messaging packages still declare
-  ^0.33.0; only the auth API installs them.
+- Every package that depends on `@seamless-auth/types` declares ^0.34.0, so an install of any mix
+  of them resolves a single copy of it.
 - The messaging packages are used by `seamless-auth-api` to deliver email and SMS. Your application
   does not install them.
 - The auth API exposes an HTTP contract, not a package range. No package declares a range on
