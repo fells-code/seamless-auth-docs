@@ -174,18 +174,18 @@ packages, which require Node.js 18 or later.
 | Package                           | Latest release | Declares on other Seamless packages                                                  | Other peer ranges                                                             |
 | --------------------------------- | -------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
 | `seamless-auth-api`               | 0.21.1         | `@seamless-auth/types` ^0.34.0, `@seamless-auth/messaging`, `-aws`, `-twilio` ^0.3.1 | None                                                                          |
-| `@seamless-auth/oidc-provider`    | 0.1.1          | `@seamless-auth/express` and `core` ^0.23.0, `@seamless-auth/types` ^0.34.0          | None                                                                          |
-| `@seamless-auth/core`             | 0.23.0         | `@seamless-auth/types` ^0.34.0                                                       | None                                                                          |
-| `@seamless-auth/express`          | 0.23.0         | `@seamless-auth/core` ^0.23.0                                                        | `express` >=5.0.0                                                             |
-| `@seamless-auth/fastify`          | 0.14.0         | `@seamless-auth/core` ^0.23.0                                                        | `fastify` >=5.0.0                                                             |
-| `@seamless-auth/nextjs`           | 0.7.0          | `@seamless-auth/core` ^0.23.0, `@seamless-auth/types` ^0.34.0                        | None                                                                          |
+| `@seamless-auth/oidc-provider`    | 0.2.0          | `@seamless-auth/express` and `core` ^0.23.0, `@seamless-auth/types` ^0.35.0          | None                                                                          |
+| `@seamless-auth/core`             | 0.24.0         | `@seamless-auth/types` ^0.35.0                                                       | None                                                                          |
+| `@seamless-auth/express`          | 0.24.0         | `@seamless-auth/core` ^0.24.0                                                        | `express` >=5.0.0                                                             |
+| `@seamless-auth/fastify`          | 0.15.0         | `@seamless-auth/core` ^0.24.0                                                        | `fastify` >=5.0.0                                                             |
+| `@seamless-auth/nextjs`           | 0.8.0          | `@seamless-auth/core` ^0.24.0, `@seamless-auth/types` ^0.35.0                        | None                                                                          |
 | `@seamless-auth/client`           | 0.8.2          | `@seamless-auth/types` ^0.34.0                                                       | None                                                                          |
 | `@seamless-auth/react`            | 0.19.2         | `@seamless-auth/client` ^0.8.2, `@seamless-auth/types` ^0.34.0                       | `react` and `react-dom` 18 or 19, optional `react-router-dom` 6.4+ or 7.15.1+ |
 | `@seamless-auth/angular`          | 0.4.1          | `@seamless-auth/client` ^0.8.1                                                       | `@angular/core`, `common`, `router` 20, 21, or 22, and `rxjs` 7               |
 | `@seamless-auth/vue`              | 0.3.1          | `@seamless-auth/client` ^0.8.1                                                       | `vue` 3.5+, optional `vue-router` 4.4+ or 5                                   |
 | `@seamless-auth/svelte`           | 0.3.1          | `@seamless-auth/client` ^0.8.1                                                       | `svelte` 5, optional `@sveltejs/kit` 2.26+ or 3                               |
 | `@seamless-auth/react-native`     | 0.4.2          | `@seamless-auth/client` ^0.8.2, `@seamless-auth/types` ^0.34.0                       | `react` 18 or 19                                                              |
-| `@seamless-auth/types`            | 0.34.0         | None                                                                                 | None                                                                          |
+| `@seamless-auth/types`            | 0.35.0         | None                                                                                 | None                                                                          |
 | `@seamless-auth/messaging`        | 0.3.1          | `@seamless-auth/types` ^0.34.0                                                       | None                                                                          |
 | `@seamless-auth/messaging-aws`    | 0.3.1          | `@seamless-auth/messaging` ^0.3.1                                                    | None                                                                          |
 | `@seamless-auth/messaging-twilio` | 0.3.1          | `@seamless-auth/messaging` ^0.3.1                                                    | None                                                                          |
@@ -199,9 +199,18 @@ How to read it:
   bumped and released.
 - `@seamless-auth/express`, `fastify`, and `nextjs` declare `@seamless-auth/core` as
   `workspace:^`, which pnpm rewrites at publish to a caret on the core version in the same release
-  (`^0.23.0` today).
-- Every package that depends on `@seamless-auth/types` declares ^0.34.0, so an install of any mix
-  of them resolves a single copy of it.
+  (`^0.24.0` today).
+- `@seamless-auth/types` is split across two minors. `core`, `nextjs` and `oidc-provider` declare
+  ^0.35.0. The auth API, `client`, `react`, `react-native`, the messaging packages, the CLI and the
+  dashboard still declare ^0.34.0. An app that installs packages from both groups gets two copies
+  of it.
+- `@seamless-auth/oidc-provider` 0.2.0 still declares `@seamless-auth/express` and `core` ^0.23.0.
+  If you embed it in an Express app that uses `@seamless-auth/express` 0.24.0, the app gets two
+  copies of each.
+- `@seamless-auth/oidc-provider` 0.2.0 speaks OpenID Provider contract version 3
+  (`@seamless-auth/types` 0.35.0), and it refuses to start against an auth API on another version.
+  Auth API 0.21.1 speaks version 2, so run the provider at 0.1.1 with API 0.21.1. Move to 0.2.0
+  together with the first auth API release after 0.21.1.
 - The messaging packages are used by `seamless-auth-api` to deliver email and SMS. Your application
   does not install them.
 - The auth API exposes an HTTP contract, not a package range. No package declares a range on
