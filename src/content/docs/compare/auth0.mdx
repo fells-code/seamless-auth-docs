@@ -18,7 +18,7 @@ on the Seamless Auth managed service. It does much less than Auth0, on purpose.
 This page is for an engineer or technical lead deciding whether to move off Auth0, or whether to
 start on it. Every Auth0 detail links to Auth0's or Okta's own docs or pricing page, and the
 [Sources](#sources) section gives the date each one was checked. Seamless Auth details were checked
-against the source repositories. Prices, plan contents, and feature limits change, so confirm them
+against the source repositories at Seamless Auth API v0.21.1 on 2026-11-01. Prices, plan contents, and feature limits change, so confirm them
 on [auth0.com/pricing](https://auth0.com/pricing) before you decide.
 
 ---
@@ -29,11 +29,12 @@ on [auth0.com/pricing](https://auth0.com/pricing) before you decide.
   OpenID Connect, AD/LDAP, ADFS, Microsoft Entra ID, Google Workspace, and other enterprise
   connections, which can be enabled per Organization, and inbound SCIM on selected enterprise
   connections. Seamless Auth has no SAML and no SCIM.
-- **You need an identity provider for other applications.** Auth0 is an OAuth 2.0 and OpenID Connect
-  authorization server: it issues tokens for your APIs, supports the client credentials flow for
-  machine-to-machine access, and is a certified FAPI OpenID Provider. Seamless Auth signs users in to
-  your application only. It is not an OpenID Connect provider for third-party clients and issues no
-  machine-to-machine tokens.
+- **You need a certified or long-proven identity provider for other applications.** Auth0 is an
+  OAuth 2.0 and OpenID Connect authorization server: it issues tokens for your APIs, supports the
+  client credentials flow for machine-to-machine access, and is a certified FAPI OpenID Provider.
+  Since v0.21, Seamless Auth also ships an OpenID Provider: a separate service, off by default, with
+  the authorization code flow and `S256` PKCE, client credentials, the device grant for first-party
+  apps, and JWT access tokens for your APIs. It is new (provider 0.1.0) and not OpenID certified.
 - **You need password sign-in.** Auth0 supports passwords in database connections. Seamless Auth has
   no password flow, by design.
 - **You want to run custom code inside the login flow.** Auth0 Actions are Node.js functions on
@@ -96,7 +97,7 @@ page.
 | Social and OIDC login | Yes, instance-wide; CLI presets for Google, GitHub, Microsoft (Entra ID), GitLab | Yes, social and enterprise connections |
 | SAML enterprise SSO | No | Yes, as an enterprise connection. 1 on Free, 3 on B2B Essentials, 5 on B2B Professional, extra connections a paid add-on; the B2C feature table lists none on Essentials or Professional |
 | SCIM provisioning | No | Inbound SCIM on SAML, OIDC, Okta Workforce, and Entra ID connections; needs a plan with enterprise connections |
-| Acts as an OAuth/OIDC provider, machine-to-machine tokens | No | Yes |
+| Acts as an OAuth/OIDC provider, machine-to-machine tokens | Yes, since v0.21, through the separate OpenID Provider service (off by default): authorization code with PKCE, client credentials, device grant (first-party), RFC 9068 access tokens; not OpenID certified | Yes; certified FAPI OpenID Provider |
 | Organizations | Yes: memberships, per-organization roles and scopes, active organization on the session | Yes: members, roles, invitations, per-organization connections and branding; 5 on Free, 10 on B2C paid plans, unlimited (subject to system limits) on B2B paid plans |
 | Extensibility | Logic in your own backend, behind the server adapter | Actions (Node.js) on login, registration, password, and machine-to-machine triggers; 5 on Free up to 30 on Enterprise |
 | Prebuilt UI | Built-in auth routes (`AuthRoutes` in React; equivalents in Angular, Vue, Svelte), or headless | Universal Login on Auth0's authorization server, Classic Login, and embedded login |
@@ -158,8 +159,13 @@ apps use bearer tokens in the platform keystore). Your backend verifies sessions
 auth API's JWKS. Authorization stays in your own code. See
 [What Is Seamless Auth?](/start/overview#how-the-pieces-connect).
 
+Since v0.21 you can also run the optional [OpenID Provider](/build/openid-provider), a separate
+service in front of the auth API. Apps that speak OpenID Connect redirect to its hosted login pages
+and receive tokens from it, the way they would from Auth0, with no Seamless SDK.
+
 The practical consequence: Auth0 is a central identity provider that many apps and APIs can trust;
-Seamless Auth is sign-in for your application, and the sign-in pages are yours.
+Seamless Auth is sign-in for your application by default, with sign-in pages that are yours, and
+becomes a provider for other apps only when you turn on its OpenID Provider.
 
 ---
 
@@ -172,10 +178,10 @@ today, stay on Auth0 or choose another product.
   Connect providers are configured instance-wide, not per customer organization.
 - **You provision users from a customer's directory with SCIM.** Seamless Auth has no SCIM. Bulk
   changes go through the CSV import.
-- **Other applications or services use Auth0 as their identity provider.** Seamless Auth is not an
-  OpenID Connect provider and does not issue tokens to third-party apps or machine-to-machine
-  clients. Anything that logs in through Auth0 today, other than your own application, needs another
-  home.
+- **Other applications or services need a certified identity provider.** Seamless Auth's OpenID
+  Provider (v0.21, off by default) can sign other OpenID Connect apps in and issue client credentials
+  tokens, but it is new and not OpenID certified, and it has nothing like Actions to shape their
+  tokens. Test each app that logs in through Auth0 today against it before you move that app.
 - **Your users sign in with passwords and you cannot change that.** There is no password flow, and
   no password hashes are imported.
 - **You depend on Actions to shape tokens or gate login.** There is no hook system; you move that
@@ -227,7 +233,7 @@ Auth0 and Okta details, each checked on the date shown:
 - [Universal Login](https://auth0.com/docs/authenticate/login/auth0-universal-login), checked 2026-10-20: login on Auth0's authorization server
 - [Okta customer identity product page](https://www.okta.com/products/customer-identity/), checked 2026-10-20: redirects to auth0.com
 
-Seamless Auth details:
+Seamless Auth details (Seamless Auth API v0.21.1, checked 2026-11-01):
 
 - [What Is Seamless Auth?](/start/overview), including [When Seamless Auth Is Not The Right Choice](/start/overview#when-seamless-auth-is-not-the-right-choice)
 - [Migrating Off Auth0](/operate/migrate-from-auth0), including [What You Give Up Or Must Plan For](/operate/migrate-from-auth0#what-you-give-up-or-must-plan-for)
@@ -235,5 +241,7 @@ Seamless Auth details:
 - [Environment Variables](/reference/environment-variables) (`LOGIN_METHODS`, SMS providers)
 - [How To Use Organizations And Memberships](/build/organizations-memberships)
 - [OAuth Login](/build/oauth-login)
+- [OpenID Provider](/build/openid-provider)
+- [v0.21 Release Notes](/reference/release-v0-21)
 - [Auth Events and Auditing](/understand/authevents)
 - Source: [fells-code on GitHub](https://github.com/fells-code)
