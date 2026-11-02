@@ -19,7 +19,7 @@ Cognito, and it is not tied to AWS.
 This page is for an engineer or technical lead deciding whether to move off Cognito, or whether to
 start on it. Every Cognito detail links to an AWS page, and the [Sources](#sources) section gives
 the date each one was checked. Seamless Auth details were checked against the source repositories
-at Seamless Auth API v0.19.3. Prices, plan contents, and feature limits change, so confirm them on
+at Seamless Auth API v0.21.1 on 2026-11-01. Prices, plan contents, and feature limits change, so confirm them on
 [aws.amazon.com/cognito/pricing](https://aws.amazon.com/cognito/pricing/) before you decide.
 
 ---
@@ -32,11 +32,13 @@ at Seamless Auth API v0.19.3. Prices, plan contents, and feature limits change, 
   credentials and no AWS service reads its sessions natively.
 - **You need SAML enterprise SSO.** User pools federate with SAML 2.0 and OpenID Connect identity
   providers on every feature plan, as well as social providers. Seamless Auth has no SAML.
-- **You need an identity provider for other applications or machine clients.** A user pool with a
-  domain is an OAuth 2.0 and OpenID Connect authorization server, with resource servers, custom
-  scopes, and machine-to-machine access tokens through the client credentials grant. Seamless Auth
-  signs users in to your application only. It is not an OpenID Connect provider for third-party
-  clients and issues no machine-to-machine tokens.
+- **You need a long-proven identity provider for other applications or machine clients.** A user
+  pool with a domain is an OAuth 2.0 and OpenID Connect authorization server, with resource servers,
+  custom scopes, and machine-to-machine access tokens through the client credentials grant. Since
+  v0.21, Seamless Auth also ships an OpenID Provider: a separate service, off by default, with
+  registered resources and scopes, client credentials tokens, and the authorization code flow with
+  `S256` PKCE. It is new (provider 0.1.0) and not OpenID certified, and API Gateway's Cognito
+  authorizer does not accept its tokens.
 - **You need password sign-in.** Cognito supports passwords, including Secure Remote Password (SRP),
   and can import existing bcrypt, scrypt, Argon2id, or PBKDF2-SHA256 password hashes. Seamless Auth
   has no password flow, by design.
@@ -97,7 +99,7 @@ pool feature plans.
 | Passwords | No, by design | Yes, including SRP; password hash import from CSV |
 | Social and OIDC login | Yes, instance-wide; CLI presets for Google, GitHub, Microsoft (Entra ID), GitLab | Yes: Google, Facebook, Login with Amazon, Sign in with Apple, and OIDC providers, on all plans |
 | SAML enterprise SSO | No | Yes, as a SAML 2.0 service provider, on all plans |
-| Acts as an OAuth/OIDC provider, machine-to-machine tokens | No | Yes: authorization server, resource servers, custom scopes, client credentials |
+| Acts as an OAuth/OIDC provider, machine-to-machine tokens | Yes, since v0.21, through the separate OpenID Provider service (off by default): resources and scopes, client credentials, authorization code with PKCE; not OpenID certified | Yes: authorization server, resource servers, custom scopes, client credentials |
 | Organizations | Yes: memberships, per-organization roles and scopes, active organization on the session | Groups, optionally mapped to IAM roles |
 | Extensibility | Logic in your own backend, behind the server adapter | Lambda triggers on sign-up, authentication, token generation, migration, and messages |
 | Prebuilt UI | Built-in auth routes (`AuthRoutes` in React; equivalents in Angular, Vue, Svelte), or headless | Managed login on a user pool domain (Essentials and Plus); classic hosted UI on all plans |
@@ -147,9 +149,14 @@ apps use bearer tokens in the platform keystore). Your backend verifies sessions
 auth API's JWKS. Authorization stays in your own code. See
 [What Is Seamless Auth?](/start/overview#how-the-pieces-connect).
 
+Since v0.21 you can also run the optional [OpenID Provider](/build/openid-provider), a separate
+service in front of the auth API. Apps that speak OpenID Connect redirect to its hosted login pages
+and receive tokens from it, with no Seamless SDK.
+
 The practical consequence: Cognito is an identity provider wired into AWS that many apps, APIs, and
-AWS services can trust; Seamless Auth is sign-in for your application, the sign-in pages are yours,
-and anything AWS-side goes through your backend.
+AWS services can trust; Seamless Auth is sign-in for your application by default, the sign-in pages
+are yours, and anything AWS-side goes through your backend. It becomes a provider for other apps
+only when you turn on its OpenID Provider.
 
 ---
 
@@ -164,8 +171,10 @@ requirement today, stay on Cognito or choose another product.
   read Seamless Auth sessions. Each one needs replacing with verification in your backend.
 - **A customer requires SAML SSO into your app.** Seamless Auth has no SAML. Its OAuth and OpenID
   Connect providers are configured instance-wide, not per customer organization.
-- **Other applications or machine clients use Cognito as their authorization server.** Seamless Auth
-  is not an OpenID Connect provider and issues no client credentials tokens.
+- **Other applications or machine clients need a certified authorization server.** Seamless Auth's
+  OpenID Provider (v0.21, off by default) issues authorization code and client credentials tokens,
+  but it is new and not OpenID certified. Test each client that uses Cognito today against it before
+  you move that client.
 - **Your users sign in with passwords and you cannot change that.** There is no password flow, and
   no password hashes are imported.
 - **You depend on Lambda triggers to shape tokens or gate sign-in.** There is no hook system; you
@@ -215,7 +224,7 @@ Amazon Cognito details, each checked on the date shown:
 - [Data protection in Amazon Cognito](https://docs.aws.amazon.com/cognito/latest/developerguide/data-protection.html), checked 2026-10-21: encryption at rest with AWS owned or customer managed keys in the user pool's Region
 - [Compliance validation for Amazon Cognito](https://docs.aws.amazon.com/cognito/latest/developerguide/compliance-validation.html), checked 2026-10-21: SOC, PCI, FedRAMP, HIPAA, AWS Artifact
 
-Seamless Auth details (Seamless Auth API v0.19.3):
+Seamless Auth details (Seamless Auth API v0.21.1, checked 2026-11-01):
 
 - [What Is Seamless Auth?](/start/overview), including [When Seamless Auth Is Not The Right Choice](/start/overview#when-seamless-auth-is-not-the-right-choice)
 - [Migrating Off Amazon Cognito](/operate/migrate-from-cognito), including [What You Give Up Or Must Plan For](/operate/migrate-from-cognito#what-you-give-up-or-must-plan-for)
@@ -223,5 +232,7 @@ Seamless Auth details (Seamless Auth API v0.19.3):
 - [System Config Reference](/reference/system-config), including [Authenticator Policy](/reference/system-config#authenticator-policy), and [Environment Variables](/reference/environment-variables) (`LOGIN_METHODS`, SMS providers)
 - [How To Use Organizations And Memberships](/build/organizations-memberships)
 - [OAuth Login](/build/oauth-login)
+- [OpenID Provider](/build/openid-provider)
+- [v0.21 Release Notes](/reference/release-v0-21)
 - [Auth Events and Auditing](/understand/authevents)
 - Source: [fells-code on GitHub](https://github.com/fells-code)

@@ -1,6 +1,6 @@
 ---
 title: 'OAuth Client and RFC 9700'
-description: 'How the Seamless Auth API, as an OAuth 2.0 and OpenID Connect client for social and enterprise sign-in, measures against the RFC 9700 OAuth 2.0 Security Best Current Practice, row by row, each linked to the code at v0.19.2.'
+description: 'How Seamless Auth measures against the RFC 9700 OAuth 2.0 Security Best Current Practice, row by row: the auth API as an OAuth client for social and enterprise sign-in, and the OpenID Provider (v0.21) as an authorization server, each row linked to the code or test behind it.'
 sidebar:
   order: 6
 ---
@@ -11,15 +11,19 @@ import { Aside } from '@astrojs/starlight/components';
 Practice. It gives recommendations for clients, for authorization servers, and for resource
 servers. This page checks the Seamless Auth API against the ones that apply to it today.
 
-Today the Seamless Auth API is an OAuth **client** only. When a provider is configured (Google,
-GitHub, Microsoft Entra ID, or any OAuth 2.0 or OpenID Connect provider, see
-[OAuth Login](/build/oauth-login)), the API sends the user to that provider, exchanges the
-authorization code, reads the profile, and then issues its own Seamless Auth session. It is not an
-authorization server for other applications until the OpenID Provider planned for v0.21, so the
-authorization server recommendations are listed below as "applies from v0.21", not as passes or
-gaps.
+Seamless Auth plays two OAuth roles:
 
-Every code link points at the
+- **Client.** When a provider is configured (Google, GitHub, Microsoft Entra ID, or any OAuth 2.0
+  or OpenID Connect provider, see [OAuth Login](/build/oauth-login)), the auth API sends the user
+  to that provider, exchanges the authorization code, reads the profile, and then issues its own
+  Seamless Auth session. The [client recommendations](#client-recommendations) cover this.
+- **Authorization server.** Since v0.21, the optional [OpenID Provider](/build/openid-provider)
+  (`seamless-auth-oidc-provider`, off by default) signs other applications in and issues tokens
+  for your APIs. The [authorization server recommendations](#authorization-server-recommendations)
+  cover this.
+
+The client table was written against API v0.19.2. Rows that have changed since then say so. Every
+client code link points at the
 [v0.19.2](https://github.com/fells-code/seamless-auth-api/tree/v0.19.2) tag of the API. The flow
 lives in [`oauthService.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.2/src/services/oauthService.ts),
 [`oauth.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.2/src/controllers/oauth.ts)
@@ -48,13 +52,13 @@ Status values:
 | [4.11](https://www.rfc-editor.org/rfc/rfc9700#section-4.11) | Do not expose an open redirector | **Meets** | A requested `redirectUri` must exactly match the provider's `redirectUris`, or, when a provider lists none, share an origin with a configured origin ([`allowedRedirect`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.2/src/lib/redirectAllowlist.ts#L40-L48)). `returnTo` must share an origin with a configured origin ([`allowedReturnTo`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.2/src/controllers/oauth.ts#L37-L46)), and is read back from the signed state at the callback rather than from the callback request ([`finishOAuthLogin`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.2/src/controllers/oauth.ts#L178-L184)). Configure exact `redirectUris` in production. |
 | [4.6](https://www.rfc-editor.org/rfc/rfc9700#section-4.6) | Validate ID tokens, so a token issued for another client or sign-in is not accepted | **Meets** | An OpenID Connect provider's ID token is checked for signature against its JWKS, issuer, audience (this client), expiry, issued-at, subject, `azp` when there are several audiences, and the nonce. Only asymmetric algorithms are accepted, so `none` and shared-key algorithms are refused ([`verifyOAuthIdToken`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.2/src/services/oauthService.ts#L499-L555)). |
 | [4.9](https://www.rfc-editor.org/rfc/rfc9700#section-4.9) | Send an access token only to the resource it is meant for, in a header rather than a URL | **Meets** | The provider access token is sent only to the provider's configured `userInfoUrl` (and, for GitHub, the email list on the same origin), in an `Authorization: Bearer` header ([`fetchOAuthProfile`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.2/src/services/oauthService.ts#L637-L664)). An OpenID Connect provider's profile comes from the verified ID token and the access token is not used at all. |
-| [4.13](https://www.rfc-editor.org/rfc/rfc9700#section-4.13) | Protect refresh tokens | **Not used** | The API reads only `access_token` and `id_token` from the provider's token response ([`exchangeOAuthTokens`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.2/src/services/oauthService.ts#L468-L480)). A provider refresh token is never kept, and the provider access token is used once during the callback, then dropped. Neither is stored, logged, or returned to the client. |
+| [4.14](https://www.rfc-editor.org/rfc/rfc9700#section-4.14) | Protect refresh tokens | **Not used** | The API reads only `access_token` and `id_token` from the provider's token response ([`exchangeOAuthTokens`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.2/src/services/oauthService.ts#L468-L480)). A provider refresh token is never kept, and the provider access token is used once during the callback, then dropped. Neither is stored, logged, or returned to the client. |
 | [2.2](https://www.rfc-editor.org/rfc/rfc9700#section-2.2) | Use sender-constrained access tokens (mTLS or DPoP) | **Not used** | Provider access tokens are plain bearer tokens. Each is used once, server to server, within the callback, which leaves little window for replay. DPoP and mTLS are not supported. |
 | [2.3](https://www.rfc-editor.org/rfc/rfc9700#section-2.3) | Request only the privileges the client needs | **Operator setting** | The scopes sent are the provider's configured `scopes` ([`buildOAuthAuthorizationUrl`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.2/src/services/oauthService.ts#L401-L403)). The API needs a subject and a verified email, so `openid email` (or the provider's equivalent, such as `user:email` on GitHub) is enough. |
 | [2.5](https://www.rfc-editor.org/rfc/rfc9700#section-2.5) | Authenticate the client, preferably with an asymmetric method (mTLS or `private_key_jwt`) | **Partial** | The client authenticates with `client_secret_post` ([`exchangeOAuthTokens`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.2/src/services/oauthService.ts#L437-L449)). The secret is read from the environment variable the provider's `clientSecretEnv` names, never stored in `system_config`, and never returned by the API. Asymmetric client authentication is not supported. |
 | [4.2](https://www.rfc-editor.org/rfc/rfc9700#section-4.2), [4.3](https://www.rfc-editor.org/rfc/rfc9700#section-4.3) | Keep the authorization code and state out of `Referer` headers and browser history | **Application** | The provider redirects to the application's own callback page, which then posts `code` and `state` to its backend. That page is not served by the API, so this is up to the application: load no third-party content on it and leave the URL once the sign-in is finished. The code is single use at the provider and, with PKCE, useless without the verifier only the API holds. |
 | [4.1](https://www.rfc-editor.org/rfc/rfc9700#section-4.1) | Use TLS for every endpoint of the flow | **Operator setting** | Provider `authorizationUrl`, `tokenUrl`, `userInfoUrl`, `issuer` and `jwksUri` must be URLs, but `http` is not refused ([provider schema](https://github.com/fells-code/seamless-auth-types/blob/v0.29.0/src/schemas/systemConfig/schema.ts#L55-L76)). Configure `https` endpoints, which every public provider uses. |
-| [4.7](https://www.rfc-editor.org/rfc/rfc9700#section-4.7) | Treat a `state` as single use | **Partial**, tracked in [#414](https://github.com/fells-code/seamless-auth-api/issues/414) | A consumed state is remembered for ten minutes, but only by the API instance that consumed it ([`consumeOAuthState`](https://github.com/fells-code/seamless-auth-api/blob/v0.19.2/src/services/oauthService.ts#L322-L346)). With several instances, another instance could accept a replayed callback inside that window. The state is still signed and expiring, and the provider's code is single use. Until #414 moves the cache to shared storage, keep OAuth callbacks on one instance. |
+| [4.7](https://www.rfc-editor.org/rfc/rfc9700#section-4.7) | Treat a `state` as single use | **Meets**, since 0.21.0 | A consumed state is recorded in the database, so a replayed callback is refused by every API instance, not only the one that consumed it ([`consumeOAuthState`](https://github.com/fells-code/seamless-auth-api/blob/v0.21.1/src/services/oauthService.ts#L352-L373)). Callbacks no longer need sticky routing. In 0.19.2 the record lived only in the consuming instance's memory, so another instance could accept a replay inside the ten-minute window ([#414](https://github.com/fells-code/seamless-auth-api/issues/414)). |
 
 <Aside type="note">
   Upgrade to API 0.19.2 and `@seamless-auth/client` 0.7.1 (`@seamless-auth/react` 0.18.1,
@@ -67,24 +71,25 @@ Status values:
 
 ## Authorization Server Recommendations
 
-These apply to an authorization server. The Seamless Auth API does not act as one until the
-OpenID Provider planned for v0.21, so none of them is scored yet. They are listed so the v0.21
-work is checked against them.
+These apply to the [OpenID Provider](/build/openid-provider), which is off by default. Rows are
+checked against provider 0.1.1, the version that pairs with auth API 0.21.1; provider 0.2.0 has the
+same security configuration. The edge repository keeps a fuller [edge security matrix](https://github.com/fells-code/seamless-auth-oidc-provider/blob/v0.1.1/docs/oauth-security.md) that names the test behind
+each row. These rows describe configuration and unit tests. They are not an OpenID certification.
 
-| RFC 9700 | Recommendation | Status |
-| --- | --- | --- |
-| [2.1](https://www.rfc-editor.org/rfc/rfc9700#section-2.1), [4.1](https://www.rfc-editor.org/rfc/rfc9700#section-4.1) | Match redirect URIs exactly against the registered value | Applies from v0.21 |
-| [2.1.1](https://www.rfc-editor.org/rfc/rfc9700#section-2.1.1), [4.8](https://www.rfc-editor.org/rfc/rfc9700#section-4.8) | Support PKCE, enforce it, and prevent PKCE downgrade | Applies from v0.21 |
-| [2.1](https://www.rfc-editor.org/rfc/rfc9700#section-2.1), [4.4](https://www.rfc-editor.org/rfc/rfc9700#section-4.4) | Return `iss` in the authorization response ([RFC 9207](https://www.rfc-editor.org/rfc/rfc9207)) | Applies from v0.21 |
-| [2.1.2](https://www.rfc-editor.org/rfc/rfc9700#section-2.1.2), [2.4](https://www.rfc-editor.org/rfc/rfc9700#section-2.4) | Do not offer the implicit or resource owner password credentials grants | Applies from v0.21 |
-| [2.2](https://www.rfc-editor.org/rfc/rfc9700#section-2.2), [4.13](https://www.rfc-editor.org/rfc/rfc9700#section-4.13) | Sender-constrain or rotate refresh tokens for public clients | Applies from v0.21 |
-| [2.3](https://www.rfc-editor.org/rfc/rfc9700#section-2.3), [4.10](https://www.rfc-editor.org/rfc/rfc9700#section-4.10) | Restrict access tokens to an audience and to the privileges granted | Applies from v0.21 |
-| [2.5](https://www.rfc-editor.org/rfc/rfc9700#section-2.5) | Authenticate confidential clients, preferably with asymmetric methods | Applies from v0.21 |
-| [4.11](https://www.rfc-editor.org/rfc/rfc9700#section-4.11), [4.12](https://www.rfc-editor.org/rfc/rfc9700#section-4.12) | Do not act as an open redirector, and do not redirect with HTTP 307 | Applies from v0.21 |
-| [4.14](https://www.rfc-editor.org/rfc/rfc9700#section-4.14) | Keep clients from choosing a `client_id` that impersonates a resource owner | Applies from v0.21 |
-| [4.15](https://www.rfc-editor.org/rfc/rfc9700#section-4.15) | Prevent clickjacking of the authorization page | Applies from v0.21 |
-| [4.16](https://www.rfc-editor.org/rfc/rfc9700#section-4.16) | Do not redirect to a client after a failed authentication without the user's interaction | Applies from v0.21 |
-| [2.6](https://www.rfc-editor.org/rfc/rfc9700#section-2.6) | Do not support CORS on the authorization endpoint | Applies from v0.21 |
+| RFC 9700 | Recommendation | Status | How |
+| --- | --- | --- | --- |
+| [2.1](https://www.rfc-editor.org/rfc/rfc9700#section-2.1), [4.1](https://www.rfc-editor.org/rfc/rfc9700#section-4.1) | Match redirect URIs exactly against the registered value | **Meets** | Exact string match. The only exception is the port of a native app's loopback redirect, which RFC 8252 requires. The registry accepts only `https` (not `localhost`), `http` on `127.0.0.1` or `[::1]`, or a private-use scheme, with no fragments or credentials. [`oauth21.test.ts`](https://github.com/fells-code/seamless-auth-oidc-provider/blob/v0.1.1/tests/oauth21.test.ts) |
+| [2.1.1](https://www.rfc-editor.org/rfc/rfc9700#section-2.1.1), [4.8](https://www.rfc-editor.org/rfc/rfc9700#section-4.8) | Support PKCE, enforce it, and prevent PKCE downgrade | **Meets, configurable** | PKCE is required for every client, and discovery lists only `S256`, so `plain` is refused. An admin can opt a confidential client out, as 2.1.1 allows; that client must then send an OpenID Connect `nonce` unless also opted out of that. A public client cannot be opted out. [`pkce.test.ts`](https://github.com/fells-code/seamless-auth-oidc-provider/blob/v0.1.1/tests/pkce.test.ts), [`oauth21.test.ts`](https://github.com/fells-code/seamless-auth-oidc-provider/blob/v0.1.1/tests/oauth21.test.ts) |
+| [2.1](https://www.rfc-editor.org/rfc/rfc9700#section-2.1), [4.4](https://www.rfc-editor.org/rfc/rfc9700#section-4.4) | Return `iss` in the authorization response ([RFC 9207](https://www.rfc-editor.org/rfc/rfc9207)) | **Meets** | `iss` is on every authorization response and advertised in discovery. [`oauth21.test.ts`](https://github.com/fells-code/seamless-auth-oidc-provider/blob/v0.1.1/tests/oauth21.test.ts) |
+| [2.1.2](https://www.rfc-editor.org/rfc/rfc9700#section-2.1.2), [2.4](https://www.rfc-editor.org/rfc/rfc9700#section-2.4) | Do not offer the implicit or resource owner password credentials grants | **Meets** | The only response type is `code`; `token`, `id_token` and `code id_token` are refused. The password grant is answered `unsupported_grant_type`. [`oauth21.test.ts`](https://github.com/fells-code/seamless-auth-oidc-provider/blob/v0.1.1/tests/oauth21.test.ts) |
+| [2.2.2](https://www.rfc-editor.org/rfc/rfc9700#section-2.2.2), [4.14](https://www.rfc-editor.org/rfc/rfc9700#section-4.14) | Sender-constrain or rotate refresh tokens for public clients | **Meets** | Refresh tokens rotate on every use. A reused refresh token revokes the grant and ends the first-party session behind it. [`refreshAndClientCredentials.test.ts`](https://github.com/fells-code/seamless-auth-oidc-provider/blob/v0.1.1/tests/refreshAndClientCredentials.test.ts) |
+| [2.3](https://www.rfc-editor.org/rfc/rfc9700#section-2.3), [4.10](https://www.rfc-editor.org/rfc/rfc9700#section-4.10) | Restrict access tokens to an audience and to the privileges granted | **Meets** | A token for an API is an RFC 9068 JWT whose `aud` is that registered resource (RFC 8707), and the auth API refuses to sign any other audience or scope. [`resourceIndicators.test.ts`](https://github.com/fells-code/seamless-auth-oidc-provider/blob/v0.1.1/tests/resourceIndicators.test.ts) |
+| [2.5](https://www.rfc-editor.org/rfc/rfc9700#section-2.5) | Authenticate confidential clients, preferably with asymmetric methods | **Meets, configurable** | Confidential clients use `private_key_jwt` by default, and each assertion is single use. Shared secrets need an instance setting and a per-client opt-in. `client_secret_jwt` and HMAC algorithms are never offered. [`clientAuthentication.test.ts`](https://github.com/fells-code/seamless-auth-oidc-provider/blob/v0.1.1/tests/clientAuthentication.test.ts) |
+| [4.11](https://www.rfc-editor.org/rfc/rfc9700#section-4.11), [4.12](https://www.rfc-editor.org/rfc/rfc9700#section-4.12) | Do not act as an open redirector, and do not redirect with HTTP 307 | **Meets** | Errors go only to a registered redirect URI; an unregistered one gets an error page ([`oauth21.test.ts`](https://github.com/fells-code/seamless-auth-oidc-provider/blob/v0.1.1/tests/oauth21.test.ts)). Redirects to clients use HTTP 303, the `oidc-provider` library's default. |
+| [4.15](https://www.rfc-editor.org/rfc/rfc9700#section-4.15) | Keep clients from choosing a `client_id` that impersonates a resource owner | **Meets** | There is no dynamic client registration. Applications are created by an admin, and the auth API generates each client id as a random value ([`oidcApplicationService.ts`](https://github.com/fells-code/seamless-auth-api/blob/v0.21.1/src/services/oidcApplicationService.ts#L139)), so no one picks a client id. |
+| [4.16](https://www.rfc-editor.org/rfc/rfc9700#section-4.16) | Prevent clickjacking of the authorization page | **Meets** | Hosted pages send `frame-ancestors 'none'` in a strict CSP. [`hostedPages.test.ts`](https://github.com/fells-code/seamless-auth-oidc-provider/blob/v0.1.1/tests/hostedPages.test.ts) |
+| [4.11](https://www.rfc-editor.org/rfc/rfc9700#section-4.11) | Do not redirect to a client after a failed authentication without the user's interaction | **Meets** | Section 4.11.2's attack needs a redirect URI the attacker controls, usually registered through dynamic client registration, which is off. Redirect URIs come only from admin-registered applications, and an unregistered one gets an error page. |
+| [2.6](https://www.rfc-editor.org/rfc/rfc9700#section-2.6) | Do not support CORS on the authorization endpoint | **Meets** | The authorization endpoint sends no CORS headers. Discovery and the JWKS allow any origin, since they are public metadata. Userinfo, and the token endpoint for public clients, allow only an origin among the client's registered redirect URIs ([`providerConfig.ts`](https://github.com/fells-code/seamless-auth-oidc-provider/blob/v0.1.1/src/providerConfig.ts)). |
 
 The Seamless Auth session itself (its access token, single-use refresh token rotation, and reuse
 detection) is not an OAuth grant and is described in

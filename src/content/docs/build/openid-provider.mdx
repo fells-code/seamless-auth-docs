@@ -108,8 +108,13 @@ ceremonies on the hosted pages are checked against that list.
 ### 3. Run the edge
 
 ```bash
-docker run -p 5314:5314 --env-file edge.env ghcr.io/fells-code/seamless-auth-oidc-provider:latest
+docker run -p 5314:5314 --env-file edge.env ghcr.io/fells-code/seamless-auth-oidc-provider:v0.1.1
 ```
+
+Pin the edge to the version that matches your API. With auth API 0.21.x, use edge `v0.1.1`. Edge
+`v0.2.0`, which is also the `latest` tag, speaks a newer `/oidc/*` contract and refuses to start
+against auth API 0.21.1. The [Compatibility Matrix](/build/ecosystem#compatibility-matrix) lists
+the pairs.
 
 | Variable                      | Required | What                                                                                                         |
 | ----------------------------- | -------- | ------------------------------------------------------------------------------------------------------------ |
