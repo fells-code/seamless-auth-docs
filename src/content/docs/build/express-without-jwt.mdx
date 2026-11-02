@@ -165,10 +165,13 @@ block and the type imports; nothing else changes.
 
 - The one line that adds auth is `app.use('/auth', createSeamlessAuthServer(auth))`. The one
   line that protects a route is `requireAuth({ cookieSecret })`.
-- Without a session, `requireAuth` answers `401 { "error": "Failed to find authentication token
-  required" }`, and `401 { "error": "Invalid or expired session" }` for a cookie that does not
-  verify. `requireRole` answers `403` when the user lacks the role. Scoped roles work as described
-  in [How To Secure Routes](/build/secure-routes).
+- Without a session, or with a cookie that does not verify, `requireAuth` answers
+  `401 { "error": "unauthenticated" }`. A recovery session gets
+  `403 { "error": "enrollment_required" }`. `requireRole` answers
+  `403 { "error": "insufficient_role" }` when none of the roles is granted, and never names the
+  user's roles or the required ones. Scoped roles work as described in
+  [How To Secure Routes](/build/secure-routes). These bodies need `@seamless-auth/express` 0.24
+  or later.
 - `req.user` is what the session cookie carries: `id`, `roles`, and usually `email` and `phone`.
   It is read locally, with no network call. `getSeamlessUser(req, auth)` asks the auth server for
   the full profile.
