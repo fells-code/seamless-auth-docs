@@ -1,0 +1,228 @@
+---
+title: 'Sign In With Spring Security And The OpenID Provider'
+description: 'Configure Spring Boot and Spring Security oauth2Login against the Seamless Auth OpenID Provider, tested end to end with Spring Boot 4.1.2 and Spring Security 7.1.2: a shared secret or private_key_jwt, a Java truststore for a private CA, RP-initiated logout, and the errors hit while testing.'
+sidebar:
+  order: 13.4
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+A Spring Boot app signs users in through the [OpenID Provider](/build/openid-provider) with
+[`oauth2Login`](https://docs.spring.io/spring-boot/reference/web/spring-security.html). Spring reads
+discovery from `issuer-uri`.
+
+<Aside type="note" title="What this was tested against">
+  Spring Boot 4.1.2, Spring Security 7.1.2 and Java 21, on servlet (Spring MVC), against released
+  `seamless-auth-api` v0.22.0 and `seamless-auth-oidc-provider` v0.3.0, on 2026-11-04. Nothing here
+  needs API v0.23.0. See [What was and was not tested](#what-was-and-was-not-tested): this is a local
+  test, not production verification.
+</Aside>
+
+---
+
+## 1. Register The Client
+
+`POST /admin/applications`:
+
+```json
+{
+  "name": "Spring app",
+  "clientType": "confidential",
+  "firstParty": true,
+  "tokenEndpointAuthMethod": "client_secret_basic",
+  "redirectUris": ["http://127.0.0.1:13002/login/oauth2/code/seamless"],
+  "postLogoutRedirectUris": ["http://127.0.0.1:13002/"],
+  "grantTypes": ["authorization_code", "refresh_token"]
+}
+```
+
+Spring's default redirect is `{baseUrl}/login/oauth2/code/{registrationId}`. A shared secret needs
+[`allow_client_secrets`](/build/openid-provider-connect-an-app#register-the-client). To avoid one, see
+[Use `private_key_jwt`](#use-private_key_jwt).
+
+---
+
+## 2. Add The Dependencies
+
+```xml
+<parent>
+  <groupId>org.springframework.boot</groupId>
+  <artifactId>spring-boot-starter-parent</artifactId>
+  <version>4.1.2</version>
+</parent>
+
+<dependencies>
+  <dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-webmvc</artifactId>
+  </dependency>
+  <dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-security-oauth2-client</artifactId>
+  </dependency>
+</dependencies>
+```
+
+---
+
+## 3. Configure It
+
+`application.yaml`:
+
+```yaml
+server:
+  port: 13002
+spring:
+  security:
+    oauth2:
+      client:
+        registration:
+          seamless:
+            client-id: ${SEAMLESS_CLIENT_ID}
+            client-secret: ${SEAMLESS_CLIENT_SECRET}
+            client-authentication-method: client_secret_basic
+            authorization-grant-type: authorization_code
+            scope: openid,email
+        provider:
+          seamless:
+            issuer-uri: ${SEAMLESS_ISSUER}
+```
+
+**PKCE needs no setting in this version.** With the configuration above, Spring Security 7.1.2 sent
+PKCE from a confidential client, which the provider requires. The Spring documentation covers this under
+[`requireProofKey`](https://docs.spring.io/spring-security/reference/servlet/oauth2/client/authorization-grants.html).
+Do not set it to `false`. Older versions were not tested. If yours does not send PKCE, the provider
+answers `Authorization Server policy requires PKCE`.
+
+Sign-out, so that it also ends the Seamless session, uses Spring's
+[RP-initiated logout handler](https://docs.spring.io/spring-security/reference/servlet/oauth2/login/logout.html):
+
+```java
+@Configuration
+public class SecurityConfig {
+  @Bean
+  SecurityFilterChain security(HttpSecurity http, ClientRegistrationRepository registrations)
+      throws Exception {
+    var logout = new OidcClientInitiatedLogoutSuccessHandler(registrations);
+    logout.setPostLogoutRedirectUri("{baseUrl}/");
+    return http
+        .authorizeHttpRequests((a) -> a.anyRequest().authenticated())
+        .oauth2Login(Customizer.withDefaults())
+        .logout((l) -> l.logoutSuccessHandler(logout))
+        .build();
+  }
+}
+```
+
+Read the user from `OidcUser`:
+
+```java
+@GetMapping("/")
+String home(@AuthenticationPrincipal OidcUser user) {
+  return "Signed in as " + user.getEmail() + ", subject " + user.getSubject() + ", acr "
+      + user.getClaimAsString("acr");
+}
+```
+
+The provider issues no `name` or `preferred_username` claim, so identify users by `getSubject()` or
+`getEmail()`. Add the `seamless` scope for the `roles`
+claim. Mapping `roles` to Spring authorities was not tested.
+
+### Use `private_key_jwt`
+
+Register the client with `"tokenEndpointAuthMethod": "private_key_jwt"` and your public `jwks`, as in
+the [generic guide](/build/openid-provider-connect-an-app#register-the-client). Then set the method and
+leave the secret empty:
+
+```yaml
+spring:
+  security:
+    oauth2:
+      client:
+        registration:
+          seamless:
+            client-secret: ''
+            client-authentication-method: private_key_jwt
+```
+
+Add a token client that signs the assertion, following
+[JWT Bearer client authentication](https://docs.spring.io/spring-security/reference/servlet/oauth2/client/client-authentication.html).
+`oauth2Login` picks this bean up:
+
+```java
+@Bean
+OAuth2AccessTokenResponseClient<OAuth2AuthorizationCodeGrantRequest> tokenClient()
+    throws Exception {
+  JWK key = JWK.parse(Files.readString(Path.of(System.getenv("SEAMLESS_PRIVATE_JWK_FILE"))));
+  var client = new RestClientAuthorizationCodeTokenResponseClient();
+  client.addParametersConverter(
+      new NimbusJwtClientAuthenticationParametersConverter<>((registration) -> key));
+  return client;
+}
+```
+
+The file holds the private JWK with its `kid`, which must match the registered key.
+
+---
+
+## 4. Trust A Private CA
+
+A publicly trusted certificate needs none of this. For a private CA, copy the JVM's trust store, import
+your CA, and point the JVM at the copy, so the public CAs stay trusted:
+
+```bash
+cp "$JAVA_HOME/lib/security/cacerts" /tmp/truststore.jks
+keytool -importcert -noprompt -alias seamless-local -file /ca.crt \
+  -keystore /tmp/truststore.jks -storepass changeit
+export JAVA_TOOL_OPTIONS="-Djavax.net.ssl.trustStore=/tmp/truststore.jks -Djavax.net.ssl.trustStorePassword=changeit"
+java -jar target/demo-0.0.1.jar
+```
+
+This covered discovery, the token call and the JWKS. `changeit` is the JDK's default store password.
+Use your own for anything longer lived than a test.
+
+The test ran this in a `maven:3.9-eclipse-temurin-21` container on the recipe's compose network, with
+`SEAMLESS_ISSUER`, `SEAMLESS_CLIENT_ID` and `SEAMLESS_CLIENT_SECRET` set.
+
+---
+
+## 5. Check It
+
+1. Open `http://127.0.0.1:13002/`. Every route needs a user, so the browser goes to the hosted page
+   without an intermediate login page.
+2. Sign in. A first-party client shows no consent page.
+3. The page shows the user's email and `sub`. `acr` is `null` after a first email-code sign-up and was
+   `phrh` after a passkey sign-in on the virtual authenticator.
+4. Open `/logout` and confirm. The hosted page asks whether to sign out of everything or only this app.
+   After **Sign out** the browser returns to `/`, which needs a user again, so it lands on the hosted
+   sign-in page.
+
+---
+
+## Troubleshooting
+
+Each of these was hit while testing.
+
+| What you see                                                                                                  | Cause and fix                                                                                                                                                            |
+| ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| The app exits at startup: `Unable to resolve Configuration with the provided Issuer of "https://..."`         | Spring fetches discovery at startup. In the test the cause was the JVM not trusting the CA. See [step 4](#4-trust-a-private-ca). |
+
+Registration and shared-secret errors are in the
+[generic guide](/build/openid-provider-connect-an-app#troubleshooting).
+
+---
+
+## What Was And Was Not Tested
+
+**Tested.** The configuration above, with both `client_secret_basic` and `private_key_jwt`, with
+Playwright's Chromium and a virtual WebAuthn authenticator: a new user registering and a passkey sign-in
+from a clean browser, ending on a page showing the user. Sign-out was run with `client_secret_basic`.
+The stack was the local recipe from
+[seamless-auth-oidc-provider#60](https://github.com/fells-code/seamless-auth-oidc-provider/pull/60)
+(not merged at the time of writing), adjusted as described in the
+[generic guide](/build/openid-provider-connect-an-app#what-was-and-was-not-tested).
+
+**Not tested.** A browser that trusts the CA normally, a real authenticator, a publicly trusted
+certificate, a production deployment, `https` or running behind a proxy (`server.forward-headers-strategy`),
+WebFlux, mapping `roles` to authorities, refresh tokens, older Spring versions, or Spring as a resource
+server.

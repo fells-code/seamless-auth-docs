@@ -1,0 +1,157 @@
+---
+title: 'Sign In To Grafana With The OpenID Provider'
+description: 'Configure Grafana generic OAuth against the Seamless Auth OpenID Provider, tested end to end with Grafana 13.3.0: client registration, PKCE, role mapping from the roles claim, ID token validation, sign-out, a private CA, and the errors hit while testing.'
+sidebar:
+  order: 13.2
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Grafana signs users in through the [OpenID Provider](/build/openid-provider) with its
+[generic OAuth](https://grafana.com/docs/grafana/latest/setup-grafana/configure-access/configure-authentication/generic-oauth/)
+integration. Users choose **Sign in with Seamless** on Grafana's login page, sign in on the hosted
+page, and arrive in Grafana with a role mapped from their Seamless roles.
+
+<Aside type="note" title="What this was tested against">
+  Grafana 13.3.0 (`grafana/grafana:13.3.0`), released `seamless-auth-api` v0.22.0 and
+  `seamless-auth-oidc-provider` v0.3.0, on 2026-11-04. Nothing here needs API v0.23.0. See
+  [What was and was not tested](#what-was-and-was-not-tested): this is a local test, not production
+  verification.
+</Aside>
+
+---
+
+## 1. Register The Client
+
+Grafana's documentation lists `client_secret` as required, so this guide uses a shared secret, which
+needs `allow_client_secrets` on the instance and an edge restart. See
+[Register the client](/build/openid-provider-connect-an-app#register-the-client).
+
+`POST /admin/applications`:
+
+```json
+{
+  "name": "Grafana",
+  "clientType": "confidential",
+  "firstParty": true,
+  "tokenEndpointAuthMethod": "client_secret_basic",
+  "redirectUris": ["http://127.0.0.1:13000/login/generic_oauth"],
+  "postLogoutRedirectUris": ["http://127.0.0.1:13000/login"],
+  "grantTypes": ["authorization_code", "refresh_token"]
+}
+```
+
+The redirect is Grafana's root URL plus `/login/generic_oauth`. Keep `application.id` and
+`clientSecret` from the response.
+
+---
+
+## 2. Run Grafana
+
+This is the command that was run. `--network` puts Grafana on the local recipe's compose network so
+it reaches the issuer by name, and the CA mount is only for a private CA.
+
+```bash
+export ISSUER=https://auth.guides.localhost:19443
+export CLIENT_ID=...
+export CLIENT_SECRET=...
+
+docker run -d --name grafana \
+  --network provider-guides_default \
+  -p 127.0.0.1:13000:3000 \
+  -v "$PWD/local/.generated/ca.crt:/etc/grafana/seamless-ca.crt:ro" \
+  -e GF_SERVER_ROOT_URL=http://127.0.0.1:13000 \
+  -e GF_AUTH_GENERIC_OAUTH_ENABLED=true \
+  -e GF_AUTH_GENERIC_OAUTH_NAME=Seamless \
+  -e GF_AUTH_GENERIC_OAUTH_CLIENT_ID="$CLIENT_ID" \
+  -e GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET="$CLIENT_SECRET" \
+  -e GF_AUTH_GENERIC_OAUTH_AUTH_STYLE=InHeader \
+  -e GF_AUTH_GENERIC_OAUTH_USE_PKCE=true \
+  -e 'GF_AUTH_GENERIC_OAUTH_SCOPES=openid email seamless' \
+  -e GF_AUTH_GENERIC_OAUTH_AUTH_URL="$ISSUER/authorize" \
+  -e GF_AUTH_GENERIC_OAUTH_TOKEN_URL="$ISSUER/token" \
+  -e GF_AUTH_GENERIC_OAUTH_API_URL="$ISSUER/userinfo" \
+  -e GF_AUTH_GENERIC_OAUTH_VALIDATE_ID_TOKEN=true \
+  -e GF_AUTH_GENERIC_OAUTH_JWK_SET_URL="$ISSUER/jwks" \
+  -e GF_AUTH_GENERIC_OAUTH_LOGIN_ATTRIBUTE_PATH=email \
+  -e GF_AUTH_GENERIC_OAUTH_NAME_ATTRIBUTE_PATH=email \
+  -e "GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH=contains(roles[*], 'user') && 'Editor' || 'Viewer'" \
+  -e "GF_AUTH_SIGNOUT_REDIRECT_URL=$ISSUER/session/end?client_id=$CLIENT_ID&post_logout_redirect_uri=http%3A%2F%2F127.0.0.1%3A13000%2Flogin" \
+  -e GF_AUTH_GENERIC_OAUTH_TLS_CLIENT_CA=/etc/grafana/seamless-ca.crt \
+  -e SSL_CERT_FILE=/etc/grafana/seamless-ca.crt \
+  grafana/grafana:13.3.0
+```
+
+Grafana maps `GF_<SECTION>_<KEY>` environment variables to its
+[configuration file](https://grafana.com/docs/grafana/latest/setup-grafana/configure-grafana/).
+
+### What each setting does
+
+| Setting                               | Value                 | Why                                                                                                                |
+| ------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `use_pkce`                            | `true`                | The default is `false`, and the provider refuses a request without PKCE.                                           |
+| `auth_style`                          | `InHeader`            | Sends the secret the way `client_secret_basic` expects.                                                            |
+| `scopes`                              | `openid email seamless` | `seamless` adds the `roles` claim. Without it, leave out `role_attribute_path`.                                  |
+| `validate_id_token`, `jwk_set_url`    | `true`, `<issuer>/jwks` | Off by default in Grafana. Verifies the ID token's signature.                                                    |
+| `login_attribute_path`, `name_attribute_path` | `email`       | The provider issues no `name` or `preferred_username` claim.                                                       |
+| `role_attribute_path`                 | A JMESPath over `roles` | The tested mapping gave a user with the default `user` role `Editor`. Write yours for your own roles.            |
+| `[auth] signout_redirect_url`         | `/session/end` URL    | Passes `client_id`, which the provider accepts in place of `id_token_hint`. Encode the inner URL.                       |
+| `tls_client_ca`, `SSL_CERT_FILE`      | The CA path           | Private CA only. See below.                                                                                        |
+
+### For your deployment
+
+Replace the issuer, `root_url` and the redirect URI with your own `https` URLs, drop `--network`, and
+with a publicly trusted certificate drop the CA mount, `tls_client_ca` and `SSL_CERT_FILE`. These
+`https` values were not run.
+
+### A private CA
+
+Two settings, because Grafana 13.3.0 does not use `tls_client_ca` for everything:
+
+- `tls_client_ca` covered the token and UserInfo calls.
+- `validate_id_token` fetches the JWKS without it, so with only `tls_client_ca` sign-in fails. See
+  [Troubleshooting](#troubleshooting). `SSL_CERT_FILE`, which Go reads, fixes that.
+
+`SSL_CERT_FILE` alone also worked for the whole sign-in.
+
+---
+
+## 3. Check It
+
+1. Open `http://127.0.0.1:13000/login` and choose **Sign in with Seamless**.
+2. Sign in on the hosted page. A first-party client shows no consent page.
+3. Open `/profile`. Name, email and username show the user's email and say **Synced via Generic
+   OAuth**, and **Main Org.** shows the mapped role.
+4. Sign out. The hosted page asks whether to sign out of everything or only Grafana. After **Sign
+   out**, the browser returns to Grafana's login page.
+
+---
+
+## Troubleshooting
+
+Each of these was hit while testing. Grafana's detail is in its log.
+
+| What you see                                                                    | Log line                                                                                                                                     | Cause and fix                                                                                                                              |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Login failed`, `Login provider denied login request`                           | None useful. The provider answers `invalid_request`, `Authorization Server policy requires PKCE`.                                            | Set `use_pkce=true`.                                                                                                                       |
+| `Login failed`, `Failed to get token from provider`, after the hosted page      | `failed to exchange code to token ... x509: certificate signed by unknown authority`                                                         | Grafana does not trust the issuer's CA. Set `tls_client_ca` or `SSL_CERT_FILE`.                                                            |
+| Back on the login page after the hosted page, not signed in                     | `Error retrieving JWKS from URL ... x509: certificate signed by unknown authority`, then `signing key not found for kid`                     | `validate_id_token` fetched the JWKS without `tls_client_ca`. Set `SSL_CERT_FILE`.                                                         |
+| Signed in normally                                                              | `Error retrieving access token payload ... token is not in JWT format`, a warning on every sign-in                                           | Harmless. Without `resource`, the access token is opaque by design, and Grafana reads the ID token and UserInfo instead.                   |
+
+Registration and shared-secret errors are in the
+[generic guide](/build/openid-provider-connect-an-app#troubleshooting).
+
+---
+
+## What Was And Was Not Tested
+
+**Tested.** The command above, with Playwright's Chromium and a virtual WebAuthn authenticator: a new
+user registering, a passkey sign-in from a clean browser, the profile page, the mapped role through
+Grafana's API, and sign-out. The stack was the local recipe from
+[seamless-auth-oidc-provider#60](https://github.com/fells-code/seamless-auth-oidc-provider/pull/60)
+(not merged at the time of writing), adjusted as described in the
+[generic guide](/build/openid-provider-connect-an-app#what-was-and-was-not-tested).
+
+**Not tested.** A browser that trusts the CA normally, a real authenticator, Grafana over `https`, a
+production deployment, `use_refresh_token` and what Grafana does when the provider's token expires,
+`allow_assign_grafana_admin`, or mapping any role other than the default `user`.

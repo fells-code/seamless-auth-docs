@@ -1,0 +1,188 @@
+---
+title: 'Protect An App With oauth2-proxy And The OpenID Provider'
+description: 'Put oauth2-proxy in front of an app with no OIDC support so users sign in through the Seamless Auth OpenID Provider, tested end to end with oauth2-proxy 7.15.5: why oauth2-proxy, PKCE, a private CA, restricting by role, the headers the app receives, sign-out, and the errors hit while testing.'
+sidebar:
+  order: 13.5
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+[oauth2-proxy](https://oauth2-proxy.github.io/oauth2-proxy/) is a reverse proxy that signs users in
+with OIDC before passing requests on. Use it for an app that has no OIDC support of its own, such as an
+internal tool: the app needs no code change, and receives the user in request headers.
+
+**Why oauth2-proxy.** The guide needed a proxy that works with any HTTP app, on its own or alongside
+whichever web server you already run. oauth2-proxy has a generic
+[OIDC provider](https://oauth2-proxy.github.io/oauth2-proxy/configuration/providers/openid_connect), and
+[documented options](https://oauth2-proxy.github.io/oauth2-proxy/configuration/overview/) for the two
+things this provider asks of a client: `S256` PKCE (`code_challenge_method`) and a private CA
+(`provider_ca_files`). Other proxies were not compared by running them.
+
+<Aside type="note" title="What this was tested against">
+  oauth2-proxy 7.15.5 (`quay.io/oauth2-proxy/oauth2-proxy:v7.15.5`), running as the proxy itself, against
+  released `seamless-auth-api` v0.22.0 and `seamless-auth-oidc-provider` v0.3.0, on 2026-11-04. Nothing
+  here needs API v0.23.0. See [What was and was not tested](#what-was-and-was-not-tested): this is a
+  local test, not production verification.
+</Aside>
+
+---
+
+## 1. Register The Client
+
+The `--help` of oauth2-proxy 7.15.5 shows client secret options and none for `private_key_jwt`, so this
+needs
+[`allow_client_secrets`](/build/openid-provider-connect-an-app#register-the-client) and an edge restart.
+
+`POST /admin/applications`:
+
+```json
+{
+  "name": "oauth2-proxy",
+  "clientType": "confidential",
+  "firstParty": true,
+  "tokenEndpointAuthMethod": "client_secret_basic",
+  "redirectUris": ["http://127.0.0.1:13003/oauth2/callback"],
+  "postLogoutRedirectUris": ["http://127.0.0.1:13003/"],
+  "grantTypes": ["authorization_code", "refresh_token"]
+}
+```
+
+---
+
+## 2. Run It
+
+This is the command that was run. `--network` puts it on the local recipe's compose network, where
+`my-upstream` stands for your app. The CA mount is only for a private CA.
+
+```bash
+export ISSUER=https://auth.guides.localhost:19443
+export CLIENT_ID=...
+export CLIENT_SECRET=...
+
+docker run -d --name oauth2-proxy \
+  --network provider-guides_default \
+  -p 127.0.0.1:13003:4180 \
+  -v "$PWD/local/.generated/ca.crt:/etc/oauth2-proxy/seamless-ca.crt:ro" \
+  -e OAUTH2_PROXY_HTTP_ADDRESS=0.0.0.0:4180 \
+  -e OAUTH2_PROXY_PROVIDER=oidc \
+  -e OAUTH2_PROXY_PROVIDER_DISPLAY_NAME=Seamless \
+  -e OAUTH2_PROXY_OIDC_ISSUER_URL="$ISSUER" \
+  -e OAUTH2_PROXY_CLIENT_ID="$CLIENT_ID" \
+  -e OAUTH2_PROXY_CLIENT_SECRET="$CLIENT_SECRET" \
+  -e OAUTH2_PROXY_REDIRECT_URL=http://127.0.0.1:13003/oauth2/callback \
+  -e OAUTH2_PROXY_UPSTREAMS=http://my-upstream:8080/ \
+  -e OAUTH2_PROXY_CODE_CHALLENGE_METHOD=S256 \
+  -e 'OAUTH2_PROXY_SCOPE=openid email seamless' \
+  -e OAUTH2_PROXY_OIDC_GROUPS_CLAIM=roles \
+  -e OAUTH2_PROXY_ALLOWED_GROUPS=user \
+  -e 'OAUTH2_PROXY_EMAIL_DOMAINS=*' \
+  -e OAUTH2_PROXY_INSECURE_OIDC_SKIP_NONCE=false \
+  -e OAUTH2_PROXY_COOKIE_SECRET="$(openssl rand -hex 16)" \
+  -e OAUTH2_PROXY_COOKIE_SECURE=false \
+  -e OAUTH2_PROXY_SKIP_PROVIDER_BUTTON=true \
+  -e OAUTH2_PROXY_WHITELIST_DOMAINS=auth.guides.localhost:19443 \
+  -e OAUTH2_PROXY_PROVIDER_CA_FILES=/etc/oauth2-proxy/seamless-ca.crt \
+  quay.io/oauth2-proxy/oauth2-proxy:v7.15.5
+```
+
+### What each setting does
+
+| Setting                                | Value                     | Why                                                                                                                                  |
+| -------------------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `CODE_CHALLENGE_METHOD`                | `S256`                    | Off by default, and the provider refuses a request without PKCE.                                                                     |
+| `SCOPE`                                | `openid email seamless`   | `seamless` adds the `roles` claim. oauth2-proxy's default scopes also worked, because the provider ignores `profile`, but give no roles. |
+| `OIDC_GROUPS_CLAIM`, `ALLOWED_GROUPS`  | `roles`, your role        | The provider has no `groups` claim, so read `roles` as groups. A user without the role gets `403` after signing in.                  |
+| `EMAIL_DOMAINS`                        | `*`, or your domain       | `*` lets any signed-in user through this check, so restrict by role or domain.                                             |
+| `INSECURE_OIDC_SKIP_NONCE`             | `false`                   | Its default is `true`. The provider returned the nonce, so verification passes.                                                      |
+| `COOKIE_SECRET`                        | 32 random characters      | Encrypts oauth2-proxy's session cookie.                                      |
+| `COOKIE_SECURE`                        | `false` on loopback only  | Needed for plain `http` here. **Remove it in a deployment**: the default is `true`.                                                  |
+| `WHITELIST_DOMAINS`                    | The issuer's host and port | Allows the sign-out redirect to the issuer.                                                                                         |
+| `PROVIDER_CA_FILES`                    | The CA path               | Private CA only.                                                                                                                     |
+
+The environment names follow oauth2-proxy's
+[flag to environment variable rule](https://oauth2-proxy.github.io/oauth2-proxy/configuration/overview/).
+
+### For your deployment
+
+Replace the issuer, redirect URL and whitelist with your own `https` values, remove
+`OAUTH2_PROXY_COOKIE_SECURE`, and with a publicly trusted certificate remove the CA mount and
+`PROVIDER_CA_FILES`. Those values were not run.
+
+**Make the app reachable only through the proxy.** It trusts the headers below, so anyone who can reach
+it directly can send their own.
+
+---
+
+## 3. What The App Receives
+
+The test's upstream printed these headers:
+
+| Header               | Value                                                                       |
+| -------------------- | --------------------------------------------------------------------------- |
+| `X-Forwarded-User`   | The `sub`, the Seamless user ID. There is no username claim to use instead. |
+| `X-Forwarded-Email`  | The `email` claim                                                           |
+| `X-Forwarded-Groups` | The `roles` claim, with the settings above. Absent otherwise.               |
+
+---
+
+## 4. Check It
+
+1. Open `http://127.0.0.1:13003/`. A request with no session gets a `302`, and the browser goes to the
+   hosted page.
+2. Sign in. A first-party client shows no consent page.
+3. The app's response shows the headers above.
+
+---
+
+## 5. Sign Out
+
+oauth2-proxy's `/oauth2/sign_out` clears its own cookie and follows `rd`. To end the Seamless session as
+well, set `rd` to the provider's end session URL. Each level is URL encoded:
+
+```text
+/oauth2/sign_out?rd=<encoded: <issuer>/session/end?client_id=<id>&post_logout_redirect_uri=<encoded: http://127.0.0.1:13003/>>
+```
+
+In Python:
+
+```python
+import urllib.parse as u
+inner = u.quote('http://127.0.0.1:13003/', safe='')
+print('/oauth2/sign_out?rd=' + u.quote(f'{issuer}/session/end?client_id={client_id}&post_logout_redirect_uri={inner}', safe=''))
+```
+
+The hosted page asks whether to sign out of everything or only this app. After **Sign out**, the browser
+returns to the app, whose request has no session, so it lands on the hosted sign-in page.
+
+---
+
+## Troubleshooting
+
+Each of these was hit while testing.
+
+| What you see                                                                                                                                          | Cause and fix                                                                     |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| The container exits at startup: `error while discovery OIDC configuration ... tls: failed to verify certificate`                                      | It does not trust the issuer's CA. Set `PROVIDER_CA_FILES`.                       |
+| At startup, `Warning: Your provider supports PKCE methods ["S256"], but you have not enabled one with --code-challenge-method`, then an error page on sign-in | Set `CODE_CHALLENGE_METHOD=S256`.                                       |
+| `403 Forbidden` on `/oauth2/callback`, after the hosted page                                                                                          | The user's roles do not include `ALLOWED_GROUPS`. This is the check working.      |
+| `X-Forwarded-Groups` is missing                                                                                                                       | `OIDC_GROUPS_CLAIM=roles` and the `seamless` scope are both needed.               |
+
+Registration and shared-secret errors are in the
+[generic guide](/build/openid-provider-connect-an-app#troubleshooting).
+
+---
+
+## What Was And Was Not Tested
+
+**Tested.** The command above, in front of a small upstream that printed its request headers, with
+Playwright's Chromium and a virtual WebAuthn authenticator: a new user registering, a passkey sign-in
+from a clean browser, the headers reaching the upstream, sign-out, and a `403` for a user lacking the
+allowed role. The stack was the local recipe from
+[seamless-auth-oidc-provider#60](https://github.com/fells-code/seamless-auth-oidc-provider/pull/60)
+(not merged at the time of writing), adjusted as described in the
+[generic guide](/build/openid-provider-connect-an-app#what-was-and-was-not-tested).
+
+**Not tested.** A browser that trusts the CA normally, a real authenticator, `https` or
+`COOKIE_SECURE=true`, a production deployment, oauth2-proxy behind nginx, Traefik or Caddy
+(`auth_request` or forward-auth mode), session refresh (`--cookie-refresh`), Redis session storage, or
+any other reverse proxy.

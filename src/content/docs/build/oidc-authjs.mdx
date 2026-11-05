@@ -1,0 +1,227 @@
+---
+title: 'Sign In With Auth.js And The OpenID Provider'
+description: 'Add the Seamless Auth OpenID Provider to a Next.js app as a custom Auth.js provider, tested end to end with next-auth 5.0.0-beta.32 and Next.js 16.4.5: shared secret and private_key_jwt, a private CA, why Next.js cannot use 127.0.0.1 here, sign-out, and the errors hit while testing.'
+sidebar:
+  order: 13.3
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+[Auth.js](https://authjs.dev) signs users in through the [OpenID Provider](/build/openid-provider)
+with a [custom OIDC provider](https://authjs.dev/guides/configuring-oauth-providers). Discovery
+supplies the endpoints. In the tested version, an `oidc` provider sent PKCE with no extra setting.
+
+<Aside type="note" title="What this was tested against">
+  `next-auth` 5.0.0-beta.32 (with `@auth/core` 0.41.3), Next.js 16.4.5 and Node 24, against released
+  `seamless-auth-api` v0.22.0 and `seamless-auth-oidc-provider` v0.3.0, on 2026-11-04. Version 5 is
+  on npm's `beta` tag. The `latest` tag, 4.24.15, and other Auth.js integrations such as
+  `@auth/express` were not tested. Nothing here needs API v0.23.0. See
+  [What was and was not tested](#what-was-and-was-not-tested): this is a local test, not production
+  verification.
+</Aside>
+
+---
+
+## 1. Give The App A Real Hostname, Over HTTPS
+
+<Aside type="caution" title="Next.js cannot use 127.0.0.1 with this provider">
+  Next.js rewrites `127.0.0.1` to `localhost` in the URL its route handlers see
+  ([`next-url.ts`](https://github.com/vercel/next.js/blob/canary/packages/next/src/server/web/next-url.ts)),
+  even with `AUTH_URL` set. The provider refuses `localhost` as a redirect host, so a client registered
+  on `http://127.0.0.1` signs in up to the callback and then fails with `invalid_grant`, because the
+  redirect URI at the token endpoint no longer matches. See [Troubleshooting](#troubleshooting).
+</Aside>
+
+So even locally, this app needs `https` on a name that is not `localhost`. The test used
+`https://app.guides.test:13443`, with Caddy terminating TLS:
+
+```caddyfile
+{
+	local_certs
+	skip_install_trust
+	admin off
+	auto_https disable_redirects
+}
+
+https://app.guides.test:13443 {
+	reverse_proxy authjs:13001
+}
+```
+
+On your own machine that name needs to resolve to `127.0.0.1`, for example through your hosts file.
+The test instead gave Chromium `--host-resolver-rules=MAP *.guides.test 127.0.0.1`.
+
+---
+
+## 2. Register The Client
+
+`POST /admin/applications`. Prefer `private_key_jwt`, which Auth.js supports:
+
+```json
+{
+  "name": "My Next.js app",
+  "clientType": "confidential",
+  "firstParty": true,
+  "tokenEndpointAuthMethod": "private_key_jwt",
+  "jwks": { "keys": [{ "kty": "RSA", "n": "...", "e": "AQAB", "kid": "my-app-1", "alg": "RS256", "use": "sig" }] },
+  "redirectUris": ["https://app.guides.test:13443/api/auth/callback/seamless"],
+  "postLogoutRedirectUris": ["https://app.guides.test:13443/"],
+  "grantTypes": ["authorization_code", "refresh_token"]
+}
+```
+
+The redirect path is `/api/auth/callback/<provider id>`. For a shared secret, use
+`client_secret_basic` without `jwks`, after
+[turning on `allow_client_secrets`](/build/openid-provider-connect-an-app#register-the-client).
+
+---
+
+## 3. Configure Auth.js
+
+`auth.ts`, with `private_key_jwt`:
+
+```ts
+import NextAuth from 'next-auth'
+
+const jwk = JSON.parse(process.env.AUTH_SEAMLESS_PRIVATE_JWK ?? '{}')
+const key = await crypto.subtle.importKey(
+  'jwk',
+  jwk,
+  { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+  false,
+  ['sign'],
+)
+
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  providers: [
+    {
+      id: 'seamless',
+      name: 'Seamless',
+      type: 'oidc',
+      issuer: process.env.AUTH_SEAMLESS_ISSUER,
+      clientId: process.env.AUTH_SEAMLESS_ID,
+      client: { token_endpoint_auth_method: 'private_key_jwt' },
+      token: { clientPrivateKey: { key, kid: jwk.kid } },
+      authorization: { params: { scope: 'openid email' } },
+    },
+  ],
+  callbacks: {
+    jwt({ token, account, profile }) {
+      if (account && profile) {
+        token.sub = profile.sub ?? token.sub
+        token.acr = profile.acr
+      }
+      return token
+    },
+    session({ session, token }) {
+      session.user.id = token.sub!
+      return session
+    },
+  },
+})
+```
+
+`token.clientPrivateKey` comes from the
+[`@auth/core` source](https://github.com/nextauthjs/next-auth/blob/main/packages/core/src/lib/actions/callback/oauth/callback.ts),
+not from the Auth.js guides, so check it again when you upgrade.
+
+With a shared secret, drop the key import, `client` and `token`, and add
+`clientSecret: process.env.AUTH_SEAMLESS_SECRET`.
+
+`app/api/auth/[...nextauth]/route.ts`:
+
+```ts
+import { handlers } from '@/auth'
+export const { GET, POST } = handlers
+```
+
+Read the session and sign in from a server component:
+
+```tsx
+import { auth, signIn, signOut } from '@/auth'
+
+export default async function Page() {
+  const session = await auth()
+  if (!session?.user) {
+    return (
+      <form action={async () => { 'use server'; await signIn('seamless') }}>
+        <button type="submit">Sign in with Seamless</button>
+      </form>
+    )
+  }
+  return <p>Signed in as {session.user.email}</p>
+}
+```
+
+The provider issues no `name` or `picture` claim, so `session.user.name` and `image` stay empty.
+
+---
+
+## 4. Run It
+
+| Variable                    | Value                                                                       |
+| --------------------------- | --------------------------------------------------------------------------- |
+| `AUTH_URL`                  | `https://app.guides.test:13443`, the app's public origin                    |
+| `AUTH_SECRET`               | A random secret for Auth.js's own cookies                                   |
+| `AUTH_SEAMLESS_ISSUER`      | The issuer, for example `https://auth.guides.localhost:19443`               |
+| `AUTH_SEAMLESS_ID`          | `application.id`                                                            |
+| `AUTH_SEAMLESS_PRIVATE_JWK` | The private JWK as JSON, including its `kid`. Or `AUTH_SEAMLESS_SECRET`.    |
+| `NODE_EXTRA_CA_CERTS`       | Private CA only: the path to the CA file                                    |
+
+See [Auth.js environment variables](https://authjs.dev/getting-started/deployment#environment-variables)
+and [`NODE_EXTRA_CA_CERTS`](https://nodejs.org/api/cli.html#node_extra_ca_certsfile). The test ran
+`next build` and `next start -H 0.0.0.0 -p 13001` in a `node:24-alpine` container on the recipe's
+compose network.
+
+---
+
+## 5. Check It
+
+1. Open the app and choose **Sign in with Seamless**.
+2. Sign in on the hosted page. A first-party client shows no consent page.
+3. The app shows `Signed in as <email>`. In the test, `session.user.id` held the `sub`, and `acr` was
+   empty after the first email-code sign-up and `phrh` after a passkey sign-in on the virtual
+   authenticator.
+
+---
+
+## Sign-Out
+
+`signOut()` ends only the Auth.js session. In the test, the next **Sign in with Seamless** went straight
+back to the app without showing the hosted page, because the user's Seamless session was still live.
+If your app needs to end that session, send the browser to the provider's
+[sign-out endpoint](/build/openid-provider#sign-out) as well. That part was not run with Auth.js. It
+was run in the [generic guide](/build/openid-provider-connect-an-app#sign-out).
+
+---
+
+## Troubleshooting
+
+Each of these was hit while testing. Auth.js's detail is in the server log, under `[auth][cause]` and
+`[auth][details]`.
+
+| What you see                                                                         | Log line                                                                     | Cause and fix                                                                                                                                         |
+| ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Server error`, at `http://localhost:<port>/api/auth/error?error=Configuration`, after the hosted page | `CallbackRouteError` with `"error": "invalid_grant"`, `"grant request is invalid"` | The app runs on `http://127.0.0.1`. See [step 1](#1-give-the-app-a-real-hostname-over-https). `/api/auth/providers` shows the callback URL it uses. |
+| Registering returns `localhost is not a redirect host`, for `app.guides.localhost`   | None, it is the registration response                                        | `*.localhost` is refused even over `https`. Use another name, such as one under `.test`.                                                              |
+| `Server error`, `error=Configuration`, on choosing sign-in                           | `[auth][error] TypeError: fetch failed`                                      | The app does not trust the issuer's CA. Set `NODE_EXTRA_CA_CERTS`.                                                                                    |
+| An error page on `/authorize`, `missing required parameter 'client_id'`              | None                                                                         | `AUTH_SEAMLESS_ID` is empty.                                                                                                                          |
+
+Registration and shared-secret errors are in the
+[generic guide](/build/openid-provider-connect-an-app#troubleshooting).
+
+---
+
+## What Was And Was Not Tested
+
+**Tested.** The configuration above, built and started in production mode, once with `private_key_jwt`
+and once with `client_secret_basic`, with Playwright's Chromium and a virtual WebAuthn authenticator: a
+new user registering and a passkey sign-in from a clean browser, ending on a page showing the user. The
+stack was the local recipe from
+[seamless-auth-oidc-provider#60](https://github.com/fells-code/seamless-auth-oidc-provider/pull/60)
+(not merged at the time of writing), adjusted as described in the
+[generic guide](/build/openid-provider-connect-an-app#what-was-and-was-not-tested).
+
+**Not tested.** A browser that trusts the CA normally, a real authenticator, a publicly trusted
+certificate, a production deployment, `next dev`, refresh tokens or access token rotation in Auth.js,
+database sessions, Auth.js middleware, `next-auth` 4, or other Auth.js integrations.
