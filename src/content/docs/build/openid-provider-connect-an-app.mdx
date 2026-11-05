@@ -258,8 +258,7 @@ with Playwright's Chromium and a virtual WebAuthn authenticator: a new user regi
 user signing in with the passkey from a clean browser. Each run covered ID token validation including
 nonce, UserInfo, refresh rotation and sign-out, with `private_key_jwt`. The sign-in and refresh were
 repeated with `client_secret_post`. The provider stack was the local recipe in
-[seamless-auth-oidc-provider#60](https://github.com/fells-code/seamless-auth-oidc-provider/pull/60)
-(not merged at the time of writing), changed for this run in three ways: it used the published API
+[seamless-auth-oidc-provider](https://github.com/fells-code/seamless-auth-oidc-provider/tree/main/local), changed for this run in three ways: it used the published API
 v0.22.0 image, skipped the recipe's client link step (those routes arrive in API v0.23.0, and these
 guides do not use them), and raised `flow_rate_limits.otp.perIp` so repeated test sign-ups were not
 refused.
