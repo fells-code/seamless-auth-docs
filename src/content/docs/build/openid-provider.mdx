@@ -846,6 +846,11 @@ for the application, so an app cannot learn who else has an account), `notice_ac
 (400), `notice_no_channel` (422) and `notice_rate_limited` (429). The limits are 300 notices an hour
 per application and 10 an hour per application and user.
 
+A backend that serves a public client, such as a desktop app, cannot reach that app's users this way,
+because users hold grants with the app and not with the backend. Client links solve that, and they
+need Seamless Auth API v0.23.0, which is not published yet. See
+[Send A Notice Through The Client Link](/build/native-apps-oidc#send-a-notice-through-the-client-link).
+
 ---
 
 ## Verify Tokens In Your API
