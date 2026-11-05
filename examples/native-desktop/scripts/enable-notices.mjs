@@ -1,6 +1,6 @@
 // Turns account notices on for the recipe's backend client, the way an operator would: the owner
 // signs in with an email code, steps up with TOTP, and sets noticesEnabled through the admin API.
-// TODO(fells-code/seamless-auth-oidc-provider#60): the recipe's seed does not do this yet, and its
+// The recipe's seed does not do this yet, and its
 // three records and link are otherwise everything this example needs. Delete this file once it does.
 //   node scripts/enable-notices.mjs <the recipe local directory>
 import { createHmac } from 'node:crypto'

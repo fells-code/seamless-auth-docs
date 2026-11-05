@@ -20,10 +20,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # TODO(fells-code/seamless-auth-oidc-provider#60): the recipe is not on that repo's main yet. Pin
-  # the merge commit once it lands. It builds the API from source until API v0.23.0 is published
+  # The recipe builds the API from source until API v0.23.0 is published
   # (fells-code/seamless-auth-api#561), since v0.22.0 has no client link routes.
-  RECIPE_REF: ddd5009a21bb07343e7fc3fd0c362d6ae3c46c99
+  RECIPE_REF: 30be59b557ad109a93aff68695f0fb21ff2ef84d
 
 jobs:
   example:
