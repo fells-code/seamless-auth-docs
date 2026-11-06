@@ -1,0 +1,278 @@
+---
+title: 'Connect Any OIDC App To The OpenID Provider'
+description: 'The generic steps to sign users in to any OpenID Connect app through the Seamless Auth OpenID Provider: what the app must support, registering a client, the values to give it, the claims it receives, private CAs, sign-out, what the provider does not offer, and the errors you are likely to see.'
+sidebar:
+  order: 13.1
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Use this page when an app you did not write, or one you are writing without a Seamless SDK, should
+sign users in through the [OpenID Provider](/build/openid-provider). It is the checklist the
+app-specific guides follow. [Use Seamless Auth As An OpenID Provider](/build/openid-provider) is the
+reference for deploying the edge and for every setting.
+
+App-specific guides: [Grafana](/build/oidc-grafana), [Auth.js](/build/oidc-authjs),
+[Spring Security](/build/oidc-spring-security), and [oauth2-proxy](/build/oidc-oauth2-proxy) for an
+app with no OIDC support of its own.
+
+<Aside type="note" title="What this was tested against">
+  Run on 2026-11-04 against released `seamless-auth-api` v0.22.0 and
+  `seamless-auth-oidc-provider` v0.3.0, using `openid-client` 6.8.9 on Node 24 as the app. Nothing
+  here needs API v0.23.0. See [What was and was not tested](#what-was-and-was-not-tested): this is
+  a local test, not production verification.
+</Aside>
+
+---
+
+## What The App Must Support
+
+| Requirement                                       | Why                                                                                                                              |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Authorization code flow with PKCE (`S256`)        | The only sign-in flow. Without PKCE the app gets `invalid_request`, `Authorization Server policy requires PKCE`.                 |
+| Discovery, or fields for each endpoint            | The issuer's `/.well-known/openid-configuration` lists them.                                                                     |
+| `private_key_jwt`, or a shared secret             | Shared secrets need an opt-in. A public client uses PKCE alone: see [native apps](/build/native-apps-oidc).                      |
+| A way to trust your CA, if yours is private       | See [Trust a private CA](#trust-a-private-ca).                                                                                   |
+| RS256 ID tokens                                   | `id_token_signing_alg_values_supported` lists only `RS256`.                                                                      |
+| Identifying users by `sub` or `email`             | The provider issues no `name`, `preferred_username` or `groups` claim. See [Claims the app receives](#claims-the-app-receives).  |
+
+An app that cannot send PKCE can be opted out with `pkceRequired: false`, but that setting exists for
+OpenID certification test clients and [is not recommended](/build/openid-provider#pkce-and-nonce-opt-outs).
+No guide here uses it.
+
+---
+
+## Register The Client
+
+Applications are created under `/admin/applications`, which needs `admin:write` and a fresh step-up.
+The tests here used that route directly. The [CLI and dashboard](/build/openid-provider#register-applications-and-apis)
+manage the same records, but were not part of these runs.
+
+Prefer `private_key_jwt` when the app supports it, so the provider never holds a secret of yours:
+
+```json
+{
+  "name": "My app",
+  "clientType": "confidential",
+  "firstParty": true,
+  "tokenEndpointAuthMethod": "private_key_jwt",
+  "jwks": {
+    "keys": [{ "kty": "RSA", "n": "...", "e": "AQAB", "kid": "my-app-1", "alg": "RS256", "use": "sig" }]
+  },
+  "redirectUris": ["https://app.example.com/callback"],
+  "postLogoutRedirectUris": ["https://app.example.com/"],
+  "grantTypes": ["authorization_code", "refresh_token"]
+}
+```
+
+The response's `application.id` is the `client_id`.
+
+For an app that only supports a shared secret, turn the instance switch on, restart the edge, and
+then register with `client_secret_basic` or `client_secret_post` instead of `jwks`:
+
+```http
+PATCH /system-config/admin
+Content-Type: application/json
+
+{ "allow_client_secrets": true }
+```
+
+The response then also has `clientSecret`, shown only once. The edge reads this switch when it starts,
+so both steps are required: see [Troubleshooting](#troubleshooting).
+
+### Redirect URI rules
+
+- `https` URIs match exactly.
+- Plain `http` is accepted only on `127.0.0.1` or `[::1]`. The port is ignored there (RFC 8252), so a
+  client registered on port 13000 was also accepted on port 13001. Scheme, host and path must match.
+- `localhost` and every `*.localhost` name are refused as redirect hosts, even over `https`:
+  `localhost is not a redirect host, use 127.0.0.1 or [::1] (RFC 8252 section 8.3)`. The issuer may
+  use `*.localhost` in a local stack, but the app's redirect cannot.
+
+---
+
+## The Values To Give The App
+
+| App setting                   | Value                                                          |
+| ----------------------------- | -------------------------------------------------------------- |
+| Issuer, or discovery URL      | `https://login.example.com`, with no trailing slash            |
+| Authorization endpoint        | `<issuer>/authorize`                                           |
+| Token endpoint                | `<issuer>/token`                                               |
+| UserInfo endpoint             | `<issuer>/userinfo`                                            |
+| JWKS URI                      | `<issuer>/jwks`                                                |
+| End session endpoint          | `<issuer>/session/end`                                         |
+| Client ID                     | `application.id` from registration                             |
+| Scopes                        | `openid email`, plus `seamless` for roles                      |
+| PKCE                          | On, `S256`                                                     |
+
+Use discovery when the app supports it.
+
+---
+
+## Claims The App Receives
+
+Claims in an ID token for a user registered on the test stack, with `openid email seamless
+offline_access`:
+
+```text
+sub, acr, amr, auth_time, email, email_verified, roles, nonce, aud, exp, iat, iss
+```
+
+- **There is no profile data.** Discovery does not list a `profile` scope, and the edge drops `profile`
+  and any other unknown scope rather than refusing the request. Asking for `profile` is harmless, and
+  several apps do by default, but no `name`, `preferred_username` or `picture` comes back. Map the
+  app's display name and username to `email`.
+- **Roles are in `roles`, not `groups`.** They need the `seamless` scope. Point the app's group or role
+  mapping at `roles`.
+- **`acr` is absent for an email code.** A first sign-in that registered with an email code had
+  `amr: ["otp"]` and no `acr`. A later passkey sign-in on the virtual authenticator had `acr: "phrh"`
+  and `amr: ["hwk", "user", "mfa"]`. Do not require `acr` unless your users have passkeys.
+- `org_id` was not present for these test users, who had no organization.
+
+---
+
+## A Minimal App
+
+This is the sign-in the tests ran with `openid-client`, reduced to the provider-relevant calls.
+`oidc.PrivateKeyJwt` takes the imported private key and its `kid`:
+
+```ts
+import * as oidc from 'openid-client'
+
+const jwk = JSON.parse(readFileSync(process.env.PRIVATE_JWK_FILE, 'utf8'))
+const key = await crypto.subtle.importKey(
+  'jwk',
+  jwk,
+  { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+  false,
+  ['sign'],
+)
+const config = await oidc.discovery(
+  new URL(process.env.ISSUER),
+  process.env.CLIENT_ID,
+  {},
+  oidc.PrivateKeyJwt({ key, kid: jwk.kid }),
+)
+
+// Sign in. Keep code_verifier, state and nonce for the callback.
+const url = oidc.buildAuthorizationUrl(config, {
+  redirect_uri,
+  scope: 'openid email seamless offline_access',
+  prompt: 'consent', // offline_access is honoured only with prompt=consent
+  state,
+  nonce,
+  code_challenge: await oidc.calculatePKCECodeChallenge(code_verifier),
+  code_challenge_method: 'S256',
+})
+
+// Callback.
+const tokens = await oidc.authorizationCodeGrant(config, currentUrl, {
+  pkceCodeVerifier: code_verifier,
+  expectedState: state,
+  expectedNonce: nonce,
+  idTokenExpected: true,
+})
+const claims = tokens.claims()
+const userinfo = await oidc.fetchUserInfo(config, tokens.access_token, claims.sub)
+
+// Later. Every refresh returns a new refresh token.
+const refreshed = await oidc.refreshTokenGrant(config, tokens.refresh_token)
+
+// Sign out.
+const signOutUrl = oidc.buildEndSessionUrl(config, {
+  id_token_hint: tokens.id_token,
+  post_logout_redirect_uri,
+})
+```
+
+With a shared secret the only change is `oidc.ClientSecretPost(secret)` in place of
+`oidc.PrivateKeyJwt(...)`. Both were run. See the
+[`openid-client` documentation](https://github.com/panva/openid-client).
+
+---
+
+## Trust A Private CA
+
+A publicly trusted certificate on the issuer needs none of this. A private CA, such as the local
+recipe's Caddy CA, must be given to the app, which calls the token, UserInfo and JWKS endpoints itself.
+The browser needs it too, separately.
+
+| Runtime | What worked                                                                                                                                                                  | Guide                                         |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| Node    | [`NODE_EXTRA_CA_CERTS`](https://nodejs.org/api/cli.html#node_extra_ca_certsfile)`=/path/ca.crt`                                                                              | [Auth.js](/build/oidc-authjs)                 |
+| Go      | `SSL_CERT_FILE=/path/ca.crt`, or the app's own setting                                                                                                                       | [Grafana](/build/oidc-grafana), [oauth2-proxy](/build/oidc-oauth2-proxy) |
+| Java    | A copy of `cacerts` with the CA imported, passed as `-Djavax.net.ssl.trustStore`                                                                                             | [Spring Security](/build/oidc-spring-security) |
+
+Do not turn certificate verification off to get past this.
+
+---
+
+## Sign-Out
+
+Send the browser to `end_session_endpoint` with `id_token_hint` (or `client_id`) and a registered
+`post_logout_redirect_uri`. A hosted page asks before anything ends, offering **Sign out** (the whole
+Seamless session) and **Only sign out of** the app. After **Sign out**, the browser returned to the
+app's `post_logout_redirect_uri` and the next sign-in needed the hosted page again. See
+[Sign-Out](/build/openid-provider#sign-out).
+
+An app that only clears its own cookies does not sign the user out of Seamless, so its next sign-in
+can complete silently. The [Auth.js guide](/build/oidc-authjs#sign-out) shows this happening.
+
+---
+
+## What The Provider Does Not Offer
+
+If an app needs one of these, it cannot use the provider that way today:
+
+| Feature                                | What happens                                                                    |
+| -------------------------------------- | ------------------------------------------------------------------------------- |
+| Request objects (`request=`)           | `error=request_not_supported`. Discovery has `request_uri_parameter_supported: false`. |
+| The `claims` request parameter         | Discovery has `claims_parameter_supported: false`. Use `acr_values` for `acr`.  |
+| `profile` claims or a `groups` claim   | Not issued. See [Claims the app receives](#claims-the-app-receives).            |
+| ID tokens signed with anything but RS256 | Discovery lists only `RS256`.                                                 |
+| `client_secret_jwt`, implicit or hybrid flows, plain PKCE | [Refused by design](/build/openid-provider#security-defaults).  |
+
+---
+
+## Troubleshooting
+
+Each of these was hit while testing.
+
+| What you see                                                                                       | Cause and fix                                                                                                                                              |
+| -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `invalid_request`, `Authorization Server policy requires PKCE to be used for this request`         | The app did not send PKCE. Turn it on with `S256`.                                                                                                         |
+| Registering returns `400`, `Shared client secrets are off on this instance (allow_client_secrets)` | Turn on `allow_client_secrets`.                                                                                                                            |
+| `invalid_client_metadata`, `token_endpoint_auth_method must be 'private_key_jwt' or 'none'` on `/authorize` | `allow_client_secrets` was turned on but the edge was not restarted. Discovery also omits the secret methods until it is. Restart the edge.                |
+| `invalid_client`, `client authentication failed` at the token endpoint                             | Wrong secret, or the wrong key. The browser gets back to the app first, so this shows up as an error on the app's callback.                                |
+| `invalid_redirect_uri`, `redirect_uri did not match any of the client's registered redirect_uris`  | The app's redirect URI differs from the registered one. Compare scheme, host and path.                                                                     |
+| Registering returns `localhost is not a redirect host`                                             | See [Redirect URI rules](#redirect-uri-rules). Use `127.0.0.1`, or a real hostname over `https`.                                                           |
+| TLS or fetch errors from the app (`x509`, `fetch failed`, `Unable to resolve Configuration`)                                           | The app does not trust the issuer's CA. See [Trust a private CA](#trust-a-private-ca).                                                                     |
+| The hosted page says `Failed to register. Please try again.` and the network response is `429`     | The sign-in flow limit, `flow_rate_limits.otp.perIp` (10 per 15 minutes by default). Repeated test sign-ups from one address reach it. Wait, or use fewer. |
+
+---
+
+## What Was And Was Not Tested
+
+**Tested.** A small Node server using `openid-client` 6.8.9, in a `node:24-alpine` container, signed in
+with Playwright's Chromium and a virtual WebAuthn authenticator: a new user registering, then the same
+user signing in with the passkey from a clean browser. Each run covered ID token validation including
+nonce, UserInfo, refresh rotation and sign-out, with `private_key_jwt`. The sign-in and refresh were
+repeated with `client_secret_post`. The provider stack was the local recipe in
+[seamless-auth-oidc-provider](https://github.com/fells-code/seamless-auth-oidc-provider/tree/main/local), changed for this run in three ways: it used the published API
+v0.22.0 image, skipped the recipe's client link step (those routes arrive in API v0.23.0, and these
+guides do not use them), and raised `flow_rate_limits.otp.perIp` so repeated test sign-ups were not
+refused.
+
+**Not tested.** A browser that trusts the CA normally (Chromium was told to accept the served
+certificate by its key hash, after a script checked it against the CA), a real authenticator, a
+publicly trusted certificate, a production deployment, the CLI or dashboard for registration, or API
+v0.23.0.
+
+---
+
+## Related Docs
+
+- [Use Seamless Auth As An OpenID Provider](/build/openid-provider)
+- [Sign-In For Native, Desktop And CLI Apps](/build/native-apps-oidc)
+- [Grafana](/build/oidc-grafana), [Auth.js](/build/oidc-authjs),
+  [Spring Security](/build/oidc-spring-security), [oauth2-proxy](/build/oidc-oauth2-proxy)
