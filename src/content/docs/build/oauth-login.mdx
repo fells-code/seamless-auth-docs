@@ -171,6 +171,22 @@ http://localhost:5173/oauth/callback
 That URI must also be registered with the external OAuth provider, and must appear in the provider's
 `redirectUris` allowlist above.
 
+### Native apps
+
+A custom scheme such as `myapp://oauth/callback` has no origin, so it never passes the fallback to
+Seamless Auth origins. It must be listed in `redirectUris`, and a start that asks for it otherwise
+answers 400 and records `oauth_login_failed` with reason `start_failed` and detail
+`redirect_not_allowed`.
+
+Listing it satisfies Seamless Auth only. The provider has to accept it as well, and Google does not
+take a custom scheme on the web application client that a server-side token exchange uses: its
+[web server guide](https://developers.google.com/identity/protocols/oauth2/web-server) requires https
+redirect URIs apart from localhost, and its
+[native app guide](https://developers.google.com/identity/protocols/oauth2/native-app) says custom
+URI schemes are no longer supported on Android. With Google, register an https page you serve and
+have that page pass `code` and `state` on to the app's scheme. Test the whole trip on a device before
+offering the button.
+
 ---
 
 ## Step 3: Show Provider Buttons
