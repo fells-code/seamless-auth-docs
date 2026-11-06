@@ -1,0 +1,27 @@
+{
+  "name": "seamless-native-desktop-example",
+  "private": true,
+  "version": "0.0.0",
+  "description": "A desktop app and its backend on the Seamless Auth OpenID Provider: system browser sign-in, OS keychain, verify-only API, step-up and a client link notice.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "app/main.mjs",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "app": "electron .",
+    "backend": "node backend/server.mjs",
+    "e2e": "node e2e/run.mjs"
+  },
+  "dependencies": {
+    "@napi-rs/keyring": "2.1.1",
+    "@seamless-auth/express": "0.24.0",
+    "express": "5.2.1",
+    "openid-client": "6.8.9"
+  },
+  "devDependencies": {
+    "electron": "44.9.2",
+    "playwright": "1.64.1"
+  }
+}

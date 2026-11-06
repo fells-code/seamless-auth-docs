@@ -1,6 +1,6 @@
 ---
 title: 'Sign-In For Native, Desktop And CLI Apps'
-description: 'Sign users in to desktop apps, CLIs and other native apps through the Seamless Auth OpenID Provider the RFC 8252 way: a public client, the system browser, PKCE, loopback redirects on any port, IPv6 loopback and private-use schemes, and what OAuth 2.1 refuses.'
+description: 'Sign users in to desktop apps, CLIs and other native apps through the Seamless Auth OpenID Provider the RFC 8252 way (public client, system browser, PKCE, loopback or private-use redirects, keychain storage), and give a desktop app a backend with verify-only tokens, step-up and account notices, with a runnable Electron example.'
 sidebar:
   order: 14
 ---
@@ -18,8 +18,10 @@ Read [Use Seamless Auth As An OpenID Provider](/build/openid-provider) first for
 the registry and the token model. This page covers what is different for native apps.
 
 <Aside type="note" title="Status">
-  Ships in v0.21 with the OpenID Provider, including sign-out and the device authorization grant
-  for CLIs on machines without a browser.
+  Sign-in ships in v0.21 with the OpenID Provider, including sign-out and the device authorization
+  grant for CLIs on machines without a browser. Part of [An App With Its Own
+  Backend](#an-app-with-its-own-backend) is not released: account notices through a client link need
+  Seamless Auth API v0.23.0, which is not published yet. See [Versions](#versions).
 </Aside>
 
 ---
@@ -36,7 +38,7 @@ the registry and the token model. This page covers what is different for native 
 4. **Receive the code on a loopback redirect or a private-use scheme.** See the next section.
 5. **Keep tokens in the OS credential store**: the macOS Keychain, Windows Credential Manager, or the
    Secret Service API (GNOME Keyring, KWallet) on Linux. Not a plain file, not an environment
-   variable.
+   variable. See [Keep Tokens In The OS Credential Store](#keep-tokens-in-the-os-credential-store).
 
 ---
 
@@ -150,23 +152,55 @@ to the browser every time the access token expires. See [Refresh tokens](/build/
 
 ---
 
+## Keep Tokens In The OS Credential Store
+
+- **The refresh token** goes in the OS credential store and nowhere else. If the store is locked or
+  absent, sign-in should fail and say so. Do not fall back to a file.
+- **The access token** stays in memory. It is short-lived and cheap to refresh.
+- **The ID token** stays in memory too, for `id_token_hint` on sign-out. A refresh returns a new one.
+- **One refresher at a time.** An app with several processes (a tray helper, a CLI, the main window)
+  refreshes through one of them, or behind a lock. In Electron, `app.requestSingleInstanceLock()`
+  and one in-flight refresh in the main process cover the app itself.
+- **Save before use.** Store a rotated refresh token before using the new access token, so a crash
+  cannot leave the app holding a spent one.
+- **The renderer never sees a token.** In Electron or Tauri, keep tokens in the native process and
+  give the page the results of calls, so script running in the page has nothing to take.
+
+A library that reaches the store directly is the simplest route. The example uses
+[`@napi-rs/keyring`](https://github.com/Brooooooklyn/keyring-node), with
+`{ linux: { store: 'secret-service' } }`: by default it falls back on Linux to the kernel keyring,
+which is memory only, so the user would be signed out at every reboot. Two things that look like the
+same choice are not, as checked on 2026-11-04:
+
+- [`keytar`](https://github.com/atom/node-keytar), the older Node library, is archived on GitHub.
+- Electron's [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) encrypts data
+  for you to store yourself, and it is not a credential store. On Linux with no secret store, it
+  falls back to a hardcoded password, and `safeStorage.getSelectedStorageBackend()` returns
+  `basic_text`. If you use it anyway, check that and refuse.
+
+---
+
 ## Refresh, API Tokens And Sign-Out
 
 - **Refresh.** Refresh tokens rotate on every use. Save the new one each time, before using the new
   access token. A refresh token used twice revokes the grant and ends the user's Seamless session,
-  so two processes of the same app must not refresh with one token at the same time.
+  so two processes of the same app must not refresh with one token at the same time. `acr`, `amr`
+  and `auth_time` on the new access token are the session's, so a step-up survives a refresh.
 - **Tokens for your API.** Ask for a token for a named API with `resource=<identifier>` on the
   authorization request, using a resource the application is linked to. The access token is an RFC
   9068 JWT whose `aud` is that API. See
   [Access tokens for your API](/build/openid-provider#access-tokens-for-your-api).
 - **Signing out of the app.** Revoke the refresh token at `/token/revocation` (a public client sends
   its `client_id`), then delete the stored tokens. That ends this app's grant only. The user stays
-  signed in to Seamless in the browser and in their other apps.
+  signed in to Seamless in the browser and in their other apps. An access token already issued
+  keeps working at a backend that verifies tokens locally until it expires, so keep access token
+  lifetimes short ([`accessTokenTtlSeconds`](/build/openid-provider#refresh-tokens)).
 - **Signing out of Seamless.** To end the user's Seamless session too, revoke and delete the tokens,
   then open the [end session URL](/build/openid-provider#rp-initiated-logout) in the system
   browser, where the Seamless session cookie lives. The hosted page asks the user to confirm. To
   bring the user back to the app, register a `post_logout_redirect_uri` and pass it with a `state`.
-  It is matched exactly, with no loopback port exception, so a private-use scheme fits best.
+  A loopback URI registered for a native application matches on any port, as a redirect URI does,
+  so the listener can use a port the OS picks. Every other form is matched exactly.
 
 ```ts
 const logoutUrl = oidc.buildEndSessionUrl(config, {
@@ -231,6 +265,194 @@ cannot reach the passkeys synced to the user's browser or phone in any case. Sen
 the system browser keeps passkeys, saved sessions and any security keys working, and keeps the app
 out of the credential path.
 
+The same page handles step-up. When a backend asks for a recent passkey, the app opens the system
+browser again, and the user confirms on the hosted page with the session they already have.
+
+---
+
+## An App With Its Own Backend
+
+Most desktop apps call their own API. The app holds the user's tokens and nothing else, and the
+backend trusts a call by verifying its token locally. The auth API stays private, so the app never
+reaches it.
+
+```text
+desktop app (public client) ──system browser──► login edge ──► auth API (private)
+      │  access token, aud = backend resource         ▲              ▲
+      ▼                                               │ JWKS         │ notices, client credentials
+backend API (resource server) ── verify-only adapter ─┘              │ through a client link
+      └──────────────────────────────────────────────────────────────┘
+```
+
+The design is [ADR 0002](https://github.com/fells-code/seamless-auth-api/blob/main/docs/adr/0002-native-and-desktop-apps.md).
+Nothing in it is specific to one product.
+
+### Versions
+
+The example was run against the versions in the last column. Anything earlier is unverified, even
+where a feature first shipped sooner.
+
+| Piece                                                                     | Needs                                                                                                                      | Run against                                                                                      |
+| ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Public client, loopback redirect, PKCE, API tokens, refresh, revocation   | The provider, from v0.21                                                                                                   | Edge image `seamless-auth-oidc-provider:v0.3.0`                                                  |
+| `acr`, `amr` and `auth_time` on an access token for a resource            | `@seamless-auth/oidc-provider` 0.3.0                                                                                       | Edge image `v0.3.0`                                                                              |
+| Verify-only guards (`createResourceServer`)                               | `@seamless-auth/express` 0.23.0, with the same guards in the Fastify, Next.js, Go, Python and Rust adapters                | `@seamless-auth/express` 0.24.0                                                                  |
+| Client links and `clientId` on account notices                            | **Seamless Auth API v0.23.0, which is not published.** API v0.22.0 has no link routes.                                     | The API built from source at [`bcab4d1`](https://github.com/fells-code/seamless-auth-api/commit/bcab4d1b62ebb1f14e9b3eda8297ede01e38962f) |
+
+### Register Three Records
+
+| Record         | Registry entry                                                                                      | Holds                              |
+| -------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| Desktop app    | Application, `clientType: public`, `tokenEndpointAuthMethod: none`, a loopback or private-use URI   | Nothing secret                     |
+| Backend client | Application, `clientType: confidential`, `private_key_jwt`, `client_credentials`, notices turned on | A private key, on the backend only |
+| Backend API    | Resource, an absolute URI such as `https://api.example.com`, with its scopes                        | Nothing; it names the audience     |
+
+Allow both applications the resource with `PUT /admin/applications/:id/resources`. Then link the
+backend client to the desktop app (API v0.23.0) with
+`PUT /admin/applications/<backend id>/links/<desktop id>`. A link says the backend acts for that
+app. The acting client must be confidential and the linked one public, and both must be first-party
+or both third-party. Every write needs a fresh step-up and is audited.
+
+### Verify Tokens In The Backend
+
+Use the verify-only guards of your adapter, as in
+[Verify Tokens In Your API](/build/openid-provider#verify-tokens-in-your-api). They check the
+signature, `iss`, `aud`, `typ` and `exp` locally, and never call the auth API. One check is yours:
+which clients this API serves. The adapter accepts any valid token for the resource, so without
+this, another client allowed the same resource could call it. In the example, the backend's own
+client credentials token verifies, and this check is what answers it with a 403.
+
+```ts
+import { createResourceServer } from '@seamless-auth/express'
+
+const api = createResourceServer({
+  issuer: 'https://login.example.com',
+  audience: 'https://api.example.com',
+})
+
+const clients = new Set(['DESKTOP_CLIENT_ID'])
+function requireClient(req, res, next) {
+  if (clients.has(req.user.clientId)) return next()
+  res.status(403).json({ error: 'client_not_allowed' })
+}
+
+app.get('/notes', api.requireAuth(), requireClient, api.requireScope('notes:read'), listNotes)
+```
+
+### Require A Recent Passkey On One Route
+
+The backend decides which routes are sensitive. `requireStepUp` answers with the RFC 9470 challenge
+until the token shows what the route asks for:
+
+```ts
+app.post(
+  '/notes/export',
+  api.requireAuth(),
+  requireClient,
+  api.requireScope('notes:read'),
+  api.requireStepUp({ acrValues: ['phr'], maxAge: 300 }),
+  exportNotes,
+)
+```
+
+```http
+HTTP/1.1 401 Unauthorized
+WWW-Authenticate: Bearer error="insufficient_user_authentication",
+  error_description="A different authentication level is required", acr_values="phr", max_age="300"
+```
+
+The app reads the challenge, accepting quoted or bare values, and then:
+
+1. Opens the system browser on a new authorization request with the same `resource` and scopes,
+   plus the `acr_values` and `max_age` from the challenge.
+2. The user confirms on the hosted page, which offers their passkey on the session they already
+   have.
+3. The app exchanges the code, stores the new refresh token, and retries the call once.
+4. The app revokes the refresh token it replaced. A step-up starts a new grant, so the old one
+   would otherwise stay usable until it expires.
+
+`acr` says how strong and `max_age` says how recent, so a route that needs a passkey within five
+minutes asks for both. The challenge comes back once `auth_time` is older than `max_age`. Do not
+use the device flow for such a route, since device tokens never carry `acr`.
+
+### Send A Notice Through The Client Link
+
+Users sign in to the desktop app, so the backend's own client holds no grants and could reach
+nobody. A link fixes that. The backend gets a client credentials token with its own key and names
+the desktop app in `clientId`. The template names the app the user knows, not the backend.
+
+<Aside type="caution" title="Needs API v0.23.0">
+  `clientId` and the link routes are not in a published API yet. On API v0.22.0, an application can
+  only send to users who hold a grant with that same application. See
+  [Account Notices](/build/openid-provider#account-notices-from-an-application).
+</Aside>
+
+```ts
+const { access_token } = await oidc.clientCredentialsGrant(backendConfig, {
+  resource: 'https://login.example.com/seamless',
+  scope: 'notices:send',
+})
+
+await fetch('https://auth-api.internal.example.com/applications/account-notices', {
+  method: 'POST',
+  headers: { authorization: `Bearer ${access_token}`, 'content-type': 'application/json' },
+  body: JSON.stringify({
+    userId: req.user.id,
+    clientId: 'DESKTOP_CLIENT_ID',
+    subject: 'Your notes export is ready',
+    text: 'The export you asked for is ready in the app.',
+  }),
+})
+```
+
+A user token cannot send a notice, and neither can a public client, which cannot use
+`client_credentials`. The backend's private key never ships in the app.
+
+---
+
+## A Runnable Desktop Example
+
+[`examples/native-desktop`](https://github.com/fells-code/seamless-auth-docs/tree/main/examples/native-desktop)
+is an Electron app and an Express backend that do everything on this page against a local instance:
+system browser sign-in, a loopback redirect on a port the OS picks, PKCE, the OS keychain, refresh,
+sign-out with revocation, a token for a named API, a route that answers the RFC 9470 challenge until
+the user steps up, and a notice through a client link. Its README has the steps, and it runs on the
+[local recipe](https://github.com/fells-code/seamless-auth-oidc-provider/pull/60), which is still in
+review.
+
+CI runs it end to end on a schedule, with a virtual authenticator in Chromium standing in for the
+user's passkey and default browser. That covers the flow and the keychain. It does not cover a real
+browser being opened by the OS, a physical authenticator, or Windows. The README lists exactly what
+it does and does not check.
+
+---
+
+## A Runnable CLI Example
+
+<Aside type="caution" title="Not written yet">
+  This section is a placeholder. A runnable CLI example is waiting on
+  [seamless-cli#316](https://github.com/fells-code/seamless-cli/issues/316). Nothing here describes
+  what that work will ship, so do not plan around it. Today, `seamless profile login` signs in with
+  an email code.
+</Aside>
+
+---
+
+## Where DPoP Will Fit
+
+<Aside type="caution" title="Not shipped">
+  DPoP ([seamless-auth-api#512](https://github.com/fells-code/seamless-auth-api/issues/512)) and
+  device-bound keys do not exist in Seamless Auth yet. This section is the intended direction, and it
+  may change.
+</Aside>
+
+Today, every token on this page is a bearer token: whoever holds it can use it, which is why the
+storage rules above are the protection. DPoP (RFC 9449) binds a token to a key the app holds, so a
+stolen token alone would not be enough. When #512 ships, this page should recommend a non-exportable
+key in the platform keystore where one exists. On the backend, the verify-only guards already refuse
+a sender-constrained token (`cnf`) unless you pass a `confirm` hook, which is where a proof check
+would plug in.
+
 ---
 
 ## What OAuth 2.1 Refuses
@@ -257,5 +479,8 @@ public one never):
 
 - [Use Seamless Auth As An OpenID Provider](/build/openid-provider)
 - [Mobile Passkeys](/build/mobile-passkeys)
+- [Server SDKs](/build/server-sdks)
 - [OAuth 2.0 Security Best Current Practice (RFC 9700)](/understand/oauth-rfc9700)
 - [RFC 8252: OAuth 2.0 for Native Apps](https://www.rfc-editor.org/rfc/rfc8252)
+- [RFC 9470: OAuth 2.0 Step Up Authentication Challenge Protocol](https://www.rfc-editor.org/rfc/rfc9470)
+- [RFC 9449: OAuth 2.0 Demonstrating Proof of Possession (DPoP)](https://www.rfc-editor.org/rfc/rfc9449)

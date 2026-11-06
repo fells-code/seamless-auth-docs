@@ -1,0 +1,37 @@
+body {
+  font:
+    15px/1.5 system-ui,
+    sans-serif;
+  margin: 24px;
+}
+
+h1 {
+  font-size: 22px;
+  margin: 0 0 4px;
+}
+
+h2 {
+  font-size: 14px;
+  margin: 20px 0 4px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+button {
+  font: inherit;
+  padding: 6px 12px;
+}
+
+pre {
+  background: #f4f4f5;
+  border-radius: 6px;
+  min-height: 2em;
+  overflow: auto;
+  padding: 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

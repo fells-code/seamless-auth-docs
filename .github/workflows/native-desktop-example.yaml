@@ -1,0 +1,83 @@
+name: native-desktop-example
+
+# Keeps examples/native-desktop running: the Electron app and its backend against the OpenID
+# Provider local recipe, with a virtual authenticator standing in for the user's passkey. The weekly
+# run catches a change in the pinned images or the published packages breaking the example.
+on:
+  pull_request:
+    paths:
+      - 'examples/native-desktop/**'
+      - '.github/workflows/native-desktop-example.yaml'
+  schedule:
+    - cron: '41 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The recipe builds the API from source until API v0.23.0 is published
+  # (fells-code/seamless-auth-api#561), since v0.22.0 has no client link routes.
+  RECIPE_REF: 30be59b557ad109a93aff68695f0fb21ff2ef84d
+
+jobs:
+  example:
+    name: Desktop app and backend, end to end
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: examples/native-desktop
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Checkout the local recipe
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: fells-code/seamless-auth-oidc-provider
+          ref: ${{ env.RECIPE_REF }}
+          path: .recipe
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+          cache-dependency-path: examples/native-desktop/package-lock.json
+
+      - name: Bring the recipe up
+        run: '${GITHUB_WORKSPACE}/.recipe/local/up.sh'
+
+      - name: Install the example
+        run: |
+          npm ci
+          sudo apt-get update
+          sudo apt-get install -y xvfb dbus-x11 gnome-keyring
+          npx playwright install --with-deps chromium
+          # Ubuntu 24.04 restricts the user namespaces Electron's sandbox uses.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - name: Turn notices on for the backend client
+        run: node scripts/enable-notices.mjs "${GITHUB_WORKSPACE}/.recipe/local"
+
+      - name: Run the example end to end
+        env:
+          RECIPE_DIR: ${{ github.workspace }}/.recipe/local
+        run: xvfb-run -a dbus-run-session -- bash e2e/with-keyring.sh node e2e/run.mjs
+
+      - name: Service logs
+        if: failure()
+        working-directory: .recipe/local
+        run: docker compose --env-file settings.env logs --no-color --tail 200
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native-desktop-screenshots
+          path: examples/native-desktop/e2e/screenshots/
+          if-no-files-found: ignore
+          retention-days: 7
