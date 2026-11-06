@@ -1,9 +1,11 @@
 ---
 title: "CLI Command Reference"
-description: "Reference for every seamless-cli command and flag: init (including non-interactive flags), add, templates, check, verify, profile, login, and the instance admin commands."
+description: "Reference for every seamless-cli command and flag: init (including non-interactive flags), add, templates, check, verify, profile (including sign-in through the OpenID Provider), login, clients, and the instance admin commands."
 sidebar:
   order: 1
 ---
+
+import { Aside } from '@astrojs/starlight/components'
 
 This page summarizes the current public command surface of `seamless-cli`.
 
@@ -22,6 +24,7 @@ The npm package is named `seamless-cli`. The executable binary is named `seamles
 | `seamless owner-code [email]`  | Print a one-time code for the owner of a local stack, to finish registering the first admin |
 | `seamless verify [flags]`      | Run the cross-package auth conformance harness (api / adapter / react matrix)              |
 | `seamless profile <sub>`       | Manage the instances the CLI targets, and sign in to one with `profile login`              |
+| `seamless clients <sub>`       | Register and change the OIDC clients on an instance (admin)                                |
 | `seamless login [identifier]`  | Sign in to the Seamless portal (managed control plane) with email OTP                      |
 | `seamless apps <list\|get>`    | Show the managed applications your portal account owns                                     |
 | `seamless whoami`              | Show the identity and instance URL behind the portal session, or an instance profile       |
@@ -500,9 +503,11 @@ and identity metadata, never tokens.
 ```bash
 seamless profile list
 seamless profile add <name> --instance-url <url> [--identifier-type email|phone]
+                   [--oidc-issuer <url> --client-id <id>]
 seamless profile use <name>
 seamless profile remove <name>
 seamless profile login [name] [identifier] [--identifier <email>] [--local]
+                       [--device] [--email-code] [--oidc-issuer <url>] [--client-id <id>]
 ```
 
 - `list` shows configured profiles; the active one is marked with `*`.
@@ -517,6 +522,77 @@ seamless profile login [name] [identifier] [--identifier <email>] [--local]
 
 Choose the active profile per command with `--profile <name>` or the `SEAMLESS_PROFILE` environment
 variable.
+
+### Signing in through the OpenID Provider
+
+<Aside type="caution" title="Merged, not released">
+  The flags below are merged in
+  [seamless-cli#349](https://github.com/fells-code/seamless-cli/pull/349), and are not in a published
+  `seamless-cli`. The latest published version is 0.27.2, whose `profile login` signs in with an email
+  code. They also need Seamless Auth API v0.23.0, which is not published, and the provider edge.
+</Aside>
+
+When the profile has a provider, `profile login` signs in through it and exchanges the sign-in at
+`POST /sessions/exchange` for a first-party session. It stores that session in the OS keychain and
+keeps no token from the provider. It checks the keychain before it starts, and fails early on a
+machine with none.
+
+| Flag                  | What it does                                                                                                                                                            |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| (none)                | Opens the system browser, with a loopback redirect on `127.0.0.1`, a random port and PKCE `S256`. `BROWSER` overrides the browser.                                       |
+| `--device`            | Uses the device grant: prints a URL and a code to approve on any device. For a machine with no browser. Cannot be combined with `--email-code` or `--local`. With no provider, it falls back to an email code and says so. |
+| `--email-code`        | Signs in with an email code on purpose, even when a provider is known.                                                                                                   |
+| `--oidc-issuer <url>` | Names the provider's issuer, which must be https. Needs `--client-id` too. Saved to the profile on a successful sign-in.                                                 |
+| `--client-id <id>`    | Names the client the CLI signs in with. Saved to the profile on a successful sign-in.                                                                                    |
+
+- **Which provider.** Flags win over what the profile saved, which wins over `oidcProvider` on
+  `GET /system-config/public`. With no provider from any of them, `profile login` uses an email code.
+  An issuer that is known but cannot be read stops the sign-in rather than falling back.
+- **The advertisement.** It is read only over https or on loopback, so an instance on plain http
+  needs the flags. An advertised issuer on another origin needs your confirmation, and without a
+  terminal the CLI stops and asks for the flags. `oidc_cli_client_id` is not settable through
+  `seamless config` yet ([seamless-cli#351](https://github.com/fells-code/seamless-cli/issues/351)).
+- **A failed exchange.** Sign in again. The CLI never retries one: the token works once, and a replay
+  revokes the session the first attempt created.
+- **A session from `--device`** must step up with the authenticator app before admin and organization
+  commands, reads included. `whoami`, `logout` and `sessions` need none. A browser session can step up
+  with a passkey as well.
+
+The client has to exist first. See [`clients`](#clients) for how to register it. The guide has the
+reasoning: [Signing In To Seamless With The Seamless
+CLI](/build/native-apps-oidc#signing-in-to-seamless-with-the-seamless-cli).
+
+---
+
+## `clients`
+
+```bash
+seamless clients create <name> [--public] [flags]
+seamless clients update <id> [flags]
+```
+
+Registers and changes the OIDC clients on an instance. It needs an admin role, and writes need a fresh
+step-up. [Use Seamless Auth As An OpenID Provider](/build/openid-provider) covers the other
+subcommands and flags.
+
+`--session-exchange` and `--no-session-exchange` turn session exchange on and off for a first-party
+public native client, which is what lets that client sign in the CLI with
+[`profile login`](#signing-in-through-the-openid-provider). `clients get` shows the setting. Turning it
+off revokes the sessions the client exchanged for, including the one running the command if it signed
+in through that client. These flags are merged in
+[seamless-cli#349](https://github.com/fells-code/seamless-cli/pull/349), and are not in a published
+`seamless-cli` yet. They need Seamless Auth API v0.23.0, which is not published.
+
+```bash
+seamless clients create "Seamless CLI" --public --first-party --auth-method none \
+  --redirect-uri http://127.0.0.1/callback --device-flow --session-exchange
+
+seamless clients update <id> --session-exchange
+seamless clients update <id> --no-session-exchange
+```
+
+The loopback redirect is required even if you will only use `--device`. `--device-flow` is needed only
+for `--device`.
 
 ---
 

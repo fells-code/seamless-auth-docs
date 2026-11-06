@@ -1,6 +1,6 @@
 ---
 title: 'Sign-In For Native, Desktop And CLI Apps'
-description: 'Sign users in to desktop apps, CLIs and other native apps through the Seamless Auth OpenID Provider the RFC 8252 way (public client, system browser, PKCE, loopback or private-use redirects, keychain storage), and give a desktop app a backend with verify-only tokens, step-up and account notices, with a runnable Electron example.'
+description: 'Sign users in to desktop apps, CLIs and other native apps through the Seamless Auth OpenID Provider the RFC 8252 way (public client, system browser, PKCE, loopback or private-use redirects, keychain storage), and give a desktop app a backend with verify-only tokens, step-up and account notices, with runnable Electron and CLI examples.'
 sidebar:
   order: 14
 ---
@@ -21,7 +21,9 @@ the registry and the token model. This page covers what is different for native 
   Sign-in ships in v0.21 with the OpenID Provider, including sign-out and the device authorization
   grant for CLIs on machines without a browser. Part of [An App With Its Own
   Backend](#an-app-with-its-own-backend) is not released: account notices through a client link need
-  Seamless Auth API v0.23.0, which is not published yet. See [Versions](#versions).
+  Seamless Auth API v0.23.0, which is not published yet. See [Versions](#versions). So does `seamless
+  profile login` through the provider, described in [A Runnable CLI
+  Example](#a-runnable-cli-example).
 </Aside>
 
 ---
@@ -417,8 +419,7 @@ is an Electron app and an Express backend that do everything on this page agains
 system browser sign-in, a loopback redirect on a port the OS picks, PKCE, the OS keychain, refresh,
 sign-out with revocation, a token for a named API, a route that answers the RFC 9470 challenge until
 the user steps up, and a notice through a client link. Its README has the steps, and it runs on the
-[local recipe](https://github.com/fells-code/seamless-auth-oidc-provider/pull/60), which is still in
-review.
+[local recipe](https://github.com/fells-code/seamless-auth-oidc-provider/tree/main/local).
 
 CI runs it end to end on a schedule, with a virtual authenticator in Chromium standing in for the
 user's passkey and default browser. That covers the flow and the keychain. It does not cover a real
@@ -429,12 +430,82 @@ it does and does not check.
 
 ## A Runnable CLI Example
 
-<Aside type="caution" title="Not written yet">
-  This section is a placeholder. A runnable CLI example is waiting on
-  [seamless-cli#316](https://github.com/fells-code/seamless-cli/issues/316). Nothing here describes
-  what that work will ship, so do not plan around it. Today, `seamless profile login` signs in with
-  an email code.
+[`examples/native-cli`](https://github.com/fells-code/seamless-auth-docs/tree/main/examples/native-cli)
+is a small standalone CLI that does the client side of this page against a local instance: `login`
+through the system browser with a loopback redirect and PKCE `S256`, `login --device` with the device
+grant, refresh, and `logout` with revocation. It is a public client with no secret, and its tokens
+are in the OS keychain with no file fallback. It uses nothing new in API v0.23.0, but the
+[local recipe](https://github.com/fells-code/seamless-auth-oidc-provider/tree/main/local) it runs on
+builds that unpublished API from source, for its seed's client links, so it has not been run against
+a published API.
+
+A CLI differs from a desktop app in three ways, and each one is easy to get wrong:
+
+- **Every command is a new process.** Memory does not survive between commands, so the example keeps
+  the access token in the keychain too, with its expiry. Without that, every command would spend a
+  refresh.
+- **Commands run at the same time.** A refresh token used twice revokes the grant and ends the user's
+  Seamless session, and two commands in a pipeline or in two terminals are enough. So a refresh
+  takes a lock that spans processes and reads the keychain again once it holds the lock, because the
+  command it waited for has already rotated the token. With the lock removed, the example's check of
+  six commands at once fails with the grant revoked.
+- **stdout belongs to the result.** Prompts, URLs and errors go to stderr, so
+  `curl -H "Authorization: Bearer $(notes token)"` works.
+
+`login` also prints the URL it opens, and honours the `BROWSER` environment variable. On a machine
+with no browser, the printed hint leads to `--device`.
+
+CI runs it end to end on a schedule, with the real CLI as a child process, the real keychain, and a
+virtual authenticator in Chromium standing in for the user's passkey and default browser. That does
+not cover a real browser being opened by the OS, a physical authenticator, Windows, a locked
+keychain, or a device code that expires. The README lists exactly what it does and does not check.
+
+### Signing In To Seamless With The Seamless CLI
+
+<Aside type="caution" title="Merged, not released">
+  What this section describes is merged in
+  [seamless-cli#349](https://github.com/fells-code/seamless-cli/pull/349), but no published
+  `seamless-cli` has it yet, and it needs Seamless Auth API v0.23.0 and the provider edge. API v0.23.0
+  is not published. The published CLI (0.27.2) signs in to an instance with an email code.
 </Aside>
+
+`seamless profile login` follows the same rules for one more purpose: an operator signing in to an
+instance they administer. It differs from the example above in what it keeps. It uses the provider
+sign-in once, then exchanges the provider's access token at `POST /sessions/exchange` for a
+first-party session, stores that session in the OS keychain, and keeps no token from the provider.
+
+```bash
+seamless profile login prod            # system browser, loopback redirect, PKCE S256
+seamless profile login prod --device   # the device grant, for a machine with no browser
+seamless profile login prod \
+  --oidc-issuer https://auth.example.com --client-id <client id>
+```
+
+- **The exchange token.** The access token is a single-use `session:exchange` token that lasts 60
+  seconds. The CLI never retries an exchange: presenting the token a second time revokes the session
+  the first attempt created ([ADR 0003](https://github.com/fells-code/seamless-auth-api/blob/main/docs/adr/0003-native-admin-access.md)).
+- **Finding the provider.** Flags win over the saved profile, which wins over `oidcProvider { issuer,
+  cliClientId }` on `GET /system-config/public`. So an instance that stops advertising cannot downgrade
+  a profile. With no provider anywhere, the CLI uses an email code.
+- **Trusting the advertisement.** The CLI reads it only over https or on loopback. An advertised issuer
+  on another origin needs the user's confirmation, and without a terminal the CLI stops and asks for
+  the flags. Instances cannot set `oidc_cli_client_id` through `seamless config` yet
+  ([seamless-cli#351](https://github.com/fells-code/seamless-cli/issues/351)), so plan on passing
+  `--oidc-issuer` and `--client-id` once. The sign-in saves them to the profile.
+- **Device sessions step up.** A session from `--device` must step up with the authenticator app before
+  admin and organization commands, reads included, because whoever approved the code may not be
+  whoever holds this terminal.
+- **The client.** An admin registers a first-party public client with a loopback redirect, with
+  session exchange on, and the device grant on for `--device`:
+
+```bash
+seamless clients create "Seamless CLI" --public --first-party --auth-method none \
+  --redirect-uri http://127.0.0.1/callback --device-flow --session-exchange
+```
+
+The session exchange is for first-party admin access, so your own CLI should not copy this part. Copy
+the example, and call your API with the provider's token. See the
+[CLI reference](/reference/cli-commands#profile) for the flags.
 
 ---
 
