@@ -25,7 +25,8 @@ enforce authorization.
 | Step-up auth               | Require fresh verification before sensitive auth/admin operations | Auth API         |
 
 For normal app APIs, start with `requireAuth(...)`. Add `requireRole(...)` when the route has a
-role or permission boundary.
+role boundary. To guard by a named permission such as `reports:read`, see
+[How To Use Roles And Permissions](/build/roles-and-permissions) (needs auth API v0.23).
 
 ---
 
@@ -353,6 +354,7 @@ Do not rely on a hidden organization selector in the UI as the only tenant bound
 
 ## Related Docs
 
+- [How To Use Roles And Permissions](/build/roles-and-permissions)
 - [How To Use Organizations And Memberships](/build/organizations-memberships)
 - [How To Use TOTP And Step-Up](/build/totp-step-up)
 - [How To Add OAuth Login](/build/oauth-login)
