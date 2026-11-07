@@ -1,0 +1,277 @@
+---
+title: "Seamless Auth vs Okta"
+description: "Seamless Auth or Okta? An honest comparison with Okta Workforce Identity, and a pointer for Okta Customer Identity: sign-in methods, SSO protocols, directory and lifecycle, policy, extensibility, hosting, export, and cost, with dated sources. The workforce lane is planned, not shipped."
+sidebar:
+  order: 4.5
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+"Okta" means two product lines. **Okta Workforce Identity** signs employees, contractors and
+partners in to the apps they use at work, with a directory, lifecycle management and policy around
+it. **Okta Customer Identity** and **Auth0** are Okta's products for sign-in to the apps you build
+for your own customers. Seamless Auth is an open source (Apache-2.0), passwordless-only auth server
+that you self-host or run on the Seamless Auth managed service. Today it signs users in to
+applications you build, and, through its optional OpenID Provider, to other apps that speak OpenID
+Connect.
+
+Most of this page compares Seamless Auth with Okta Workforce Identity, because that is what most
+people mean by "Okta". Be clear about the gap first: Seamless Auth's workforce lane (a SAML identity
+provider, groups and app assignment, directory sync, outbound SCIM, joiner, mover and leaver
+lifecycle) is planned for Seamless Auth v2.0 and is **not shipped**. This page compares the two as
+equals only where both have the feature today, and says so where Seamless Auth does not. For
+customer identity, see [Okta Customer Identity](#okta-customer-identity) below and the
+[Auth0 comparison](/compare/auth0).
+
+Every Okta detail links to Okta's own docs, help center, trust center or pricing page, and the
+[Sources](#sources) section gives the date each one was checked. Seamless Auth details were checked
+against the docs and source repositories at Seamless Auth API v0.22.0 and OpenID Provider v0.3.0 on
+2026-11-07. Okta changes suites and prices, so confirm them on
+[okta.com/pricing](https://www.okta.com/pricing/) before you decide.
+
+---
+
+## Choose Okta If
+
+- **You need SSO into a large catalog of SaaS apps.** Okta's app integration wizard connects SAML,
+  OIDC, SWA (Secure Web Authentication, for apps without federation) and SCIM apps, it has a
+  WS-Federation template app, and Okta lists 8,000+ prebuilt integrations in the Okta Integration
+  Network. Seamless Auth's OpenID Provider signs users in to apps that speak OpenID Connect; it has
+  no SAML identity provider (planned for v2.0) and no integration catalog.
+- **You need a workforce directory fed from HR or Active Directory.** Universal Directory takes
+  profiles from AD, LDAP and HR sources such as Workday, BambooHR and SuccessFactors, through agents
+  you install for AD and LDAP. Seamless Auth has no directory sync (planned for v2.0).
+- **You need provisioning and deprovisioning.** Okta Lifecycle Management uses SCIM to create,
+  update and deactivate accounts in apps, and deactivating a user deprovisions them. Seamless Auth
+  has no SCIM and no lifecycle automation (SCIM server planned for v1.2, outbound SCIM and
+  lifecycle for v2.0).
+- **You need policy and device checks.** Global session policies, app sign-in policies and device
+  assurance policies have no Seamless Auth equivalent. Seamless Auth has instance sign-in settings,
+  such as `phishing_resistant_only`, and step-up for sensitive actions, not a policy engine over
+  users, devices and context.
+- **You need desktop, network or server access.** Okta Device Access (Desktop MFA at the macOS and
+  Windows login screens), the RADIUS agent, the LDAP Interface and Okta Privileged Access are outside
+  what Seamless Auth does. RADIUS, LDAP and forward-auth are planned for v2.1.
+- **You need governance.** Okta Identity Governance combines Lifecycle Management, Workflows and
+  Access Governance. Seamless Auth has none of these.
+- **You need a vendor's compliance reports.** Okta's trust center lists FedRAMP High and Moderate,
+  DoD IL5, SOC 1, 2 and 3, ISO/IEC 27001, 27017 and 27018, HIPAA, PCI DSS, GovRAMP and others.
+  Seamless Auth has no third-party attestations of its own.
+
+## Choose Seamless Auth If
+
+- **Users and sessions must stay inside your own boundary.** Self-hosted, the auth API and its
+  Postgres database run in your infrastructure, on any cloud or none. Okta documents agents and an
+  Access Gateway appliance that you install yourself, but the Okta service itself runs in Okta's
+  cells; it documents no self-hosted deployment of it.
+- **You want the auth server's source under a permissive license.** The auth API, OpenID Provider,
+  server adapters, frontend SDKs, admin dashboard and CLI are all Apache-2.0. Okta is a commercial
+  service sold as suites.
+- **You want passkeys as the default and passwords gone.** Seamless Auth has no password flow, and
+  `phishing_resistant_only` accepts only passkeys to start a session. Okta supports passwordless
+  too: passkeys (FIDO2 WebAuthn) and Okta FastPass are its phishing-resistant authenticators, and
+  passwords can be made optional or disabled per group. Okta's docs note that LDAP users are not
+  supported for that, and that traditional RADIUS does not work with passwordless users.
+- **You do not want a per-user contract.** Self-hosting has no per-user fee and no minimum; you pay
+  for the infrastructure you run. Okta Workforce Identity suites are priced per user per month,
+  billed annually, with a $1,500 annual contract minimum.
+- **You want your audit trail for as long as you keep it.** Seamless Auth's auth events are
+  append-only and hash-chained rows in your own Postgres, and they export as NDJSON with an
+  integrity check. Okta retains System Log events for 90 days, and log streaming goes to Amazon
+  EventBridge or Splunk Cloud.
+- **You want your user data out without asking.** Self-hosted, users and memberships are rows in a
+  database you run. Okta exports user profiles through the Users API or a CSV report; a password
+  hash export is possible only in a very limited number of cases, by request, for a move from Okta
+  to Auth0.
+- **What you need is sign-in for an app your team builds.** An adapter for Node.js, Go, Python or
+  Rust and a frontend SDK is a shorter path than a workforce identity platform. Seamless Auth also
+  covers some internal-app sign-in today: Grafana or an internal tool behind
+  [oauth2-proxy](/build/oidc-oauth2-proxy) can sign in through its OpenID Provider.
+
+---
+
+## Feature Comparison: Okta Workforce Identity
+
+Okta column as checked on the dates in [Sources](#sources). Suite names refer to Okta's pricing
+page. Where the Seamless Auth column says **Planned**, the feature does not exist today.
+
+| | Seamless Auth | Okta Workforce Identity |
+| --- | --- | --- |
+| License | Apache-2.0 for the server, OpenID Provider, SDKs, dashboard and CLI | Commercial cloud service, sold as suites |
+| Hosting | Self-host (Docker, Postgres) or Seamless Auth managed hosting | Okta-operated cells; customer-installed AD, LDAP and RADIUS agents and Access Gateway |
+| Passkeys | Yes, the primary sign-in method (WebAuthn via SimpleWebAuthn) | Yes, the Passkey (FIDO2 WebAuthn) authenticator |
+| Phishing-resistant authenticators | Passkeys; `phishing_resistant_only` accepts only passkeys to start a session | Passkey (FIDO2 WebAuthn), Okta Verify with FastPass, smart card (PIV/CAC), custom authenticators |
+| Other authenticators | Magic link, email OTP, SMS OTP (Twilio or AWS SNS, configured by you), TOTP | Okta Verify (push and TOTP), password, email, phone (SMS and voice, through your own telephony provider), Google Authenticator, YubiKey OTP, Duo, Symantec VIP, custom OTP, security question, temporary access code |
+| Passwords | No, by design | Yes; optional or disabled per group, not for LDAP users |
+| SSO into third-party apps | OpenID Connect only, through the OpenID Provider (v0.21, off by default, not OpenID certified); tested guides for Grafana, Auth.js, Spring Security and oauth2-proxy | SAML, OIDC, SWA, WS-Federation (template app, SP-initiated); 8,000+ prebuilt integrations |
+| SAML identity provider | **Planned for v2.0** | Yes |
+| Directory, groups, app assignment, app launcher | **Planned for v2.0.** Users, global roles and organizations exist today | Universal Directory, groups, app assignment |
+| Directory and HR sources | **Planned for v2.0** (Google Workspace and Entra ID) | AD and LDAP agents; HR and other profile sources such as Workday, BambooHR, SuccessFactors |
+| Provisioning to apps (outbound SCIM) | **Planned for v2.0** | Lifecycle Management, in Essentials or as an add-on to Starter |
+| Inbound provisioning | CSV import and `seamless migrate`; SCIM server **planned for v1.2** | Profile sourcing from HR apps and directories |
+| Lifecycle automation | **Planned for v2.0** | Lifecycle Management, Workflows, Okta Identity Governance |
+| Policy | Instance sign-in settings, staged sign-in policy, step-up | Global session policy, app sign-in policies, device assurance |
+| Roles and permissions in the token | Organization membership roles today. A permission catalogue, role-to-permission mapping and organization roles in the token **need API v0.23.0, which is not released** | Custom authorization servers with scopes and claims (API Access Management) |
+| Tokens for your own APIs | Yes, through the OpenID Provider: authorization code with `S256` PKCE, client credentials, device grant (first-party), RFC 9068 JWT access tokens | Custom authorization servers, which need the API Access Management add-on; client credentials; built-in org authorization server in every org |
+| Extensibility | Logic in your own backend, behind the server adapter. Webhooks and login hooks are planned for v0.23 | Inline hooks (synchronous), event hooks (asynchronous, up to 25 per org), Okta Workflows (5 in Starter, 50 in Essentials) |
+| Desktop, RADIUS and LDAP access | **Planned for v2.1** (RADIUS, LDAP, forward-auth) | Okta Device Access (Desktop MFA for macOS and Windows), RADIUS agent, LDAP Interface |
+| Audit trail | Append-only, hash-chained auth events; NDJSON export with an integrity check | System Log, 90 days; log streaming to Amazon EventBridge or Splunk Cloud |
+| User export | No bulk export endpoint; self-hosted, the data is in your own Postgres. Paginated admin user list and a passkey coverage report (CSV) | Users API, User Accounts report as CSV; password hashes only in limited cases, by request, for a move to Auth0 |
+| Third-party compliance attestations | None for Seamless Auth itself | FedRAMP High and Moderate, DoD IL5, SOC 1/2/3, ISO/IEC 27001, 27017, 27018, HIPAA, and others on Okta's trust center |
+| Maturity | 0.x, small community | Established commercial product, large community |
+| Pricing model | Free to self-host; managed plans in the portal | Suites per user per month, billed annually, $1,500 annual minimum; free Integrator plan for non-production use, up to 10 active users |
+
+<Aside type="note">
+  As checked on 2026-11-07, Okta's pricing page lists the Starter suite from $6, Core Essentials at
+  $14 and Essentials from $17 per user per month, Professional and Enterprise on inquiry, all billed
+  annually with a $1,500 annual contract minimum for Okta Workforce Identity. Add-ons such as
+  Adaptive MFA, Lifecycle Management and API Access Management are marked as add-ons on Starter,
+  with no published price. Check [okta.com/pricing](https://www.okta.com/pricing/) for current
+  figures.
+</Aside>
+
+---
+
+## Okta Customer Identity
+
+Okta sells customer identity two ways. Okta's site lists **Auth0** and **Okta Customer Identity**
+under customer identity, and `okta.com/customer-identity` redirects to auth0.com. Okta Customer
+Identity is priced on its own tab of Okta's pricing page: it starts with a required Enterprise base
+product at $3,000 per month, billed annually, with add-ons priced by usage such as monthly active
+users, and B2C and B2B suites on inquiry, all on an annual contract.
+
+For a feature-by-feature comparison of customer identity, read the [Auth0 comparison](/compare/auth0),
+which covers Auth0 as sold on auth0.com, and confirm the features of an Okta Customer Identity plan
+with Okta. The [Identity Cost Calculator](/compare/cost) lists published prices for both.
+
+---
+
+## Architecture Difference
+
+**Okta** is a central identity provider for an organization. Apps are assigned to users and groups
+in the Okta org and redirect them to the org's sign-in page. Okta evaluates the global session
+policy and the app's sign-in policy, authenticates the user with the required authenticators, and
+returns a SAML assertion or OpenID Connect tokens. Users, groups and app assignments live in the
+Okta org, fed by directories and HR sources, and you manage them in the Admin Console or through
+Okta's APIs.
+
+**Seamless Auth** is a service you run next to your backend:
+
+```txt
+browser or native app
+  -> your backend's /auth routes   (@seamless-auth/express, fastify, nextjs, or the Python/Go/Rust adapter)
+  -> seamless-auth-api             (your infrastructure, or Seamless Auth managed)
+  -> Postgres
+```
+
+Clients never call the auth API directly. Your backend mounts the adapter routes, forwards calls
+with a service token, and keeps the session in signed `httpOnly` cookies on your domain (native
+apps use bearer tokens in the platform keystore). Authorization stays in your own code. See
+[What Is Seamless Auth?](/start/overview#how-the-pieces-connect).
+
+Since v0.21 you can also run the optional [OpenID Provider](/build/openid-provider), a separate
+public service in front of the private API. Apps that speak OpenID Connect redirect to its hosted
+pages and get tokens back the way they would from Okta, with no Seamless SDK. That covers some
+internal-app sign-in today. It is not a workforce identity platform: there is no SAML, no
+group-based app assignment, and no provisioning.
+
+The two also work together. Seamless Auth can use an Okta org as an upstream OpenID Connect provider
+through [OAuth Login](/build/oauth-login), so employees sign in with their Okta account while your
+app gets a Seamless session.
+
+---
+
+## When Not To Use Seamless Auth
+
+If any of these is a hard requirement today, stay on Okta or choose another product.
+
+- **You need to sign employees in to SAML apps or a SaaS catalog.** Seamless Auth has no SAML
+  identity provider (planned for v2.0) and no integration catalog.
+- **You provision or deprovision accounts from HR or a directory.** There is no SCIM, no directory
+  sync and no lifecycle automation. Bulk changes go through the CSV import.
+- **You rely on sign-in policies, device assurance or governance.** Seamless Auth has no
+  equivalent.
+- **You need desktop MFA, RADIUS or LDAP.** Out of scope today; RADIUS, LDAP and forward-auth are
+  planned for v2.1.
+- **You need permissions in the token now.** That needs API v0.23.0, which is not released.
+- **Other apps need a certified identity provider.** The OpenID Provider is new and not OpenID
+  certified.
+- **You need a vendor's FedRAMP authorization or SOC 2 report for the auth service itself.** Seamless
+  Auth has no third-party attestations. Self-hosted, it is covered by your own controls.
+- **Your users sign in with passwords and you cannot change that.** There is no password flow, and no
+  password hashes are imported.
+- **You need a 1.0 stability guarantee.** Every Seamless Auth package is still 0.x.
+
+The full list is in
+[When Seamless Auth Is Not The Right Choice](/start/overview#when-seamless-auth-is-not-the-right-choice).
+
+---
+
+## Moving An App's Users Off Okta
+
+There is no dedicated Okta source in `seamless migrate` yet. Export users with Okta's Users API or
+the User Accounts report as CSV, then import them with `seamless migrate csv`, after a readiness
+check with `seamless migrate assess csv`. See
+[Migrate Users From Another Identity System](/operate/migrate-users). This path is not tested
+against an Okta export.
+
+No credentials move. During cutover, imported users can keep signing in with their Okta account
+through OpenID Connect, then enroll a passkey
+([sign in through the old provider](/operate/migrate-users)). This moves an app's users, not an
+organization's workforce identity: Okta stays the directory for everything else.
+
+---
+
+## Sources
+
+Okta details, each checked on 2026-11-07 on Okta's own pages:
+
+- [Okta pricing](https://www.okta.com/pricing/): Workforce Identity suites and prices, add-ons, $1,500 annual minimum, 30-day trial, Customer Identity tab and Enterprise base price, Integrator Free Plan
+- [Okta Workforce Identity](https://www.okta.com/products/workforce-identity/): product name and scope
+- [App integration wizard](https://help.okta.com/en-us/content/topics/apps/apps_app_integration_wizard.htm): SAML, OIDC, SWA and SCIM apps
+- [WS-Federation template app](https://help.okta.com/en-us/content/topics/apps/apps_configure_okta_template_ws_federation.htm): SP-initiated WS-Fed
+- [SWA app integrations](https://help.okta.com/en-us/content/topics/apps/apps_app_integration_wizard_swa.htm)
+- [Okta Integration Network](https://www.okta.com/solutions/okta-integration-network/): 8,000+ integrations
+- [Profile sourcing](https://help.okta.com/en-us/content/topics/users-groups-profiles/usgp-about-profile-sourcing.htm): HR and directory sources
+- [Active Directory agent](https://help.okta.com/oie/en-us/content/topics/directory/ad-agent-new-integration.htm) and [LDAP agent](https://help.okta.com/en-us/content/topics/directory/ldap-agent-install-configure.htm)
+- [Provisioning](https://help.okta.com/en-us/content/topics/provisioning/lcm/con-okta-prov.htm) and [deprovisioning](https://help.okta.com/oie/en-us/content/topics/provisioning/lcm/lcm-deprovision-user.htm): SCIM, deactivation
+- [Authenticators](https://help.okta.com/oie/en-us/content/topics/identity-engine/authenticators/about-authenticators.htm): authenticator list and which are phishing resistant
+- [Phishing-resistant authentication](https://help.okta.com/oie/en-us/content/topics/identity-engine/authenticators/phishing-resistant-auth.htm): passkeys and FastPass
+- [Phone authenticator](https://help.okta.com/oie/en-us/content/topics/identity-engine/authenticators/configure-phone.htm): SMS and voice, own telephony provider
+- [Smart card authenticator](https://help.okta.com/oie/en-us/content/topics/identity-engine/authenticators/smart-card-authenticator.htm): PIV/CAC
+- [Password optional or disabled](https://help.okta.com/oie/en-us/content/topics/identity-engine/password-optional/password-optional-disabled.htm): per group, LDAP and RADIUS limits
+- [Policies](https://developer.okta.com/docs/concepts/policies/): global session and app sign-in policies
+- [Device assurance](https://help.okta.com/oie/en-us/content/topics/identity-engine/devices/device-assurance.htm)
+- [Inline hooks](https://developer.okta.com/docs/concepts/inline-hooks/) and [event hooks](https://developer.okta.com/docs/concepts/event-hooks/): synchronous and asynchronous, 25 event hooks per org
+- [Authorization servers](https://developer.okta.com/docs/concepts/auth-servers/): API Access Management add-on for custom authorization servers, org authorization server
+- [Client credentials](https://developer.okta.com/docs/guides/implement-grant-type/clientcreds/main/)
+- [RADIUS agent](https://help.okta.com/en-us/content/topics/integrations/getting-started-about-radius.htm) and [LDAP Interface](https://help.okta.com/en-us/content/topics/directory/ldap-interface-main.htm)
+- [Okta Identity Governance](https://help.okta.com/oie/en-us/content/topics/identity-governance/iga.htm), [Okta Privileged Access](https://help.okta.com/oie/en-us/content/topics/privileged-access/pam-overview.htm) and [Okta Device Access](https://help.okta.com/oie/en-us/content/topics/oda/oda-overview.htm)
+- [System Log](https://help.okta.com/en-us/content/topics/reports/syslog-filters.htm): 90-day retention
+- [Log streaming](https://help.okta.com/oie/en-us/content/topics/reports/log-streaming/about-log-streams.htm): Amazon EventBridge or Splunk Cloud
+- [Data residency](https://www.okta.com/okta-data-residency/): cell architecture
+- [Access Gateway deployment](https://help.okta.com/oag/en-us/content/topics/access-gateway/learn-about-oag-deployment.htm): customer-installed appliance
+- [Okta Security Trust Center](https://security.okta.com/): compliance list
+- [User Accounts report](https://help.okta.com/en-us/content/topics/reports/access/user-account-report.htm): CSV export
+- [List users](https://developer.okta.com/docs/api/openapi/okta-management/management/tags/user/other/listusers): Users API
+- [Export users with hashed passwords to Auth0](https://support.okta.com/help/s/article/how-to-export-okta-users-with-hashed-passwords-to-import-to-auth0?language=en_US): limited cases, by request
+- [Org defaults](https://developer.okta.com/docs/reference/org-defaults/): Integrator Free Plan limits
+
+Not verified, so not claimed on this page: prices of Workforce add-ons and of the Professional and
+Enterprise suites (Okta publishes none), an Okta statement that the service is cloud-only, whether
+the cell list on the data residency page is current, the scope of FedRAMP High beyond Okta for
+Government, and how SWA stores credentials.
+
+Seamless Auth details (Seamless Auth API v0.22.0, OpenID Provider v0.3.0, checked 2026-11-07):
+
+- [What Is Seamless Auth?](/start/overview), including [When Seamless Auth Is Not The Right Choice](/start/overview#when-seamless-auth-is-not-the-right-choice)
+- [OpenID Provider](/build/openid-provider) and the [oauth2-proxy guide](/build/oidc-oauth2-proxy)
+- [How To Use Roles And Permissions](/build/roles-and-permissions) (needs API v0.23.0, not released)
+- [How To Use Organizations And Memberships](/build/organizations-memberships)
+- [OAuth Login](/build/oauth-login)
+- [Migrate Users From Another Identity System](/operate/migrate-users)
+- [v0.20 Release Notes](/reference/release-v0-20) (recovery) and [v0.21 Release Notes](/reference/release-v0-21) (OpenID Provider)
+- [Environment Variables](/reference/environment-variables) (`PHISHING_RESISTANT_ONLY`)
+- [Auth Events and Auditing](/understand/authevents)
+- Planned features: the Seamless Auth roadmap milestones v0.23, v1.1, v1.2, v2.0 and v2.1 in [seamless-auth-api](https://github.com/fells-code/seamless-auth-api/milestones)
+- Source: [fells-code on GitHub](https://github.com/fells-code)
