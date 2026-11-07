@@ -306,6 +306,10 @@ Seamless Auth has two role concepts:
 | Global user roles                    | `users.roles`              | App-wide access such as `admin:read`                |
 | Organization membership roles/scopes | `organization_memberships` | Tenant-level membership and organization management |
 
+From auth API v0.23, organization roles come from an instance-wide catalogue and can be mapped to
+permissions that reach the access token as `org_permissions`. See
+[How To Use Roles And Permissions](/build/roles-and-permissions).
+
 Membership roles are intentionally simple. A pragmatic default is:
 
 | Membership role | Use for                                        |
@@ -338,6 +342,7 @@ Scopes should be concrete and action-oriented:
 
 ## Related Docs
 
+- [How To Use Roles And Permissions](/build/roles-and-permissions)
 - [How To Secure Routes](/build/secure-routes)
 - [React SDK](/build/react-sdk)
 - [Server SDKs](/build/server-sdks)

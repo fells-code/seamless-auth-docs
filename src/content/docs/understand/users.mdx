@@ -124,8 +124,10 @@ Each membership has:
 - `roles`
 - `scopes`
 
-Use global roles for system-wide permissions. Use membership roles and scopes when the decision is
-specific to one organization.
+Use global roles for system-wide access. From auth API v0.23, roles of either kind can be mapped to
+named permissions, which is usually the better thing to check; see
+[How To Use Roles And Permissions](/build/roles-and-permissions). Use membership roles and scopes
+when the decision is specific to one organization.
 
 ---
 

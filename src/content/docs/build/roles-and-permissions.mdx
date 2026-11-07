@@ -1,0 +1,591 @@
+---
+title: "How To Use Roles And Permissions"
+description: "Map instance and organization roles to permissions, read them from the access token, and enforce them with requirePermission in Express, Fastify, Next.js, Go, Python and Rust, with UI gating in React."
+sidebar:
+  order: 11.5
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Use this guide when your backend needs to answer "can this user do this action" with a named
+permission such as `invoices:read`, instead of hard-coding role names in every route.
+
+Roles say who someone is. Permissions say what they can do. In Seamless Auth an administrator keeps
+a catalogue of permissions, maps each role to a set of them, and the auth API puts the resulting
+permissions in the access token. Your backend checks them with `requirePermission`, and your React
+app can read them to show or hide UI.
+
+<Aside type="caution" title="Needs auth API v0.23.0, not released yet">
+Permissions, organization roles in the token, and every route on this page need
+`seamless-auth-api` v0.23.0. The latest release is v0.22.0, which has none of them. The adapter
+guards are already published (see [Versions](#versions)), and against API v0.22 they deny every
+request, because no token carries permissions. Nothing fails open.
+</Aside>
+
+---
+
+## Concepts
+
+| Concept                | Held on                                       | Managed at                  | Reaches the token as |
+| ---------------------- | --------------------------------------------- | --------------------------- | -------------------- |
+| Permission             | Nowhere directly. A role grants it            | `/admin/permissions`        | `permissions`, `org_permissions` |
+| Instance role          | The user (`users.roles`)                      | `available_roles` in system config | `roles`        |
+| Organization role      | An organization membership                    | `/admin/organization-roles` | `org_roles`          |
+| Role to permission map | A role, named by kind and name                | `PUT /admin/roles/:kind/:roleName/permissions` | Expands into the permission claims |
+
+- **Permissions** are one catalogue for the whole instance. A name uses the role alphabet: letters,
+  digits and `-`, in `:`-separated segments, up to 80 characters, for example `invoices:read`. There
+  is no `*`.
+- **Instance roles** are the existing global roles in `available_roles`, such as `user` or `admin`.
+  Removing a role from `available_roles` also deletes its permission mappings, so adding the name
+  back later grants nothing.
+- **Organization roles** are a catalogue shared by every organization on the instance. `owner`,
+  `admin` and `member` are built in and cannot be deleted. Assigning a membership role that is not
+  in the catalogue answers `400`.
+- **A role grants through its literal name.** Holding `billing` does not pick up a mapping on
+  `billing:read`.
+- **An instance `admin` and an organization `admin` are different roles** and never share a grant,
+  even though they have the same name.
+
+### Matching Is Exact
+
+`invoices:read` matches only `invoices:read`. There are no wildcards and no implied grants, so
+`invoices:write` does not satisfy `invoices:read`, and matching is case-sensitive. This is
+deliberately different from role guards (`requireRole`), which keep their scoped matching where
+`admin` grants `admin:read` and a `:write` role grants the matching `:read`.
+
+### What Reaches The Access Token
+
+A first-party access token carries the instance claims always, and the organization claims only
+while the session has an active organization:
+
+```json
+{
+  "sub": "user uuid",
+  "sid": "session uuid",
+  "typ": "access",
+  "roles": ["user"],
+  "permissions": ["reports:read"],
+  "org_id": "org uuid",
+  "org_roles": ["admin"],
+  "org_permissions": ["projects:write"]
+}
+```
+
+- `permissions` are the instance-wide grants from the user's instance roles.
+- `org_id`, `org_roles` and `org_permissions` describe the active organization only. With no active
+  organization all three are absent.
+- Organization roles never merge into `roles`. A `requireRole('admin')` guard does not pass for an
+  organization admin.
+- Membership `scopes` (such as `organization:read`) stay out of the token. They gate Seamless
+  Auth's own organization routes and are not app permissions.
+- A recovery session's token (after account recovery or a recovery code) carries no permissions
+  and no organization claims.
+
+### When The Set Does Not Fit
+
+`org_roles`, `permissions` and `org_permissions` together get a 1 KiB budget, serialized, because a
+server adapter keeps the whole access token inside a signed cookie under the browser's 4 KiB limit.
+Over the budget, all three are replaced with:
+
+```json
+{ "permissions_omitted": true }
+```
+
+`org_id` stays. Nothing is trimmed, because a partial list would look complete and deny silently.
+Absent arrays then mean "ask", not "none". Every adapter guard handles this for you: it reads
+`GET {authServerUrl}/users/me/permissions` with the caller's access token on each such request, with
+no caching and no retry, and answers `503 {"error":"permissions_unavailable"}` if that read fails.
+
+`GET /users/me/permissions` reads the database on every call and answers:
+
+```json
+{
+  "roles": ["user"],
+  "permissions": ["reports:read"],
+  "organizationId": "org uuid",
+  "organizationRoles": ["admin"],
+  "organizationPermissions": ["projects:write"]
+}
+```
+
+`organizationId` is `null` with no active organization.
+
+### When A Change Applies
+
+Access tokens carry permissions, so a mapping or role change reaches a user the next time a token is
+issued for them, within `access_token_ttl`. Tokens already issued keep what they were issued with
+until they expire. Removing someone from an organization works the same way: their next token drops
+the organization claims. `GET /users/me/permissions` is live, for a check that cannot wait.
+
+### Switching Organizations Needs `organization:read`
+
+Organization claims apply to the active organization only. A session starts in the user's oldest
+membership, and `POST /organizations/:organizationId/switch` (through an adapter,
+`POST /auth/organizations/:organizationId/switch`) changes it. Switching needs the
+`organization:read` membership scope unless the member is an `owner` or `admin`; without it the
+switch answers `404`. So a member without that scope cannot reach the permissions of any
+organization other than the one their session starts in.
+
+When you add someone who belongs to more than one organization, give the membership
+`scopes: ["organization:read"]`.
+
+---
+
+## Step 1: Define Permissions And Map Roles
+
+You can do this in the admin console or through the admin API. The CLI does not manage permissions
+or role mappings yet.
+
+### In The Admin Console
+
+The console's **Roles** page (`/roles` in `seamless-auth-admin-dashboard`) has three sections:
+
+- **Permissions**: create, edit and delete permissions, with which roles grant each one.
+- **Organization roles**: the instance-wide catalogue, with `owner`, `admin` and `member` built in.
+- **Instance roles**: the roles in `available_roles`, with what each grants.
+
+Each role row has **Edit permissions**, which replaces everything that role grants. Against an API
+older than v0.23 the page says it needs v0.23. The Roles page is on the console's `main` branch and
+is not in a console release yet (the latest is v0.12.0).
+
+### With The Admin API
+
+Every write needs an `admin:write` (or `admin`) instance role and a fresh step-up on the calling
+session, a WebAuthn or TOTP check in the last five minutes. Without the step-up the call answers
+`403` with `"error": "step_up_required"`; step up and retry (see
+[How To Use TOTP And Step-Up](/build/totp-step-up)). Reads need `admin:read`.
+
+These are auth API paths. Through a server adapter mounted at `/auth`, prefix them with `/auth`
+(`/auth/admin/permissions`), which is how the console reaches them.
+
+| Method   | Route                                        | Body                                       | Purpose |
+| -------- | -------------------------------------------- | ------------------------------------------ | ------- |
+| `GET`    | `/admin/permissions`                         |                                            | List the catalogue (`{ permissions, total }`) |
+| `POST`   | `/admin/permissions`                         | `{ name, description? }`                   | Create a permission (`201`) |
+| `PATCH`  | `/admin/permissions/:permissionName`         | `{ description }` (string or `null`)       | Change its description |
+| `DELETE` | `/admin/permissions/:permissionName`         |                                            | Delete it. `409` naming the roles that still grant it |
+| `GET`    | `/admin/roles`                               |                                            | Both kinds of role, with what each grants |
+| `PUT`    | `/admin/roles/:kind/:roleName/permissions`   | `{ permissions: [...] }` (up to 200)       | Replace what a role grants. `kind` is `instance` or `organization` |
+| `POST`   | `/admin/organization-roles`                  | `{ name, description?, permissions? }`     | Add an organization role |
+| `PATCH`  | `/admin/organization-roles/:roleName`        | `{ description }`                          | Change its description |
+| `DELETE` | `/admin/organization-roles/:roleName`        |                                            | Delete it. `409` for a built-in role or one a membership still holds |
+
+A worked example, from an admin session that has just stepped up:
+
+```bash
+# 1. Create the permissions.
+curl -X POST "$AUTH_SERVER_URL/admin/permissions" \
+  -H "Authorization: Bearer $ADMIN_ACCESS_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"name":"reports:read","description":"Read reports"}'
+
+curl -X POST "$AUTH_SERVER_URL/admin/permissions" \
+  -H "Authorization: Bearer $ADMIN_ACCESS_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"name":"projects:write","description":"Create and edit projects"}'
+
+# 2. Grant reports:read to the instance role "user". This replaces the role's whole mapping.
+curl -X PUT "$AUTH_SERVER_URL/admin/roles/instance/user/permissions" \
+  -H "Authorization: Bearer $ADMIN_ACCESS_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"permissions":["reports:read"]}'
+
+# 3. Grant projects:write to the organization role "admin".
+curl -X PUT "$AUTH_SERVER_URL/admin/roles/organization/admin/permissions" \
+  -H "Authorization: Bearer $ADMIN_ACCESS_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"permissions":["projects:write"]}'
+
+# 4. Check the result.
+curl "$AUTH_SERVER_URL/admin/roles" -H "Authorization: Bearer $ADMIN_ACCESS_TOKEN"
+```
+
+Every permission in a `PUT` has to exist first. Because a `PUT` replaces the mapping, send the full
+list each time: a permission you leave out is no longer granted by that role.
+
+### Assign Roles To People
+
+- **Instance roles**: add the role name to `available_roles` first
+  (`seamless config set available_roles '["user","staff"]'` replaces the whole list), then set a
+  user's roles with `PATCH /admin/users/:userId` and `{ "roles": [...] }` (admin write, step-up).
+- **Organization roles**: set them on the membership. `seamless org members add` and
+  `seamless org members update` take `--roles` and `--scopes`, as does
+  `PATCH /organizations/:organizationId/members/:userId`. See
+  [How To Use Organizations And Memberships](/build/organizations-memberships).
+
+Changing a member's organization roles needs step-up and is audited. Only an owner or an instance
+`admin:write` can grant or remove `owner`. Any other manager can only grant a role whose permissions
+they hold, and a refusal answers `403` naming the roles.
+
+---
+
+## Step 2: Enforce On Your Backend
+
+Every adapter has a permission guard with the same rules:
+
+| Option          | Effect |
+| --------------- | ------ |
+| Default         | A permission counts if it is in `permissions` or `org_permissions`, so an instance-wide grant applies everywhere |
+| Match all       | Every listed permission must be held, each from either claim. The default is any one |
+| Organization    | Only `org_permissions` count, and the token must have a non-empty `org_id` |
+| Organization bound to the route | Organization scope, and a named route parameter must equal `org_id` exactly. A missing parameter or a mismatch is a `403` |
+
+<Aside type="danger" title="Bind organization routes to the route parameter">
+For any route that names an organization, such as `/orgs/:organizationId/projects`, use the bound
+form. With the default or plain organization scope, a user whose active organization is A and who
+holds `projects:write` there passes on `/orgs/B/projects` too. Only the bound form compares the
+organization in the URL with `org_id`.
+</Aside>
+
+Every adapter answers the same way:
+
+| Situation                                                     | Status | Body |
+| ------------------------------------------------------------- | ------ | ---- |
+| Not signed in, or the live read answered `401`                | 401    | `{"error":"unauthenticated"}` |
+| Recovery session (unless the guard allows recovery sessions)  | 403    | `{"error":"enrollment_required"}` |
+| Requirement not met, or an empty list of permissions          | 403    | `{"error":"insufficient_permission"}` |
+| Token has `permissions_omitted` and the live read failed      | 503    | `{"error":"permissions_unavailable"}` |
+
+A refusal never names the user's permissions or the required ones. An empty required list never
+opens a route.
+
+### Express
+
+`@seamless-auth/express` 0.25.0 or later. Mount `requirePermission` after `requireAuth`:
+
+```ts
+import { requireAuth, requirePermission } from '@seamless-auth/express'
+
+const guard = requireAuth({
+  cookieSecret: process.env.COOKIE_SECRET!,
+  authServerUrl: process.env.AUTH_SERVER_URL!,
+  audience: process.env.AUTH_SERVER_URL!,
+})
+
+// Bound to the route: a token for organization A cannot pass on /orgs/B.
+app.post(
+  '/api/orgs/:organizationId/projects',
+  guard,
+  requirePermission('projects:write', { organizationParam: 'organizationId' }),
+  createProject,
+)
+
+// Instance-wide, any one of these.
+app.get('/api/reports', guard, requirePermission(['reports:read', 'reports:admin']), listReports)
+
+// Every one of these.
+app.post(
+  '/api/invoices',
+  guard,
+  requirePermission(['invoices:read', 'invoices:write'], { match: 'all' }),
+  createInvoice,
+)
+```
+
+Options are `match` (`'any'` or `'all'`), `organization` (`true`), `organizationParam` (a route
+parameter name, implies `organization`) and `authServerUrl`. The live read for
+`permissions_omitted` uses the `authServerUrl` given to `requireAuth`. If your `requireAuth` is
+cookie-only (no `authServerUrl` and `audience`), pass `authServerUrl` to `requirePermission`, or
+such a token gets a `503` and a logged warning.
+
+`req.user` carries `permissions`, `organizationRoles`, `organizationPermissions` and
+`permissionsOmitted`. When `permissionsOmitted` is `true` the three lists say nothing.
+
+### Fastify
+
+`@seamless-auth/fastify` 0.16.0 or later. `requirePermission` is a `preHandler` hook, after
+`requireAuth`:
+
+```ts
+import { requireAuth, requirePermission } from '@seamless-auth/fastify'
+
+const authenticated = requireAuth({
+  cookieSecret: process.env.COOKIE_SECRET!,
+  authServerUrl: process.env.AUTH_SERVER_URL!,
+  audience: process.env.AUTH_SERVER_URL!,
+})
+
+app.post(
+  '/api/orgs/:organizationId/projects',
+  {
+    preHandler: [
+      authenticated,
+      requirePermission('projects:write', { organizationParam: 'organizationId' }),
+    ],
+  },
+  createProject,
+)
+
+app.get(
+  '/api/reports',
+  { preHandler: [authenticated, requirePermission('reports:read')] },
+  listReports,
+)
+```
+
+The options are the same as Express, including `authServerUrl` for a cookie-only `requireAuth`.
+
+### Next.js
+
+`@seamless-auth/nextjs` 0.9.0 or later. `requirePermission(required, handler, options)` wraps an App
+Router route handler. `organizationParam` names a dynamic segment:
+
+```ts
+// lib/seamless.ts
+export const seamless = {
+  authServerUrl: process.env.AUTH_SERVER_URL!,
+  audience: process.env.AUTH_SERVER_URL!,
+  cookieSecret: process.env.COOKIE_SECRET!,
+  serviceSecret: process.env.SEAMLESS_SERVICE_TOKEN!,
+  jwksKid: process.env.JWKS_KID,
+}
+```
+
+```ts
+// app/api/orgs/[organizationId]/projects/route.ts
+import { requirePermission } from '@seamless-auth/nextjs'
+import { seamless } from '@/lib/seamless'
+
+export const POST = requirePermission(
+  'projects:write',
+  async (request, _context, user) => Response.json(await createProject(request, user)),
+  { ...seamless, organizationParam: 'organizationId' },
+)
+```
+
+```ts
+// app/api/reports/route.ts
+import { requirePermission } from '@seamless-auth/nextjs'
+import { seamless } from '@/lib/seamless'
+
+export const GET = requirePermission(
+  'reports:read',
+  async (_request, _context, user) => Response.json(await listReports(user.id)),
+  seamless,
+)
+```
+
+`match` and `organization` are options on the same object. The user the handler gets carries
+`permissions`, `organizationRoles`, `organizationPermissions` and `permissionsOmitted`.
+
+### Go
+
+`github.com/fells-code/seamless-auth-go` v0.6.0 or later. `RequirePermission` and
+`RequirePermissionWith` do what `RequireAuth` does and then check permissions, so they replace
+`RequireAuth` on the route rather than sitting behind it:
+
+```go
+// Bound to the route: lead with this for a route that names an organization.
+mux.Handle("POST /api/orgs/{organizationId}/projects", auth.RequirePermissionWith(
+	[]string{"projects:write"}, seamlessauth.InRouteOrganization("organizationId"))(createProject))
+
+// Any one of these, from permissions or org_permissions.
+mux.Handle("GET /api/reports", auth.RequirePermission("reports:read", "reports:admin")(listReports))
+
+// Every one of these.
+mux.Handle("POST /api/invoices", auth.RequirePermissionWith(
+	[]string{"invoices:read", "invoices:write"}, seamlessauth.AllPermissions())(createInvoice))
+```
+
+The options are `AllPermissions()`, `InOrganization()` and `InRouteOrganization(param)`, and they
+combine. `InRouteOrganization` reads the parameter with `r.PathValue`, so with a router that does
+not set it, such as Gin, call `r.SetPathValue` in your wrapper first. `User.Permissions`,
+`User.OrganizationRoles`, `User.OrganizationPermissions` and `User.PermissionsOmitted` come from
+the verified access token.
+
+### Python (FastAPI And Django)
+
+`seamless-auth` 0.6.0 or later on PyPI. Pass `permissions` to the existing guard, `RequireUser` on
+FastAPI or `@require_auth` on Django:
+
+```python
+# FastAPI
+from fastapi import Depends
+from seamless_auth import User
+from seamless_auth.fastapi import RequireUser
+
+
+@app.post("/api/orgs/{organization_id}/projects")
+def create_project(
+    organization_id: str,
+    user: User = Depends(
+        RequireUser(auth, permissions=["projects:write"], organization_param="organization_id")
+    ),
+):
+    return {"id": user.id}
+
+
+@app.get("/api/reports")
+def reports(user: User = Depends(RequireUser(auth, permissions=["reports:read"]))):
+    return {"id": user.id}
+```
+
+```python
+# Django: urls.py has path("api/orgs/<str:organization_id>/projects", views.create_project)
+from django.http import JsonResponse
+from seamless_auth.django import require_auth, user_of
+
+
+@require_auth(permissions=["projects:write"], organization_param="organization_id")
+def create_project(request, organization_id):
+    return JsonResponse({"id": user_of(request).id})
+```
+
+The other options are `permission_mode="all"` (the default is `"any"`) and `organization=True`.
+`permissions` must be a list, not a bare string. `User.permissions`, `User.organization_roles`,
+`User.organization_permissions` and `User.permissions_omitted` come from the verified token.
+
+### Rust (Axum)
+
+`seamless-auth` 0.6.0 or later on crates.io. The guards are layers that do what `require_auth()`
+does and then check permissions. They return a `Result`, and an empty list is refused at setup with
+`BuildError::EmptyGuard`:
+
+```rust
+use seamless_auth::PermissionRule;
+
+// Bound to the route: lead with this for a route that names an organization.
+let in_org = auth.require_permission_rule(
+    PermissionRule::any(["projects:write"]).organization_from_path("organizationId"),
+)?;
+
+let app: Router = Router::new()
+    .route("/api/orgs/{organizationId}/projects", post(create_project).route_layer(in_org))
+    .route(
+        "/api/reports",
+        get(reports).route_layer(auth.require_permission(["reports:read", "reports:admin"])?),
+    )
+    .route(
+        "/api/invoices",
+        post(invoice).route_layer(auth.require_all_permissions(["invoices:read", "invoices:write"])?),
+    );
+```
+
+`PermissionRule::any` or `PermissionRule::all`, with `.organization()` or
+`.organization_from_path(param)`, goes to `require_permission_rule`. The bound form reads the
+matched route's parameters, so put it on the route with `route_layer`. Wrapped around a whole
+router, it refuses everyone.
+
+### Tokens From The OpenID Provider
+
+The verify-only guards for OpenID Provider tokens (`createResourceServer` in Express and Fastify,
+the resource server in Next.js, `Verifier` in Go, `ResourceServer` in Python, verify-only mode in
+Rust) have a permission guard with the same rules, but **it denies every provider token today**.
+Provider tokens do not carry these claims yet
+([seamless-auth-oidc-provider#47](https://github.com/fells-code/seamless-auth-oidc-provider/issues/47)).
+
+---
+
+## Step 3: Gate UI In React
+
+`@seamless-auth/react` 0.20.0 or later exports `usePermissions()`:
+
+```tsx
+import { usePermissions } from '@seamless-auth/react'
+
+export function NewProjectButton({ organizationId }: { organizationId: string }) {
+  const { hasPermission, activeOrganizationId, loading } = usePermissions()
+
+  if (loading) return null
+  if (organizationId !== activeOrganizationId) return null
+  if (!hasPermission('projects:write', { organization: true })) return null
+
+  return <button type="button">New project</button>
+}
+```
+
+| Check                                             | Reads                                         | Matching |
+| ------------------------------------------------- | --------------------------------------------- | -------- |
+| `hasPermission(required)`                         | `permissions` and `organizationPermissions`   | Exact, any of `required` |
+| `hasPermission(required, { organization: true })` | `organizationPermissions` only                | Exact, any of `required` |
+| `hasAllPermissions(required, options?)`           | The same, with the same option                | Exact, all of `required` |
+| `hasRole(required)`                               | `roles`, instance roles only                  | Scoped, as `hasScopedRole` |
+| `hasOrganizationRole(required)`                   | `organizationRoles` in the active organization | Exact |
+
+The same checks are exported as standalone functions from `@seamless-auth/react` and
+`@seamless-auth/client` 0.9.0, taking the user as the first argument.
+
+<Aside type="caution" title="UI gating is a convenience">
+Hiding a button does not protect the route it calls. The server guard from Step 2 is the
+enforcement. The hook reads the last `/users/me` response, so a change reaches the UI on
+`refreshSession()`, after a sign-in or organization switch, or on the next page load.
+</Aside>
+
+Against an API older than v0.23 the permission fields are absent, which means unknown rather than
+none: every check answers `false`, and `permissions`, `organizationRoles` and
+`organizationPermissions` stay `undefined`.
+
+---
+
+## Step 4: Check It End To End
+
+1. Create a permission and map it to a role you hold (Step 1).
+2. Sign out and in again, or wait for the next refresh, so a new access token is issued.
+3. Call `GET /auth/users/me` (or `GET /users/me/permissions` on the auth API) and confirm the
+   permission is listed.
+4. Call the guarded route. Expect `200`. Remove the mapping, get a new token, and expect
+   `403 {"error":"insufficient_permission"}`.
+5. For an organization route, call it with another organization's id in the path while your
+   session is in the first one. Expect `403`.
+
+---
+
+## Versions
+
+| Component                       | First version with permissions | Status |
+| ------------------------------- | ------------------------------ | ------ |
+| `seamless-auth-api`             | v0.23.0                        | Not released. v0.22.0 is the latest |
+| `@seamless-auth/core`, `express`| 0.25.0                         | Published |
+| `@seamless-auth/fastify`        | 0.16.0                         | Published |
+| `@seamless-auth/nextjs`         | 0.9.0                          | Published |
+| `@seamless-auth/client`         | 0.9.0                          | Published |
+| `@seamless-auth/react`          | 0.20.0                         | Published |
+| Go, Python, Rust adapters       | 0.6.0 (`v0.6.0` for Go)        | Published |
+| `seamless-auth-admin-dashboard` | Roles page                     | On `main`, not in a release yet |
+| `seamless-cli`                  | None                           | No permission or role mapping commands |
+
+---
+
+## Migrating From Another Provider
+
+Seamless Auth imports users with their instance roles and organization memberships. It does not
+import permissions or role to permission mappings from any provider. Recreate the catalogue and the
+mappings with Step 1, then import the people.
+
+| Coming from           | What it has                                                                 | What Seamless Auth does with it |
+| --------------------- | --------------------------------------------------------------------------- | ------------------------------- |
+| Auth0 RBAC            | Permissions defined per API and assigned to roles. With **Add Permissions in the Access Token** on, they arrive in a `permissions` claim ([Auth0 docs](https://auth0.com/docs/get-started/apis/enable-role-based-access-control-for-apis)) | `seamless migrate auth0` reads roles only from the `app_metadata` or `user_metadata` paths you name in `--map`. Role assignments held in Auth0 RBAC rather than metadata are not imported. Permissions are not imported |
+| Keycloak roles        | Roles, client roles (a role namespace per client) and composite roles that include other roles ([Keycloak Server Administration Guide](https://www.keycloak.org/docs/latest/server_admin/index.html)) | No Keycloak importer. Build a CSV of users and their roles and import it with `seamless migrate csv`. Seamless Auth has no composite roles: map each composite role's effective permissions onto one role |
+| Okta groups           | A `groups` claim you configure on the authorization server, with a filter choosing which groups it includes ([Okta docs](https://developer.okta.com/docs/guides/customize-tokens-groups-claim/main/)) | No Okta importer. Build a CSV of users and their groups and import it with `seamless migrate csv`, putting group names in the `roles` column, or in the `organizations` column for groups that stand for a team or tenant |
+
+Two differences to plan for:
+
+- **The claim name matches Auth0's, the scope does not.** Seamless Auth's `permissions` claim is
+  instance-wide, not per API, and organization grants arrive separately in `org_permissions`.
+- **Roles you import must exist first.** Every imported instance role must be in `available_roles`,
+  every organization must exist, and imports never grant `admin` or an `admin:*` role. See
+  [How To Migrate Users](/operate/migrate-users) and
+  [Migrate From Auth0](/operate/migrate-from-auth0).
+
+---
+
+## Common Mistakes
+
+| Mistake                                                            | Fix |
+| ------------------------------------------------------------------ | --- |
+| Guarding `/orgs/:id/...` without the bound form                    | Use `organizationParam`, `InRouteOrganization`, `organization_param` or `organization_from_path` |
+| Expecting `invoices:write` to grant `invoices:read`                | Map both permissions to the role. Matching is exact |
+| Expecting an organization `admin` to pass `requireRole('admin')`   | Organization roles never count for role guards. Use a permission |
+| Expecting a mapping change to apply at once                        | It applies at the next token issue. Use `GET /users/me/permissions` for a check that cannot wait |
+| Sending a partial list to `PUT /admin/roles/:kind/:roleName/permissions` | The call replaces the mapping. Send every permission the role should grant |
+| Members who cannot reach a second organization's permissions       | Give the membership `organization:read`, or the `owner` or `admin` role |
+| Hiding UI and calling it access control                            | Enforce with the server guard |
+
+---
+
+## Related Docs
+
+- [How To Secure Routes](/build/secure-routes)
+- [How To Use Organizations And Memberships](/build/organizations-memberships)
+- [How To Use TOTP And Step-Up](/build/totp-step-up)
+- [Server SDKs](/build/server-sdks)
+- [React SDK](/build/react-sdk)
+- [Users & Roles](/understand/users)
+- [Auth API Routes](/reference/auth-api-routes)
