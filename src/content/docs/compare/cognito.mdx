@@ -37,8 +37,8 @@ at Seamless Auth API v0.21.1 on 2026-11-01. Prices, plan contents, and feature l
   custom scopes, and machine-to-machine access tokens through the client credentials grant. Since
   v0.21, Seamless Auth also ships an OpenID Provider: a separate service, off by default, with
   registered resources and scopes, client credentials tokens, and the authorization code flow with
-  `S256` PKCE. It is new (provider 0.1.0) and not OpenID certified, and API Gateway's Cognito
-  authorizer does not accept its tokens.
+  `S256` PKCE. It is new (provider 0.3.0, released 2026-11-02) and not OpenID certified, and API
+  Gateway's Cognito authorizer does not accept its tokens.
 - **You need password sign-in.** Cognito supports passwords, including Secure Remote Password (SRP),
   and can import existing bcrypt, scrypt, Argon2id, or PBKDF2-SHA256 password hashes. Seamless Auth
   has no password flow, by design.

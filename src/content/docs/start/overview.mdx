@@ -180,9 +180,11 @@ requirements for you:
   email or phone OTP, or OAuth, with TOTP as a second factor. `seamless migrate` imports identities,
   not password hashes, so imported users sign in passwordlessly from their first login (see
   [Migrate Users](/operate/migrate-users)).
-- **You need SAML, or an identity provider for other apps.** The auth API signs users in to your
-  application and can use OAuth and OIDC providers as a login source. It does not speak SAML and it
-  is not an OAuth or OIDC authorization server for third-party clients.
+- **You need SAML.** The auth API signs users in to your application and can use OAuth and OIDC
+  providers as a login source, but it does not speak SAML, as a service provider or as an identity
+  provider. To be an identity provider for other apps over OpenID Connect, use the
+  [OpenID Provider](/build/openid-provider) (since v0.21). It is a separate service in front of the
+  API, off by default, new, and not OpenID certified yet.
 - **Your backend has no official adapter.** Official server adapters exist for Node.js 22 or later
   (`core`, `express`, `fastify`, `nextjs`), [Python](/build/python-adapter) (FastAPI and Django,
   `pip install "seamless-auth[fastapi]"`), [Go](/build/go-adapter) (`net/http`, so chi, Echo and
