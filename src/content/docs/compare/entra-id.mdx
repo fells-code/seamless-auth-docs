@@ -1,0 +1,303 @@
+---
+title: "Seamless Auth vs Microsoft Entra ID"
+description: "Seamless Auth or Microsoft Entra ID? An honest comparison for workforce sign-in and for customer identity with Entra External ID: sign-in methods, SSO protocols, provisioning, policy, extensibility, hosting, export, and cost, with dated sources. The workforce lane is planned, not shipped."
+sidebar:
+  order: 4.6
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Microsoft Entra ID is Microsoft's cloud identity and access management service. Most readers meet it
+as the directory behind Microsoft 365: employees sign in to Microsoft and third-party apps, admins
+set Conditional Access policy, and on-premises Active Directory syncs into it. Microsoft sells a
+second configuration, Entra External ID, for customer-facing apps. Seamless Auth is an open source
+(Apache-2.0), passwordless-only auth server that you self-host or run on the Seamless Auth managed
+service. Today it signs users in to applications you build, and, through its optional OpenID
+Provider, to other apps that speak OpenID Connect.
+
+The two overlap less than the word "identity" suggests. Entra ID is a workforce directory with
+governance, device and network access around it. Seamless Auth has none of that yet: a SAML identity
+provider, directory sync, and joiner, mover and leaver lifecycle are planned for Seamless Auth v2.0
+and are **not shipped**. This page compares the two as equals only where both have the feature
+today, and says so where Seamless Auth does not.
+
+Every Entra detail links to Microsoft's own docs or pricing pages, and the [Sources](#sources)
+section gives the date each one was checked. Seamless Auth details were checked against the docs and
+source repositories at Seamless Auth API v0.22.0 and OpenID Provider v0.3.0 on 2026-11-07. Microsoft
+changes plans and prices, so confirm them on
+[Microsoft's Entra pricing page](https://www.microsoft.com/en-us/security/business/microsoft-entra-pricing)
+before you decide.
+
+---
+
+## Choose Entra ID If
+
+- **You need a workforce directory and you already run Microsoft 365.** Entra ID P1 is included in
+  Microsoft 365 E3, E5 and E7 and in Business Premium, and P2 in E5 and E7. If you already pay for
+  it, Seamless Auth does not replace anything you would stop paying for. Seamless Auth has no
+  employee directory, group-based app assignment, or app launcher (planned for v2.0).
+- **You need SAML single sign-on into third-party apps.** Entra ID signs users in to cloud apps with
+  SAML 2.0, OpenID Connect, OAuth, password-based SSO (password vaulting) or linked SSO, and its app
+  gallery holds thousands of preintegrated apps. Seamless Auth's OpenID Provider signs users in to
+  apps that speak OpenID Connect; it has no SAML identity provider (planned for v2.0).
+- **You need provisioning and lifecycle.** Entra provisions users into apps over SCIM and other
+  connectors, takes HR data from Workday or SuccessFactors or any system of record through an API,
+  and syncs from on-premises Active Directory with Cloud Sync or Connect Sync. Lifecycle Workflows
+  (Entra ID Governance) automate joiner, mover and leaver tasks. Seamless Auth has no SCIM, no
+  directory sync and no lifecycle automation (SCIM server planned for v1.2, the rest for v2.0).
+- **You need policy beyond sign-in.** Conditional Access (P1) and risk-based Conditional Access,
+  ID Protection and Privileged Identity Management (P2) have no Seamless Auth equivalent. Seamless
+  Auth has sign-in policy settings, such as `phishing_resistant_only`, and step-up for sensitive
+  actions, not a policy engine over users, devices, locations and risk.
+- **You need Windows, device or network access.** Windows Hello for Business, Platform Credential for
+  macOS, Entra Domain Services (managed LDAP and Kerberos), Application Proxy and Private Access are
+  outside what Seamless Auth does. RADIUS, LDAP and forward-auth are planned for v2.1.
+- **You need government or regulated-cloud authorization.** Microsoft lists Entra ID Free and P1/P2
+  at FedRAMP High and DoD IL2 in Azure public, up to IL6 in Azure Government, and states a 99.99%
+  authentication availability commitment. Seamless Auth has no third-party attestations of its own.
+- **You want passwords available.** Entra supports passwords. Seamless Auth has no password flow, by
+  design.
+
+## Choose Seamless Auth If
+
+- **Users and sessions must stay inside your own boundary.** Self-hosted, the auth API and its
+  Postgres database run in your infrastructure, on any cloud or none. Microsoft describes Entra ID as
+  "a cloud-based identity and access management service"; its on-premises pieces (Cloud Sync and
+  Connect Sync agents, the private network connector) connect to that cloud service.
+- **You want the auth server's source under a permissive license.** The auth API, OpenID Provider,
+  server adapters, frontend SDKs, admin dashboard and CLI are all Apache-2.0. Entra is a commercial
+  service.
+- **You are building a customer-facing app and want passkeys as the default, enforced.** In an
+  Entra External ID tenant, Microsoft's passkey docs say only email and username accounts with a
+  password can register a passkey, that apps build the registration step themselves, that passkeys
+  need a custom URL domain (served through Azure Front Door, a separately billed Azure service), and
+  that external tenants cannot require passkeys through Conditional Access. In Seamless Auth,
+  passkeys are the primary sign-in method, registration is built in, and `phishing_resistant_only`
+  accepts only passkeys to start a session.
+- **You want no password to exist at all.** Seamless Auth has no password column. For Entra ID,
+  Microsoft's guidance on going passwordless is to set passwords to a random value ("password
+  scrambling") and turn off password reset and writeback, not to remove them.
+- **You prefer not to pay per user or per active user.** Self-hosting has no per-user fee; you pay
+  for the infrastructure you run. Entra workforce plans are priced per user per month, and External
+  ID per monthly active user after a free allowance, with SMS billed per attempt. The
+  [Identity Cost Calculator](/compare/cost) covers several providers' published prices next to the
+  cost of self-hosting.
+- **You want your user data and audit trail in a database you can query.** Self-hosted, users,
+  memberships and auth events are rows in your own Postgres, and the auth event trail exports as a
+  hash-chained NDJSON file you can verify. Entra keeps audit and sign-in logs for 7 days on Free and
+  30 days on P1 and P2, and longer retention means routing them through Azure Monitor.
+- **Your app needs sign-in, not a directory.** If what you need is passkey sign-in, recovery, and
+  sessions for an app your team builds, an adapter for Node.js, Go, Python or Rust and a frontend SDK
+  is a shorter path than an Entra tenant, app registrations and MSAL.
+
+---
+
+## Feature Comparison: Workforce
+
+Entra column as checked on the dates in [Sources](#sources). "P1", "P2" and "ID Governance" are
+Microsoft's license names. Where the Seamless Auth column says **Planned**, the feature does not
+exist today.
+
+| | Seamless Auth | Microsoft Entra ID |
+| --- | --- | --- |
+| License | Apache-2.0 for the server, OpenID Provider, SDKs, dashboard and CLI | Commercial cloud service, licensed per user |
+| Hosting | Self-host (Docker, Postgres) or Seamless Auth managed hosting | Microsoft-operated cloud; separate national clouds for US Government and 21Vianet (China) |
+| Passkeys | Yes, the primary sign-in method (WebAuthn via SimpleWebAuthn) | Yes: device-bound and synced passkeys (FIDO2), passkeys in Microsoft Authenticator |
+| Other sign-in methods | Magic link, email OTP, SMS OTP (Twilio or AWS SNS, configured by you) | Password, Windows Hello for Business, Platform Credential for macOS, certificate-based auth, Authenticator passwordless, QR code, SMS sign-in, Temporary Access Pass |
+| Phishing-resistant only | Yes, `phishing_resistant_only` accepts only passkeys to start a session | Conditional Access (P1) can require the built-in phishing-resistant MFA strength for a resource; Microsoft notes a strength does not restrict the initial authentication |
+| MFA and step-up | TOTP and passkey (WebAuthn) step-up | Authenticator push, software OATH tokens, hardware OATH tokens (preview), SMS, voice, passkeys, external MFA |
+| Passwords | No, by design | Yes; Microsoft's passwordless guidance scrambles them rather than removing them |
+| Account recovery | Recovery codes, self-service account recovery, break-glass admins (v0.20) | Self-service password reset; Verified ID for account recovery |
+| SSO into third-party apps | OpenID Connect only, through the OpenID Provider (v0.21, off by default, not OpenID certified); tested guides for Grafana, Auth.js, Spring Security and oauth2-proxy | SAML 2.0, OpenID Connect, OAuth, password-based and linked SSO; app gallery with thousands of apps; a WS-Federation endpoint |
+| SAML identity provider | **Planned for v2.0** | Yes |
+| Directory and groups, app assignment, app launcher | **Planned for v2.0.** Users, global roles and organizations exist today | Yes |
+| Sync from Active Directory or another directory | **Planned for v2.0** (Google Workspace and Entra ID) | Cloud Sync and Connect Sync from on-premises AD |
+| Provisioning to apps (outbound SCIM) | **Planned for v2.0** | Yes, SCIM and other connectors; SaaS user provisioning on Free, group provisioning and on-premises apps on P1 |
+| Inbound provisioning | CSV import and `seamless migrate`; SCIM server **planned for v1.2** | HR-driven (Workday, SuccessFactors) and API-driven inbound provisioning on P1 and P2 |
+| Lifecycle automation | **Planned for v2.0** | Lifecycle Workflows, with an ID Governance license |
+| Policy | Instance sign-in settings, staged sign-in policy, step-up | Conditional Access (P1); ID Protection and risk-based Conditional Access (P2) |
+| Privileged access | Break-glass admins, admin step-up | Privileged Identity Management (P2 or ID Governance) |
+| Roles and permissions in the token | Organization membership roles today. A permission catalogue, role-to-permission mapping and organization roles in the token **need API v0.23.0, which is not released** | App roles and scopes in access tokens (`roles`, `scp`) |
+| Tokens for your own APIs | Yes, through the OpenID Provider: authorization code with `S256` PKCE, client credentials, device grant (first-party), RFC 9068 JWT access tokens | Yes: expose an API with scopes, client credentials with a secret, certificate or federated credential |
+| Extensibility | Logic in your own backend, behind the server adapter. Webhooks and login hooks are planned for v0.23 | Custom authentication extensions (REST calls on token issuance and other events), custom security attributes |
+| Audit trail | Append-only, hash-chained auth events; NDJSON export with an integrity check | Audit and sign-in logs: 7 days on Free, 30 days on P1 and P2; export through Azure Monitor to Log Analytics, Event Hubs or storage |
+| User export | No bulk export endpoint; self-hosted, the data is in your own Postgres. Paginated admin user list and a passkey coverage report (CSV) | Microsoft Graph, and a CSV download of profile properties in the portal (preview). Microsoft documents no password hash export |
+| Third-party compliance attestations | None for Seamless Auth itself | FedRAMP High and DoD IL2 (Azure public), up to IL6 (Azure Government) |
+| Availability commitment | Yours, when self-hosted | Microsoft states 99.99% availability for authentication |
+| Maturity | 0.x, small community | Established commercial service, very large installed base |
+| Pricing model | Free to self-host; managed plans in the portal | Free tier, then per user per month for P1, P2, ID Governance and Entra Suite |
+
+<Aside type="note">
+  As checked on 2026-11-07, Microsoft's pricing page lists Entra ID Free, P1 at $7.00 and P2 at
+  $10.00 per user per month, Entra ID Governance at $7.00 (an add-on that needs P1 or P2 in the
+  tenant), and Entra Suite at $12.00, all paid yearly. Check
+  [Microsoft's pricing page](https://www.microsoft.com/en-us/security/business/microsoft-entra-pricing)
+  for current figures and for what your Microsoft 365 plan already includes.
+</Aside>
+
+---
+
+## Entra External ID
+
+Entra External ID is Microsoft's customer identity product: you create an external tenant, which
+follows the Entra tenant model but is configured for consumer and business-customer apps. Microsoft
+says Azure AD B2C is no longer sold to new customers as of May 1, 2025, and that new customer identity
+features are built on External ID. This is the part of Entra that competes most directly with what
+Seamless Auth does today.
+
+| | Seamless Auth | Entra External ID |
+| --- | --- | --- |
+| Hosting | Self-host or Seamless Auth managed hosting | External tenant on Microsoft's cloud; data residency add-on (Go-Local) in Australia and Japan |
+| Primary sign-in | Passkeys, magic link, email OTP, SMS OTP | Email with password (the default) or email one-time passcode; username sign-in in preview |
+| Passkeys | Primary method; built-in registration; can be the only method | For email and username accounts with a password, after MFA; app builds registration with the credential management API; needs a custom URL domain; cannot be required by policy |
+| SMS | Sign-in code, through your own Twilio or AWS SNS account | Paid add-on, billed per attempt; MFA and password reset only, not a first factor |
+| Social and federated login | Instance-wide OpenID Connect providers; CLI presets for Google, GitHub, Microsoft (Entra ID), GitLab | Google, Facebook, Apple, an Entra ID tenant, custom OIDC, and SAML or WS-Fed providers |
+| MFA | TOTP and passkey step-up | Email OTP, SMS (add-on), TOTP, passkeys; enforced with Conditional Access |
+| Sign-in UI | Built-in auth routes in your app (React, Angular, Vue, Svelte), headless, or the OpenID Provider's hosted pages | Hosted user flows with branding; native authentication through MSAL for Android, iOS, macOS and web (local accounts only) |
+| Custom domain | Your own domain, always | Custom URL domains through a reverse proxy such as Azure Front Door, billed separately |
+| Hooks | Your own backend | Custom authentication extensions on token issuance, attribute collection and OTP send |
+| Machine-to-machine | Client credentials through the OpenID Provider | M2M Premium add-on |
+| Log retention | Your own Postgres, as long as you keep it | 7 days on the Basic plan |
+| Pricing model | Free to self-host; managed plans in the portal | Free for the first 50,000 MAU, then $0.03 per MAU; SMS, M2M and Go-Local are paid add-ons; admins in an external tenant count toward MAU |
+
+---
+
+## Architecture Difference
+
+**Entra ID** is a central identity provider for an organization. Apps are registered in the tenant
+and redirect users to `login.microsoftonline.com` (or, for External ID, `<tenant>.ciamlogin.com` or
+a custom URL domain). Entra evaluates Conditional Access, authenticates the user, and returns SAML
+assertions or OpenID Connect tokens. Users, groups, devices and app assignments live in the tenant,
+and you manage them through the admin center or Microsoft Graph.
+
+**Seamless Auth** is a service you run next to your backend:
+
+```txt
+browser or native app
+  -> your backend's /auth routes   (@seamless-auth/express, fastify, nextjs, or the Python/Go/Rust adapter)
+  -> seamless-auth-api             (your infrastructure, or Seamless Auth managed)
+  -> Postgres
+```
+
+Clients never call the auth API directly. Your backend mounts the adapter routes, forwards calls
+with a service token, and keeps the session in signed `httpOnly` cookies on your domain (native
+apps use bearer tokens in the platform keystore). Authorization stays in your own code. See
+[What Is Seamless Auth?](/start/overview#how-the-pieces-connect).
+
+Since v0.21 you can also run the optional [OpenID Provider](/build/openid-provider), a separate
+public service in front of the private API. Apps that speak OpenID Connect, such as Grafana or an
+internal tool behind [oauth2-proxy](/build/oidc-oauth2-proxy), redirect to its hosted pages and get
+tokens back the way they would from Entra, with no Seamless SDK. That covers some internal-app
+sign-in today. It is not a workforce directory: there is no SAML, no group-based app assignment,
+and no provisioning.
+
+The two also work together. Seamless Auth can use Entra ID as an upstream OpenID Connect provider
+([OAuth Login](/build/oauth-login#microsoft-entra-id)), so employees sign in with their Entra
+account while your app gets a Seamless session.
+
+---
+
+## When Not To Use Seamless Auth
+
+If any of these is a hard requirement today, stay on Entra ID or choose another product.
+
+- **You need to sign employees in to SAML apps, or to Microsoft 365.** Seamless Auth has no SAML
+  identity provider (planned for v2.0) and is not a Microsoft 365 identity source.
+- **You provision or deprovision accounts from HR or a directory.** There is no SCIM, no directory
+  sync and no lifecycle automation. Bulk changes go through the CSV import.
+- **You rely on Conditional Access, risk policies or PIM.** Seamless Auth has no equivalent.
+- **You need Windows sign-in, device trust, LDAP or Kerberos.** Out of scope today; RADIUS, LDAP and
+  forward-auth are planned for v2.1.
+- **You need permissions in the token now.** That needs API v0.23.0, which is not released.
+- **Other apps need a certified identity provider.** The OpenID Provider is new and not OpenID
+  certified.
+- **You need a vendor's FedRAMP authorization or a contractual SLA for the auth service itself.**
+  Seamless Auth has no third-party attestations. Self-hosted, it is covered by your own controls.
+- **Your users sign in with passwords and you cannot change that.** There is no password flow, and no
+  password hashes are imported.
+- **You need a 1.0 stability guarantee.** Every Seamless Auth package is still 0.x.
+
+The full list is in
+[When Seamless Auth Is Not The Right Choice](/start/overview#when-seamless-auth-is-not-the-right-choice).
+
+---
+
+## Migrating From Entra ID
+
+For an app whose users live in Entra ID, `seamless migrate entra-id` reads the directory through
+Microsoft Graph and imports identities (`mail` as the email, `mobilePhone` as the phone, the object id
+as the external id, and optionally group membership as organizations and roles), as a dry run unless you pass `--apply`. Run
+`seamless migrate assess entra-id` first for a readiness report. See
+[Migrate Users From Another Identity System](/operate/migrate-users) and
+[`migrate entra-id`](/reference/cli-commands#migrate-entra-id).
+
+<Aside type="caution">
+  `seamless migrate entra-id` has not yet been tested against a live Entra ID tenant
+  ([seamless-cli#302](https://github.com/fells-code/seamless-cli/issues/302)).
+  Run the dry run and the assessment first, and check the report before `--apply`.
+</Aside>
+
+No credentials move. During cutover, imported users can keep signing in with their Entra account
+through OpenID Connect, then enroll a passkey
+([sign in through the old provider](/operate/migrate-users)). This moves an app's users, not an
+organization's workforce identity: Entra ID stays the directory for everything else.
+
+---
+
+## Sources
+
+Microsoft Entra details, each checked on 2026-11-07 on Microsoft's own pages:
+
+- [Microsoft Entra pricing](https://www.microsoft.com/en-us/security/business/microsoft-entra-pricing): Free, P1, P2, ID Governance and Entra Suite list prices; Conditional Access in P1; ID Protection and PIM in P2
+- [Licensing fundamentals](https://learn.microsoft.com/en-us/entra/id-governance/licensing-fundamentals): P1 in Microsoft 365 E3, E5, E7 and Business Premium; P2 in E5 and E7; ID Governance needs P1 or P2; Lifecycle Workflows need ID Governance; provisioning by license
+- [What is Microsoft Entra?](https://learn.microsoft.com/en-us/entra/fundamentals/what-is-entra): cloud-based service, Microsoft Graph, Private Access
+- [Plan a single sign-on deployment](https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/plan-sso-deployment): OpenID Connect, OAuth, SAML, password-based and linked SSO
+- [Federation metadata](https://learn.microsoft.com/en-us/entra/identity-platform/federation-metadata): WS-Federation endpoint
+- [Application gallery](https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/overview-application-gallery): thousands of applications; not available in external tenants
+- [Authentication methods](https://learn.microsoft.com/en-us/entra/identity/authentication/overview-authentication): methods table, hardware OATH tokens in preview, phishing-resistant methods
+- [Authentication strengths](https://learn.microsoft.com/en-us/entra/identity/authentication/concept-authentication-strengths): built-in phishing-resistant MFA strength, needs P1, applies after initial authentication
+- [Passkeys (FIDO2)](https://learn.microsoft.com/en-us/entra/identity/authentication/concept-authentication-passkeys-fido2): device-bound and synced passkeys
+- [Remove passwords from Microsoft Entra ID](https://learn.microsoft.com/en-us/entra/identity/authentication/how-to-plan-password-scramble-phishing-resistant-passwordless-authentication): password scrambling
+- [Application provisioning](https://learn.microsoft.com/en-us/entra/identity/app-provisioning/user-provisioning): SCIM and other connectors
+- [Cloud HR provisioning](https://learn.microsoft.com/en-us/entra/identity/app-provisioning/plan-cloud-hr-provision): Workday and SuccessFactors, P1 or P2
+- [API-driven inbound provisioning](https://learn.microsoft.com/en-us/entra/identity/app-provisioning/inbound-provisioning-api-concepts): any system of record, P1, P2 and ID Governance
+- [Cloud Sync](https://learn.microsoft.com/en-us/entra/identity/hybrid/cloud-sync/what-is-cloud-sync): on-premises provisioning agent, Commercial, US Government and 21Vianet clouds
+- [Domain Services](https://learn.microsoft.com/en-us/entra/identity/domain-services/overview): managed LDAP and Kerberos
+- [Application proxy](https://learn.microsoft.com/en-us/entra/identity/app-proxy/overview-what-is-app-proxy): remote access to on-premises apps, shared connector with Private Access
+- [Data retention](https://learn.microsoft.com/en-us/entra/identity/monitoring-health/reference-reports-data-retention): 7 days on Free, 30 days on P1 and P2, 7 days on External ID Basic
+- [Diagnostic settings](https://learn.microsoft.com/en-us/entra/identity/monitoring-health/howto-configure-diagnostic-settings): Log Analytics, event hub, storage account
+- [Custom authentication extensions](https://learn.microsoft.com/en-us/entra/identity-platform/custom-extension-overview): events available in workforce and external tenants
+- [Custom security attributes](https://learn.microsoft.com/en-us/entra/fundamentals/custom-security-attributes-overview)
+- [National clouds](https://learn.microsoft.com/en-us/entra/identity-platform/authentication-national-cloud): Azure Government, 21Vianet
+- [Backup authentication system](https://learn.microsoft.com/en-us/entra/architecture/backup-authentication-system): 99.99% availability for authentication
+- [FedRAMP audit scope](https://learn.microsoft.com/en-us/azure/azure-government/compliance/azure-services-in-fedramp-auditscope): FedRAMP High and DoD IL2 in Azure public; IL4 through IL6 in Azure Government; applies to External ID
+- [Download a list of users](https://learn.microsoft.com/en-us/entra/identity/users/users-bulk-download): CSV of profile properties, preview
+- [Expose a web API](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-configure-app-expose-web-apis): scopes and app roles in access tokens
+- [Client credentials flow](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-client-creds-grant-flow): secret, certificate or federated credential; M2M Premium add-on for External ID
+- [External ID overview](https://learn.microsoft.com/en-us/entra/external-id/customers/overview-customers-ciam): external tenants, Azure AD B2C not sold to new customers from May 1, 2025
+- [Azure AD B2C FAQ](https://learn.microsoft.com/en-us/azure/active-directory-b2c/faq): end of sale, support until at least May 2030
+- [External ID pricing](https://azure.microsoft.com/en-us/pricing/details/microsoft-entra-external-id/): 50,000 MAU free, then $0.03 per MAU; SMS per attempt
+- [External ID billing model](https://learn.microsoft.com/en-us/entra/external-id/external-identities-pricing): add-ons, MAU counts all users in an external tenant
+- [External ID authentication methods](https://learn.microsoft.com/en-us/entra/external-id/customers/concept-authentication-methods-customers): email with password or one-time passcode, social and federated providers, username sign-in in preview, native authentication limits
+- [External ID MFA](https://learn.microsoft.com/en-us/entra/external-id/customers/concept-multifactor-authentication-customers): second factors; SMS not a first factor
+- [External ID passkeys](https://learn.microsoft.com/en-us/entra/external-id/customers/how-to-sign-in-with-passkey): requirements and current limits
+- [External ID custom URL domains](https://learn.microsoft.com/en-us/entra/external-id/customers/concept-custom-url-domain): Azure Front Door, separate charges
+- [Native authentication](https://learn.microsoft.com/en-us/entra/identity-platform/concept-native-authentication): MSAL SDKs for Android, iOS, macOS and web
+
+Not verified, so not claimed on this page: the contractual SLA terms in Microsoft's Online Services
+SLA, Entra ID's specific SOC and ISO audit scope, and whether External ID passkeys are generally
+available (the page carries no preview label and no GA statement).
+
+Seamless Auth details (Seamless Auth API v0.22.0, OpenID Provider v0.3.0, checked 2026-11-07):
+
+- [What Is Seamless Auth?](/start/overview), including [When Seamless Auth Is Not The Right Choice](/start/overview#when-seamless-auth-is-not-the-right-choice)
+- [OpenID Provider](/build/openid-provider) and the [oauth2-proxy guide](/build/oidc-oauth2-proxy)
+- [How To Use Roles And Permissions](/build/roles-and-permissions) (needs API v0.23.0, not released)
+- [How To Use Organizations And Memberships](/build/organizations-memberships)
+- [OAuth Login](/build/oauth-login#microsoft-entra-id)
+- [Migrate Users From Another Identity System](/operate/migrate-users) and [`migrate entra-id`](/reference/cli-commands#migrate-entra-id)
+- [v0.20 Release Notes](/reference/release-v0-20) (recovery) and [v0.21 Release Notes](/reference/release-v0-21) (OpenID Provider)
+- [Environment Variables](/reference/environment-variables) (`PHISHING_RESISTANT_ONLY`)
+- [Auth Events and Auditing](/understand/authevents)
+- Planned features: the Seamless Auth roadmap milestones v0.23, v1.1, v1.2, v2.0 and v2.1 in [seamless-auth-api](https://github.com/fells-code/seamless-auth-api/milestones)
+- Source: [fells-code on GitHub](https://github.com/fells-code)
