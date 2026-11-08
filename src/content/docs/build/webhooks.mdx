@@ -1,0 +1,754 @@
+---
+title: "How To Receive Webhooks"
+description: "Subscribe an endpoint to signed Seamless Auth webhooks, verify them with verifyWebhook or by hand in Go, Python and Rust, and handle retries, duplicates, dead letters, redelivery and secret rotation, with the full event catalog."
+sidebar:
+  order: 11.6
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Use this guide when your app needs to react to something that happened in Seamless Auth, such as a
+new account, a sign-in, a revoked session or a membership change, without polling the admin API.
+
+The auth API sends a signed `POST` to each URL you subscribe, one event per request. Signatures
+follow the [Standard Webhooks](https://github.com/standard-webhooks/standard-webhooks/blob/main/spec/standard-webhooks.md)
+scheme, so any Standard Webhooks verifier checks them, and the server adapters ship `verifyWebhook`.
+Events are built from the committed audit log, delivery is retried for about 42 hours, and every
+attempt is in a delivery log you can read and redeliver from.
+
+<Aside type="caution" title="Needs auth API v0.23.0, not released yet">
+Webhooks and every route on this page need `seamless-auth-api` v0.23.0. The latest release is
+v0.22.0, which has none of them. `verifyWebhook` and the adapter helpers are not published yet,
+and neither are the console's **Webhooks** page or the CLI's `seamless webhooks` commands (see
+[Versions](#versions)). The hand-written verifiers for Go, Python and Rust work today, because
+they only need the language's standard crypto.
+</Aside>
+
+---
+
+## How Delivery Works
+
+- **Built from the audit log.** A dispatcher reads committed `auth_events` rows past a cursor, in
+  `seq` order, and queues one delivery per subscribed endpoint. An event is sent only once its row
+  has committed, and nothing is lost between the event and the queue. It polls once a second.
+- **No history on first run.** When webhooks start for the first time the cursor starts at the
+  newest audit row, so turning webhooks on does not replay old events. An endpoint receives events
+  that happen while it exists and is enabled.
+- **At least once.** A receiver can see the same delivery more than once: a retry after a timeout
+  it actually processed, or a redelivery an administrator sent. Dedupe on `webhook-id`.
+- **Unordered.** Deliveries are sent concurrently and retried on their own schedules, so a
+  `session.revoked` can arrive before the `user.signed_in` it follows. Order by the envelope's
+  `timestamp` if you need to, and treat each event as a hint to read current state when order
+  matters.
+- **Success is a 2xx within 15 seconds.** Anything else, including a redirect (never followed), is
+  a failed attempt. The response body is read only for its status and capped at 64 KiB.
+
+What is not guaranteed: ordering, exactly-once delivery, delivery of events that happened while an
+endpoint was disabled, and that `webhook-id` is the same across two endpoints (each endpoint's
+delivery of an event has its own id).
+
+---
+
+## The Envelope
+
+Every body is one JSON object:
+
+```json
+{
+  "id": "0b6b1c1e-2f0a-4c5b-9a43-0d9f3c7e1a12",
+  "type": "user.signed_in",
+  "version": 1,
+  "timestamp": "2026-11-07T12:00:00.000Z",
+  "data": {
+    "userId": "5f0c6a2e-8d1b-4f3a-9c7e-2b4d6e8f0a13",
+    "sessionId": "c3a1e7d2-4b5f-4e8a-9d6c-1f2e3a4b5c6d",
+    "method": "passkey",
+    "organizationId": "9b8a7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d"
+  }
+}
+```
+
+| Field       | Meaning |
+| ----------- | ------- |
+| `id`        | The delivery id. Equal to the `webhook-id` header, and the same on every retry and redelivery |
+| `type`      | One of the [event types](#event-catalog), or `webhook.test` |
+| `version`   | Payload version, always `1`. A breaking change would ship as a new version |
+| `timestamp` | When the event happened. A retry can arrive hours later with the same value |
+| `data`      | The event's fields, below |
+
+Three headers come with it:
+
+| Header              | Value |
+| ------------------- | ----- |
+| `webhook-id`        | The delivery id |
+| `webhook-timestamp` | When this attempt was signed, Unix seconds. Fresh on every attempt |
+| `webhook-signature` | `v1,<base64 HMAC-SHA256>`, or two of them separated by a space while a secret rotates |
+
+`data` carries identifiers and the few fields a receiver acts on. It never carries an IP address,
+user agent or free-form metadata; those stay in the audit log. The schemas are
+`WebhookEventSchema` and its parts in `@seamless-auth/types` 0.39.0 (`webhook` module).
+
+---
+
+## Event Catalog
+
+The catalog is a public contract and grows by addition. Which audit events become which webhook is
+one table in the API (`src/services/webhookCatalog.ts`), so an audit type that is not listed here
+reaches no receiver.
+
+| Webhook type                   | Sent when                                                                 | `data` |
+| ------------------------------ | ------------------------------------------------------------------------- | ------ |
+| `user.created`                 | An account is created (`user_created`)                                    | `userId`, `email`, `phone` |
+| `user.deleted`                 | An account is deleted (`user_deleted`)                                    | `userId` |
+| `user.signed_in`               | A session is created by any sign-in, including a recovery session (`session_created`) | `userId`, `sessionId`, `method`, `organizationId` |
+| `user.recovered`               | Account recovery completes (`account_recovery_completed`)                 | `userId` |
+| `session.revoked`              | A sign-out, an admin revocation, an eviction by the session limit, or a provider revocation | `userId`, `sessionId`, `reason` |
+| `credential.added`             | A passkey is registered, TOTP is enrolled, or recovery codes are generated | `userId`, `kind`, `credentialId` |
+| `credential.removed`           | A passkey is deleted or TOTP is turned off                                | `userId`, `kind`, `credentialId` |
+| `organization.member_added`    | A membership is created                                                   | `organizationId`, `userId`, `roles` |
+| `organization.member_updated`  | A membership's roles change                                               | `organizationId`, `userId`, `roles` |
+| `organization.member_removed`  | A membership is removed                                                   | `organizationId`, `userId`, `roles` (always `[]`) |
+| `webhook.test`                 | Only from the test endpoint, to the endpoint tested                       | `endpointId` |
+
+### Payload Schemas
+
+Every id is a non-empty string. `| null` marks a nullable field; no field is ever omitted.
+
+| Type | Schema |
+| ---- | ------ |
+| `user.created` | `{ userId: string, email: string \| null, phone: string \| null }`. The address the account was made with, read from the user when the event is dispatched |
+| `user.deleted`, `user.recovered` | `{ userId: string }` |
+| `user.signed_in` | `{ userId: string, sessionId: string \| null, method: string \| null, organizationId: string \| null }`. `method` is how the sign-in completed, such as `passkey`, `email_otp`, `phone_otp`, `totp`, `magic_link`, `oauth`, `recovery_code` or `account_recovery`. `organizationId` is the session's starting organization |
+| `session.revoked` | `{ userId: string \| null, sessionId: string \| null, reason: "logout" \| "admin" \| "evicted" \| "provider" }`. `sessionId` is null when a user signs out of every session at once |
+| `credential.added`, `credential.removed` | `{ userId: string, kind: "passkey" \| "totp" \| "recovery_codes", credentialId: string \| null }`. `credentialId` is set for passkeys only |
+| `organization.member_*` | `{ organizationId: string, userId: string, roles: string[] }`. The member's roles after the change, empty on removal |
+| `webhook.test` | `{ endpointId: string }` |
+
+### Examples
+
+These were generated by running the API's catalog over sample audit rows and parsing each result
+with `WebhookEventSchema` from `@seamless-auth/types` 0.39.0.
+
+```json
+{"id":"0b6b1c1e-2f0a-4c5b-9a43-0d9f3c7e1a10","type":"user.created","version":1,"timestamp":"2026-11-07T12:00:00.000Z","data":{"userId":"5f0c6a2e-8d1b-4f3a-9c7e-2b4d6e8f0a13","email":"ana@example.com","phone":null}}
+{"id":"0b6b1c1e-2f0a-4c5b-9a43-0d9f3c7e1a11","type":"user.deleted","version":1,"timestamp":"2026-11-07T12:00:00.000Z","data":{"userId":"5f0c6a2e-8d1b-4f3a-9c7e-2b4d6e8f0a13"}}
+{"id":"0b6b1c1e-2f0a-4c5b-9a43-0d9f3c7e1a12","type":"user.signed_in","version":1,"timestamp":"2026-11-07T12:00:00.000Z","data":{"userId":"5f0c6a2e-8d1b-4f3a-9c7e-2b4d6e8f0a13","sessionId":"c3a1e7d2-4b5f-4e8a-9d6c-1f2e3a4b5c6d","method":"passkey","organizationId":"9b8a7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d"}}
+{"id":"0b6b1c1e-2f0a-4c5b-9a43-0d9f3c7e1a13","type":"user.recovered","version":1,"timestamp":"2026-11-07T12:00:00.000Z","data":{"userId":"5f0c6a2e-8d1b-4f3a-9c7e-2b4d6e8f0a13"}}
+{"id":"0b6b1c1e-2f0a-4c5b-9a43-0d9f3c7e1a14","type":"session.revoked","version":1,"timestamp":"2026-11-07T12:00:00.000Z","data":{"userId":"5f0c6a2e-8d1b-4f3a-9c7e-2b4d6e8f0a13","sessionId":"c3a1e7d2-4b5f-4e8a-9d6c-1f2e3a4b5c6d","reason":"logout"}}
+{"id":"0b6b1c1e-2f0a-4c5b-9a43-0d9f3c7e1a15","type":"session.revoked","version":1,"timestamp":"2026-11-07T12:00:00.000Z","data":{"userId":"5f0c6a2e-8d1b-4f3a-9c7e-2b4d6e8f0a13","sessionId":"c3a1e7d2-4b5f-4e8a-9d6c-1f2e3a4b5c6d","reason":"admin"}}
+{"id":"0b6b1c1e-2f0a-4c5b-9a43-0d9f3c7e1a16","type":"credential.added","version":1,"timestamp":"2026-11-07T12:00:00.000Z","data":{"userId":"5f0c6a2e-8d1b-4f3a-9c7e-2b4d6e8f0a13","kind":"passkey","credentialId":"pRn3hZ4m8Q0yYbJcXk2v1A"}}
+{"id":"0b6b1c1e-2f0a-4c5b-9a43-0d9f3c7e1a17","type":"credential.removed","version":1,"timestamp":"2026-11-07T12:00:00.000Z","data":{"userId":"5f0c6a2e-8d1b-4f3a-9c7e-2b4d6e8f0a13","kind":"totp","credentialId":null}}
+{"id":"0b6b1c1e-2f0a-4c5b-9a43-0d9f3c7e1a18","type":"organization.member_added","version":1,"timestamp":"2026-11-07T12:00:00.000Z","data":{"organizationId":"9b8a7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d","userId":"5f0c6a2e-8d1b-4f3a-9c7e-2b4d6e8f0a13","roles":["member"]}}
+{"id":"0b6b1c1e-2f0a-4c5b-9a43-0d9f3c7e1a19","type":"organization.member_updated","version":1,"timestamp":"2026-11-07T12:00:00.000Z","data":{"organizationId":"9b8a7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d","userId":"5f0c6a2e-8d1b-4f3a-9c7e-2b4d6e8f0a13","roles":["admin","billing"]}}
+{"id":"0b6b1c1e-2f0a-4c5b-9a43-0d9f3c7e1a20","type":"organization.member_removed","version":1,"timestamp":"2026-11-07T12:00:00.000Z","data":{"organizationId":"9b8a7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d","userId":"5f0c6a2e-8d1b-4f3a-9c7e-2b4d6e8f0a13","roles":[]}}
+{"id":"0b6b1c1e-2f0a-4c5b-9a43-0d9f3c7e1a99","type":"webhook.test","version":1,"timestamp":"2026-11-07T12:00:00.000Z","data":{"endpointId":"7d6c5b4a-3e2f-4a1b-9c8d-7e6f5a4b3c2d"}}
+```
+
+---
+
+## Step 1: Configure The Auth API
+
+| Variable                        | Required                                          | Purpose |
+| ------------------------------- | ------------------------------------------------- | ------- |
+| `CALLOUT_SECRET_ENCRYPTION_KEY` | In production, once any webhook or login hook exists | Encrypts every stored signing secret with AES-256-GCM (the key is the SHA-256 of this value). Production refuses to start without it while a webhook or login hook exists, and creating one answers `409` until it is set. Outside production a development-only value is used |
+| `CALLOUT_PRIVATE_HOSTS`         | No                                                | Comma-separated host names that may resolve to private or loopback addresses in production, for a receiver inside your own network |
+
+Generate the key once, for example with `openssl rand -base64 32`, and keep it stable. Signing
+secrets stored under one key cannot be read under another, so changing it means deleting and
+recreating every webhook and login hook.
+
+Every webhook URL is checked when it is written and again when each request connects:
+
+- `https` only in production. `http` is accepted outside production.
+- No username or password in the URL, no fragment, and never the API's own issuer host.
+- DNS is resolved inside the connection, and every address a name resolves to must be allowed, so
+  a name cannot pass the check and then point somewhere else.
+- Link-local, unspecified, multicast and broadcast addresses are never reachable. Other private
+  and loopback addresses are refused in production unless the host is in `CALLOUT_PRIVATE_HOSTS`,
+  which is separate from `OAUTH_PROVIDER_PRIVATE_HOSTS`.
+
+Outside production (`NODE_ENV` other than `production`) private addresses are allowed, so a
+receiver on `http://localhost:4000` works in development.
+
+---
+
+## Step 2: Create An Endpoint
+
+Each endpoint has a URL, the event types it subscribes to (at least one), an optional
+description, and its own signing secret. **The secret is shown once**, when the endpoint is created
+and when it is rotated. It cannot be read back.
+
+### In The Admin Console
+
+The console's **Webhooks** page (`/webhooks` in `seamless-auth-admin-dashboard`) creates, edits,
+turns off and on, and deletes endpoints, shows why the API turned one off, rotates its secret,
+sends a test event, and has the delivery log with a dead letter view and redeliver. Every write,
+including a test and a redelivery, asks for step-up first. The page is not in a console release
+yet (seamless-auth-admin-dashboard#343). Against an API older than v0.23 it says it needs v0.23.
+
+### With The CLI
+
+The `seamless webhooks` commands are not in a CLI release yet (seamless-cli#359). With them:
+
+```bash
+seamless webhooks create https://app.example.com/webhooks/seamless \
+  --events user.created,user.deleted,session.revoked   # prints the secret once
+seamless webhooks list
+seamless webhooks test <id>                             # exits 1 when the endpoint refuses it
+seamless webhooks update <id> --events user.created     # replaces the subscription
+seamless webhooks disable <id>
+seamless webhooks enable <id>
+```
+
+### With The Admin API
+
+Reads need an `admin:read` (or `admin`) instance role. Every write, including sending a test and
+redelivering, needs `admin:write` (or `admin`) and a fresh step-up on the calling session; without
+it the call answers `403` with `"error": "step_up_required"` (see
+[How To Use TOTP And Step-Up](/build/totp-step-up)). Through a server adapter mounted at `/auth`,
+prefix the paths with `/auth`.
+
+| Method   | Route                                          | Body or query                                   | Purpose |
+| -------- | ---------------------------------------------- | ----------------------------------------------- | ------- |
+| `GET`    | `/admin/webhooks`                              |                                                 | List endpoints (`{ endpoints }`) |
+| `POST`   | `/admin/webhooks`                              | `{ url, eventTypes, description?, enabled? }`   | Create one. `201` with `{ endpoint, secret }`. `409` when `CALLOUT_SECRET_ENCRYPTION_KEY` is missing in production |
+| `GET`    | `/admin/webhooks/:id`                          |                                                 | One endpoint |
+| `PATCH`  | `/admin/webhooks/:id`                          | Any of `url`, `eventTypes`, `description`, `enabled` | Change it. Turning it back on clears `disabledReason` |
+| `DELETE` | `/admin/webhooks/:id`                          |                                                 | Delete it and its delivery history |
+| `POST`   | `/admin/webhooks/:id/secret`                   |                                                 | Rotate the secret: `{ secret, previousSecretExpiresAt }` |
+| `POST`   | `/admin/webhooks/:id/test`                     |                                                 | Send `webhook.test` now: `{ ok, failure, statusCode, durationMs }` |
+| `GET`    | `/admin/webhook-deliveries`                    | `endpointId`, `status`, `eventType`, `limit` (1 to 100, default 50), `cursor` | Deliveries, newest first: `{ deliveries, nextCursor }` |
+| `GET`    | `/admin/webhook-deliveries/:deliveryId`        |                                                 | One delivery with the event it carries |
+| `POST`   | `/admin/webhook-deliveries/:deliveryId/redeliver` |                                              | One attempt now |
+
+```bash
+curl -X POST "$AUTH_SERVER_URL/admin/webhooks" \
+  -H "Authorization: Bearer $ADMIN_ACCESS_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"url":"https://app.example.com/webhooks/seamless","eventTypes":["user.created","session.revoked"],"description":"Provisioning"}'
+```
+
+```json
+{
+  "endpoint": {
+    "id": "7d6c5b4a-3e2f-4a1b-9c8d-7e6f5a4b3c2d",
+    "url": "https://app.example.com/webhooks/seamless",
+    "description": "Provisioning",
+    "eventTypes": ["user.created", "session.revoked"],
+    "enabled": true,
+    "disabledReason": null,
+    "version": 1,
+    "previousSecretExpiresAt": null,
+    "createdAt": "2026-11-07T12:00:00.000Z",
+    "updatedAt": "2026-11-07T12:00:00.000Z"
+  },
+  "secret": "whsec_..."
+}
+```
+
+Store the secret where your receiver reads it, such as `SEAMLESS_WEBHOOK_SECRET`. Creating,
+updating, deleting and rotating are audited as `admin_webhook_*` events, with the URL recorded
+without its query string.
+
+---
+
+## Step 3: Verify Every Request
+
+The rules, which every verifier on this page follows:
+
+1. Read the body as **raw bytes**. The signature covers them exactly. Parsing and re-serializing
+   JSON changes the bytes and breaks the signature.
+2. Refuse a `webhook-timestamp` more than **300 seconds** from your clock, in either direction.
+3. The signed content is `${webhook-id}.${webhook-timestamp}.${body}`. The key is the base64
+   after `whsec_`, decoded. The signature is HMAC-SHA256, base64 encoded.
+4. `webhook-signature` holds one or more space-separated `<version>,<signature>` entries. Accept
+   the request if any `v1` entry matches any secret you hold. Ignore other versions. Compare in
+   constant time.
+5. Parse the JSON only after the signature verifies, then dedupe on `webhook-id`.
+
+Answer `2xx` quickly and do slow work afterwards: the attempt fails after 15 seconds.
+
+### Express
+
+`requireWebhook` from `@seamless-auth/express/webhook` reads the body itself with `express.raw`,
+verifies it and puts the typed event on `req.webhook`. Mount the route before any `express.json()`
+that would see it:
+
+```ts
+import express from 'express'
+import { requireWebhook } from '@seamless-auth/express/webhook'
+
+const app = express()
+
+app.post(
+  '/webhooks/seamless',
+  requireWebhook({ secret: process.env.SEAMLESS_WEBHOOK_SECRET! }),
+  async (req, res) => {
+    const event = req.webhook!
+    if (await alreadyHandled(event.id)) return res.sendStatus(204)
+    if (event.type === 'user.created') await provision(event.data.userId, event.data.email)
+    res.sendStatus(204)
+  },
+)
+
+app.use(express.json())
+```
+
+A refused request gets `400 {"error":"invalid_webhook","reason":"..."}`. If `express.json()` has
+already parsed the body, the request fails with a `TypeError` passed to `next`. `limit` caps the
+body (default `"1mb"`).
+
+### Fastify
+
+`seamlessWebhook` from `@seamless-auth/fastify/webhook` serves one route and swaps in a raw body
+parser inside its own encapsulated context, so the rest of the app keeps parsing JSON. Register it
+directly, not through `fastify-plugin`, or the raw parser applies to every route:
+
+```ts
+import { seamlessWebhook } from '@seamless-auth/fastify/webhook'
+
+await app.register(seamlessWebhook, {
+  path: '/webhooks/seamless',
+  secret: process.env.SEAMLESS_WEBHOOK_SECRET!,
+  async onEvent(event) {
+    if (event.type === 'session.revoked') await dropCachedSession(event.data.sessionId)
+  },
+})
+```
+
+`onEvent` answers by returning a value or sending on `reply`; otherwise the route answers `204`.
+
+### Next.js
+
+`createWebhookHandler` from `@seamless-auth/nextjs/webhook` is an App Router route handler. It reads
+`request.arrayBuffer()`, the exact bytes, and runs on the Node.js runtime:
+
+```ts
+// app/api/webhooks/seamless/route.ts
+import { createWebhookHandler } from '@seamless-auth/nextjs/webhook'
+
+export const POST = createWebhookHandler({
+  secret: process.env.SEAMLESS_WEBHOOK_SECRET!,
+  async onEvent(event) {
+    if (event.type === 'organization.member_removed') {
+      await revokeAccess(event.data.organizationId, event.data.userId)
+    }
+  },
+})
+```
+
+For a handler of your own, `verifyWebhookRequest(request, { secret })` returns the event or throws
+`WebhookVerificationError`. Do not call `request.json()` first.
+
+### Any Node.js Server
+
+`verifyWebhook(rawBody, headers, { secret })` from `@seamless-auth/core/webhook` (re-exported by
+each adapter's `/webhook` subpath) takes the body as a string or bytes and a Fetch `Headers` or Node
+headers object. It throws `WebhookVerificationError` with a `reason`: `missing_header`,
+`malformed_header`, `timestamp_out_of_tolerance`, `unsupported_version` (no `v1` signature),
+`invalid_signature`, or `invalid_payload` (signed, but not a known event). Passing a parsed object
+throws a `TypeError`.
+
+### Go
+
+Standard library only. `secrets` is the endpoint's secret, or both while it rotates:
+
+```go
+package webhook
+
+import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
+	"errors"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+)
+
+const tolerance = 300 * time.Second
+
+var ErrInvalidWebhook = errors.New("invalid webhook")
+
+// Verify checks a Seamless webhook against the raw body. secrets holds the
+// endpoint's whsec_ secret, or both while it rotates.
+func Verify(body []byte, header http.Header, secrets []string, now time.Time) error {
+	id := header.Get("webhook-id")
+	ts := header.Get("webhook-timestamp")
+	signatures := header.Get("webhook-signature")
+	if id == "" || ts == "" || signatures == "" {
+		return ErrInvalidWebhook
+	}
+	seconds, err := strconv.ParseInt(ts, 10, 64)
+	if err != nil {
+		return ErrInvalidWebhook
+	}
+	if d := now.Sub(time.Unix(seconds, 0)); d > tolerance || d < -tolerance {
+		return ErrInvalidWebhook
+	}
+
+	signed := append([]byte(id+"."+ts+"."), body...)
+	var expected [][]byte
+	for _, secret := range secrets {
+		key, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(secret, "whsec_"))
+		if err != nil {
+			return err
+		}
+		mac := hmac.New(sha256.New, key)
+		mac.Write(signed)
+		expected = append(expected, mac.Sum(nil))
+	}
+
+	valid := false
+	for _, entry := range strings.Split(signatures, " ") {
+		version, value, _ := strings.Cut(entry, ",")
+		if version != "v1" {
+			continue
+		}
+		received, err := base64.StdEncoding.DecodeString(value)
+		if err != nil {
+			continue
+		}
+		for _, digest := range expected {
+			if hmac.Equal(digest, received) {
+				valid = true
+			}
+		}
+	}
+	if !valid {
+		return ErrInvalidWebhook
+	}
+	return nil
+}
+```
+
+In a handler (with `io`, `os` and `time` imported), read the body before anything decodes it:
+
+```go
+func handleSeamless(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
+	if err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if err := webhook.Verify(body, r.Header, []string{os.Getenv("SEAMLESS_WEBHOOK_SECRET")}, time.Now()); err != nil {
+		http.Error(w, "invalid webhook", http.StatusBadRequest)
+		return
+	}
+	// json.Unmarshal(body, &event), dedupe on event.ID, then act.
+	w.WriteHeader(http.StatusNoContent)
+}
+```
+
+### Python
+
+Standard library only (Python 3.10 or later):
+
+```python
+import base64
+import hashlib
+import hmac
+import time
+
+TOLERANCE_SECONDS = 300
+
+
+class WebhookError(Exception):
+    pass
+
+
+def verify_webhook(body: bytes, headers, secrets: list[str], now: float | None = None) -> None:
+    """Raise WebhookError unless `body` (the raw bytes) is signed by one of `secrets`."""
+    msg_id = headers.get("webhook-id")
+    timestamp = headers.get("webhook-timestamp")
+    signatures = headers.get("webhook-signature")
+    if not msg_id or not timestamp or not signatures:
+        raise WebhookError("missing_header")
+    if not timestamp.isdigit():
+        raise WebhookError("malformed_header")
+    now = time.time() if now is None else now
+    if abs(now - int(timestamp)) > TOLERANCE_SECONDS:
+        raise WebhookError("timestamp_out_of_tolerance")
+
+    signed = f"{msg_id}.{timestamp}.".encode() + body
+    expected = [
+        hmac.new(base64.b64decode(secret.removeprefix("whsec_")), signed, hashlib.sha256).digest()
+        for secret in secrets
+    ]
+    valid = False
+    for entry in signatures.split(" "):
+        version, _, value = entry.partition(",")
+        if version != "v1":
+            continue
+        try:
+            received = base64.b64decode(value, validate=True)
+        except ValueError:
+            continue
+        for digest in expected:
+            valid |= hmac.compare_digest(digest, received)
+    if not valid:
+        raise WebhookError("invalid_signature")
+```
+
+With FastAPI, read `await request.body()` and pass `request.headers`. With Django, pass
+`request.body` and `request.headers`. Both header objects are case-insensitive.
+
+### Rust
+
+With the `hmac` 0.12, `sha2` 0.10 and `base64` 0.22 crates. `Mac::verify_slice` compares in
+constant time:
+
+```rust
+use base64::{engine::general_purpose::STANDARD, Engine};
+use hmac::{Hmac, Mac};
+use sha2::Sha256;
+
+const TOLERANCE_SECONDS: i64 = 300;
+
+/// Checks a Seamless webhook against the raw body. `secrets` holds the endpoint's
+/// `whsec_` secret, or both while it rotates. `now` is Unix seconds.
+pub fn verify_webhook(
+    body: &[u8],
+    id: &str,
+    timestamp: &str,
+    signatures: &str,
+    secrets: &[&str],
+    now: i64,
+) -> Result<(), &'static str> {
+    if id.is_empty() || signatures.is_empty() {
+        return Err("missing_header");
+    }
+    let sent: i64 = timestamp.parse().map_err(|_| "malformed_header")?;
+    if (now - sent).abs() > TOLERANCE_SECONDS {
+        return Err("timestamp_out_of_tolerance");
+    }
+
+    let mut valid = false;
+    for secret in secrets {
+        let key = STANDARD
+            .decode(secret.trim_start_matches("whsec_"))
+            .map_err(|_| "bad_secret")?;
+        for entry in signatures.split(' ') {
+            let Some(("v1", value)) = entry.split_once(',') else { continue };
+            let Ok(received) = STANDARD.decode(value) else { continue };
+            let mut mac = Hmac::<Sha256>::new_from_slice(&key).map_err(|_| "bad_secret")?;
+            mac.update(format!("{id}.{timestamp}.").as_bytes());
+            mac.update(body);
+            valid |= mac.verify_slice(&received).is_ok();
+        }
+    }
+    if valid { Ok(()) } else { Err("invalid_signature") }
+}
+```
+
+In Axum 0.8, take the body as `Bytes` (not `Json`) and read the three headers from the `HeaderMap`:
+
+```rust
+use axum::{body::Bytes, http::{HeaderMap, StatusCode}};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+async fn seamless_webhook(headers: HeaderMap, body: Bytes) -> StatusCode {
+    let header = |name: &str| headers.get(name).and_then(|v| v.to_str().ok()).unwrap_or("");
+    let secret = std::env::var("SEAMLESS_WEBHOOK_SECRET").unwrap_or_default();
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
+    match verify_webhook(
+        &body,
+        header("webhook-id"),
+        header("webhook-timestamp"),
+        header("webhook-signature"),
+        &[secret.as_str()],
+        now,
+    ) {
+        // serde_json::from_slice(&body), dedupe on the id, then act.
+        Ok(()) => StatusCode::NO_CONTENT,
+        Err(_) => StatusCode::BAD_REQUEST,
+    }
+}
+```
+
+### Test Vector
+
+Check a verifier you write against this delivery. It is signed by two secrets, as during a
+rotation, so it must verify with either secret alone. Run the check with your clock set to the
+timestamp (`now` = `1794103952`): 300 seconds either side still verifies, 301 does not, and changing
+any byte of the body must fail.
+
+| Input               | Value |
+| ------------------- | ----- |
+| Secret A            | `whsec_NYLN5zW4MbM2OC9qcKaHy0/DJxFZkmW8y60XWonSIZg=` |
+| Secret B            | `whsec_JdrTgXTZP8x6ODJvidyDeSjcOi9ijC+Ib1uBmSYaNiY=` |
+| `webhook-id`        | `6f1c9e2a-3b7d-4c41-9a8e-2d5f0b7c4e19` |
+| `webhook-timestamp` | `1794103952` |
+| `webhook-signature` | `v1,epWRn1cID1xkyeKHNNRqlHiNlK/8qnEBgMF7umeXgYI= v1,wz9g12tE6CkYUGNtgT0kgd4cAq688ojdBbQk3Nzl0Kk=` |
+
+The body, exactly, with no trailing newline:
+
+```json
+{"id":"6f1c9e2a-3b7d-4c41-9a8e-2d5f0b7c4e19","type":"user.signed_in","version":1,"timestamp":"2026-11-08T02:12:32.000Z","data":{"userId":"11111111-1111-4111-8111-111111111111","sessionId":"22222222-2222-4222-8222-222222222222","method":"passkey","organizationId":null}}
+```
+
+The first signature is secret B's and the second is secret A's. The vector was computed with
+`openssl dgst -sha256 -mac HMAC`, matches the auth API's own signer, and passes the Go, Python
+and Rust verifiers above, which also pass the example in the Standard Webhooks specification.
+
+---
+
+## Step 4: Handle Retries, Duplicates And Order
+
+### Idempotency
+
+`webhook-id` (equal to the envelope's `id`) is the same on every retry and redelivery of a
+delivery. Record the ids you have processed, for example in a table with a unique key, and answer
+`2xx` without acting again when you see one twice. Keep them for at least as long as a delivery can
+be retried and redelivered: deliveries are kept for 30 days.
+
+Each endpoint gets its own delivery, with its own id, for the same event. If two endpoints feed one
+system, it sees the event twice under two ids, so subscribe one endpoint per system.
+
+### Order
+
+Do not assume order. A `user.deleted` can arrive before a retried `user.signed_in` for the same
+user. Compare the envelope's `timestamp` with what you last applied, or re-read current state from
+the admin API when the order matters.
+
+### Retry Schedule
+
+| Attempt | Delay after the previous attempt | Time after the event, roughly |
+| ------- | -------------------------------- | ----------------------------- |
+| 1       | None, within about a second      | 0 |
+| 2       | 5 seconds                        | 5 s |
+| 3       | 5 minutes                        | 5 min |
+| 4       | 30 minutes                       | 35 min |
+| 5       | 2 hours                          | 2 h 35 min |
+| 6       | 5 hours                          | 7 h 35 min |
+| 7       | 10 hours                         | 17 h 35 min |
+| 8       | 24 hours                         | 41 h 35 min |
+
+Each delay gets up to 10% added at random, so endpoints that failed together do not retry together.
+After the eighth failure the delivery is `dead`. A `Retry-After` header (seconds or an HTTP date)
+longer than the scheduled delay is honored, up to 24 hours. One attempt is one request: there is no
+separate retry inside an attempt.
+
+### When An Endpoint Is Turned Off
+
+The API disables an endpoint and writes the audit event `webhook_endpoint_disabled` when:
+
+- it answers **`410 Gone`**, at once (`disabledReason: "gone"`), or
+- **every attempt has failed for three days**: the first failure after the last success starts the
+  clock, and the next failure three days or more later disables it (`disabledReason: "failing"`).
+  Any success resets the clock.
+
+An administrator turning it off records `disabledReason: "manual"`. While an endpoint is disabled:
+
+- events are not queued for it, and are not sent later when it is turned back on;
+- deliveries already queued are held, not dropped, and are not resumed automatically when it is
+  turned back on. Redeliver them.
+
+A test event is never retried and never disables an endpoint.
+
+---
+
+## Dead Letters And Redelivery
+
+Every delivery is in the log for 30 days with its status:
+
+| Status      | Meaning |
+| ----------- | ------- |
+| `pending`   | Queued, not attempted yet |
+| `succeeded` | An attempt got a 2xx |
+| `failed`    | An attempt failed and another is scheduled (`nextAttemptAt`) |
+| `dead`      | Every scheduled attempt failed. The dead letter state |
+
+`GET /admin/webhook-deliveries?status=dead` (or `seamless webhooks deliveries --status dead`, or
+the console's dead letter tab) lists them. Each delivery records `attempts`, `lastAttemptAt`,
+`lastStatusCode` and `lastFailure`, never the response body. `lastFailure` is deliberately coarse:
+
+| `lastFailure`       | Meaning |
+| ------------------- | ------- |
+| `refused`           | The URL or the address it resolved to is not allowed (see Step 1) |
+| `timed_out`         | No complete response within 15 seconds |
+| `connection_failed` | The connection could not be made or broke |
+| `http_status`       | A response outside 2xx, including a redirect. See `lastStatusCode` |
+| `invalid_response`  | The response could not be read |
+| `too_large`         | The response was over 64 KiB |
+
+The resolved address and the socket's error text are never shown, so the log cannot be used to map
+the network the API runs on.
+
+**Redeliver** (`POST /admin/webhook-deliveries/:deliveryId/redeliver`,
+`seamless webhooks redeliver <deliveryId>`, or the console) makes one attempt now, with the same
+`webhook-id` and the exact bytes of the original body, and a fresh `webhook-timestamp` and
+signature. It works on a delivery in any status, including one held for a disabled endpoint. It
+counts as an attempt: if it fails while scheduled attempts remain, the delivery goes back on the
+schedule.
+
+The log keeps 30 days. For anything older, or events that happened while an endpoint was
+disabled, read the audit log (`GET /admin/auth-events` or the export) and replay them yourself.
+
+---
+
+## Rotate A Secret
+
+`POST /admin/webhooks/:id/secret` (or `seamless webhooks rotate-secret <id>`, or the console)
+returns a new secret once. For 24 hours the old secret keeps signing beside it, so each request
+carries two `v1` signatures, new first, and a receiver holding either secret verifies.
+`previousSecretExpiresAt` on the endpoint says when the overlap ends.
+
+1. Rotate and copy the new secret.
+2. Deploy the receiver with both secrets: `secret: [newSecret, oldSecret]` in the Node helpers, or
+   both in the `secrets` list of the hand-written verifiers.
+3. After the overlap ends, deploy with the new secret alone.
+
+Only two secrets ever sign. Rotating again during the overlap ends the older secret's overlap at
+once, so a receiver still holding only that one starts failing. The CLI asks before doing that.
+
+---
+
+## Step 5: Check It End To End
+
+1. Run a receiver locally (`http://localhost:4000/webhooks/seamless` works outside production) and
+   create an endpoint for it.
+2. Send a test event. Expect `{"ok": true, "statusCode": 204}`, and a `webhook.test` delivery with
+   status `succeeded` in the log.
+3. Sign in to the app. Expect a `user.signed_in` delivery within a few seconds if the endpoint
+   subscribes to it.
+4. Stop the receiver and sign in again. Expect a delivery with status `failed`, `attempts: 1` and
+   `lastFailure: "connection_failed"`. Start the receiver and redeliver it.
+
+---
+
+## Versions
+
+| Component                         | First version with webhooks | Status |
+| --------------------------------- | --------------------------- | ------ |
+| `seamless-auth-api`               | v0.23.0                     | Not released. v0.22.0 is the latest |
+| `@seamless-auth/types`            | 0.39.0                      | Published |
+| `@seamless-auth/core`, `express`, `fastify`, `nextjs` (`verifyWebhook` and helpers) | The next minor after core and express 0.25.0, fastify 0.16.0, nextjs 0.9.0 | Not published (seamless-auth-server#279) |
+| `seamless-auth-admin-dashboard`   | The release after v0.13.0 (Webhooks page) | Not released (seamless-auth-admin-dashboard#343) |
+| `seamless-cli`                    | The release after 0.29.0 (`seamless webhooks`) | Not released (seamless-cli#359) |
+| Go, Python, Rust                  | No adapter helper. Use the verifiers above | Standard crypto only |
+
+---
+
+## Common Mistakes
+
+| Mistake                                                   | Fix |
+| --------------------------------------------------------- | --- |
+| Verifying a body that `express.json()` or a framework already parsed | Read the raw bytes. Mount the webhook route before the JSON parser |
+| Comparing signatures with `==`                            | Use a constant-time comparison (`hmac.Equal`, `hmac.compare_digest`, `verify_slice`, `timingSafeEqual`) |
+| Checking only the first entry in `webhook-signature`      | Try every `v1` entry. During a rotation the first one is the new secret's |
+| Using the whole `whsec_...` string as the HMAC key        | Strip `whsec_` and base64-decode the rest |
+| Acting on every delivery                                  | Dedupe on `webhook-id`. Delivery is at least once |
+| Doing slow work before answering                          | Answer `2xx` within 15 seconds, then work. A slow answer is a failure and a retry |
+| Answering `410` for a temporary problem                   | `410` turns the endpoint off. Answer `503`, with `Retry-After` if you know when |
+| Expecting events from while an endpoint was off           | They were never queued. Replay them from the audit log |
+| Rotating twice in a day                                   | The second rotation ends the first secret's overlap. Wait out the 24 hours |
+
+---
+
+## Related Docs
+
+- [Auth Events and Auditing](/understand/authevents)
+- [How To Use TOTP And Step-Up](/build/totp-step-up)
+- [Server SDKs](/build/server-sdks)
+- [Auth API Routes](/reference/auth-api-routes)
