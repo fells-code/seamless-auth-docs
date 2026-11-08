@@ -86,7 +86,8 @@ Three headers come with it:
 | `webhook-signature` | `v1,<base64 HMAC-SHA256>`, or two of them separated by a space while a secret rotates |
 
 `data` carries identifiers and the few fields a receiver acts on. It never carries an IP address,
-user agent or free-form metadata; those stay in the audit log. The schemas are
+user agent or free-form metadata; those go to the audit log and your SIEM (see
+[How To Stream Audit Events To A SIEM](/operate/stream-audit-events-siem)). The schemas are
 `WebhookEventSchema` and its parts in `@seamless-auth/types` 0.39.0 (`webhook` module).
 
 ---
@@ -761,6 +762,8 @@ once, so a receiver still holding only that one starts failing. The CLI asks bef
 
 - [How To Use Login Hooks And Custom Claims](/build/login-hooks-custom-claims), which are signed the
   same way
+- [How To Stream Audit Events To A SIEM](/operate/stream-audit-events-siem), for every audit event
+  with its network detail
 - [Auth Events and Auditing](/understand/authevents)
 - [How To Use TOTP And Step-Up](/build/totp-step-up)
 - [Server SDKs](/build/server-sdks)

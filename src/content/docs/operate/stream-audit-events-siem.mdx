@@ -1,0 +1,526 @@
+---
+title: "How To Stream Audit Events To A SIEM"
+description: "Stream the Seamless Auth audit log over OTLP or syslog, route it through an OpenTelemetry Collector to Splunk, Elastic or Datadog, look up every event field, and verify the hash chain from the events your SIEM holds."
+sidebar:
+  order: 4.65
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Use this guide when your security team wants Seamless Auth's sign-ins, refusals, admin actions and
+session changes in the SIEM they already watch, and wants to know the copy there was not altered.
+
+An **audit sink** sends every audit event to one destination as it is written: OTLP over HTTP to
+an OpenTelemetry Collector or any OTLP endpoint, or RFC 5424 syslog over TLS. Each record carries
+the event's `seamless-auth-events/1` line, the same line the export writes, with its `seq`,
+`prevHash`, `hash` and `payload`, so the hash chain verifies from the SIEM's copy alone.
+
+<Aside type="caution" title="Needs auth API v0.23.0, not released yet">
+Audit sinks and every route on this page need `seamless-auth-api` v0.23.0. The latest release is
+v0.22.0, which has none of them. The console's **Audit streaming** page and the CLI's
+`seamless audit-sinks` commands are not released yet either (see [Versions](#versions)). The
+export and the integrity check this page also uses are in v0.19.1 and later.
+</Aside>
+
+---
+
+## How A Sink Works
+
+- **Its own cursor.** Each sink reads events past its own `seq` cursor, in chain order, up to 100
+  at a time, and moves the cursor only when the destination took the whole batch.
+- **Starts now, or replays.** A new sink starts after the newest event. With `startAfterSeq` it
+  replays from there, back to the oldest event still in the database. Older events are in the
+  retention archive and cannot be streamed.
+- **Retries forever.** A failed batch is retried after 1 s, 2 s, 4 s and so on, up to one minute
+  between tries, until the destination takes it. There is no dead letter. A sink that cannot
+  deliver falls behind, and its status says by how much.
+- **At least once.** If the batch was sent but the API could not record that, it is sent again.
+  Drop repeats on `seq`.
+- **Retention waits for sinks.** Audit retention never deletes an event a sink has not delivered.
+  A disabled sink holds retention too, until it is deleted, so turning a sink off never loses an
+  event, but leaving one off keeps `auth_events` growing.
+- **Credentials are never stored.** A sink names environment variables on the API host, and the
+  names must end in `_AUDIT_SINK_SECRET`. They are read at send time. If one is unset, the send
+  fails with `refused` and nothing is sent.
+
+Every write to a sink is audited (`admin_audit_sink_created`, `_updated`, `_deleted`), and the
+destination URL is recorded without its query string.
+
+---
+
+## Step 1: Configure The Auth API
+
+- Set each secret a sink will name, for example `COLLECTOR_AUDIT_SINK_SECRET` for a header your
+  receiver checks. Names match `^[A-Z][A-Z0-9_]{0,59}_AUDIT_SINK_SECRET$`.
+- A sink's destination follows the same rules as webhooks: `https` (or TLS syslog) only in
+  production, never the API's own host, link-local addresses never, and private addresses in
+  production only for hosts listed in `CALLOUT_PRIVATE_HOSTS`. A Collector on your internal network
+  needs its host name there. See
+  [How To Receive Webhooks](/build/webhooks#step-1-configure-the-auth-api).
+
+---
+
+## Step 2: Create A Sink
+
+### OTLP Settings
+
+| Setting          | Default         | Meaning |
+| ---------------- | --------------- | ------- |
+| `kind`           |                 | `otlp` |
+| `endpoint`       |                 | The receiver's base URL. `/v1/logs` is appended, so `https://otel.internal:4318` posts to `https://otel.internal:4318/v1/logs` |
+| `headersFromEnv` | `{}`            | Header name to env var name, such as `{ "Authorization": "COLLECTOR_AUDIT_SINK_SECRET" }`. `Host`, `Content-Type` and other transport headers are refused |
+| `serviceName`    | `seamless-auth` | The `service.name` resource attribute |
+
+Any 2xx counts as delivered, including a response that reports some records as rejected, since
+retrying a rejection would stall the sink for good. A redirect is a failure and is not followed.
+
+### Syslog Settings
+
+| Setting            | Default         | Meaning |
+| ------------------ | --------------- | ------- |
+| `kind`             |                 | `syslog` |
+| `host`             |                 | The collector's host name or address |
+| `port`             | `6514`          | The RFC 5425 port |
+| `transport`        | `tls`           | `tls`, or `tcp` outside production only. Never UDP |
+| `appName`          | `seamless-auth` | The APP-NAME field |
+| `facility`         | `10` (authpriv) | The RFC 5424 facility, 0 to 23 |
+| `tlsCaEnv`         |                 | An env var holding a PEM CA, for a collector on a private CA |
+| `tlsClientCertEnv`, `tlsClientKeyEnv` | | Env vars holding a PEM client certificate and key, set together, for a collector that checks clients |
+
+TLS is 1.2 or later, with the host name checked. Each batch is one connection: the API writes the
+octet-counted messages, ends its side, and counts the batch as delivered once the collector closes
+its side. A collector that keeps the connection open makes the batch time out after 10 seconds and
+be sent again.
+
+### In The Admin Console
+
+The console's **Audit streaming** page (`/audit-streaming` in `seamless-auth-admin-dashboard`)
+creates, edits, turns off and on, tests and deletes sinks, takes credentials only as env var names
+(a value typed in their place is refused before anything is sent), and shows each sink's lag, last
+delivery and last failure, refreshed every 30 seconds. It is not in a console release yet
+(seamless-auth-admin-dashboard#343).
+
+### With The CLI
+
+The `seamless audit-sinks` commands are not in a CLI release yet (seamless-cli#359). With them:
+
+```bash
+seamless audit-sinks create collector --kind otlp --endpoint https://otel.internal:4318
+seamless audit-sinks create gateway --kind otlp --endpoint https://otel.example.com \
+  --header Authorization=COLLECTOR_AUDIT_SINK_SECRET   # for a receiver that checks a header
+seamless audit-sinks create siem --kind syslog --host syslog.internal --port 6514 \
+  --tls-ca-env SYSLOG_CA_AUDIT_SINK_SECRET
+seamless audit-sinks test <id>          # exits 1 when it fails
+seamless audit-sinks list               # with how far behind each sink is
+seamless audit-sinks update <id> --disable
+```
+
+### With The Admin API
+
+Reads need `admin:read`; writes, including the test, need `admin:write` and a fresh step-up
+([How To Use TOTP And Step-Up](/build/totp-step-up)).
+
+| Method   | Route                          | Body                                         | Purpose |
+| -------- | ------------------------------ | -------------------------------------------- | ------- |
+| `GET`    | `/admin/audit-sinks`           |                                              | Every sink with its status (`{ sinks }`) |
+| `POST`   | `/admin/audit-sinks`           | `{ name, settings, enabled?, startAfterSeq? }` | Create one |
+| `GET`    | `/admin/audit-sinks/:id`       |                                              | One sink |
+| `PATCH`  | `/admin/audit-sinks/:id`       | Any of `name`, `settings`, `enabled`         | Change it. The cursor is kept, so a sink turned back on resumes where it stopped |
+| `DELETE` | `/admin/audit-sinks/:id`       |                                              | Delete it, which also releases its hold on retention |
+| `POST`   | `/admin/audit-sinks/:id/test`  |                                              | Send one test record: `{ ok, failure, statusCode, durationMs }` |
+
+```bash
+curl -X POST "$AUTH_SERVER_URL/admin/audit-sinks" \
+  -H "Authorization: Bearer $ADMIN_ACCESS_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"name":"collector","settings":{"kind":"otlp","endpoint":"https://otel.internal:4318"}}'
+```
+
+A sink's `status` is `{ cursorSeq, lagEvents, lastDeliveredAt, lastFailure, lastFailureAt }`.
+`lagEvents` is the chain head minus the cursor. `lastFailure` uses the same coarse reasons as
+webhooks (`refused`, `timed_out`, `connection_failed`, `http_status`, `invalid_response`,
+`too_large`), never the socket's error text.
+
+The test record is `{"type":"test","test":true,"sinkId":"...","generatedAt":"..."}`. It has no
+`seq` or `hash`, is marked `seamless.audit.test = true` in OTLP and `test="true"` in syslog, and
+moves no cursor.
+
+---
+
+## Step 3: Route It To Your SIEM
+
+Each recipe below runs the OpenTelemetry Collector between Seamless Auth and the SIEM. The
+`splunk_hec`, `elasticsearch` and `datadog` exporters are in the Collector's contrib distribution
+(`otelcol-contrib`), and all three list logs support as beta. Point an OTLP sink at the Collector's
+OTLP HTTP receiver, which listens on port 4318 and serves `/v1/logs`
+([OTLP receiver](https://github.com/open-telemetry/opentelemetry-collector/blob/main/receiver/otlpreceiver/README.md)).
+
+In production the sink needs `https`, so give the receiver a certificate
+([TLS settings](https://github.com/open-telemetry/opentelemetry-collector/blob/main/config/configtls/README.md)),
+and list the Collector's host in `CALLOUT_PRIVATE_HOSTS` if it is on a private address.
+
+### First, Check It Arrives
+
+The `debug` exporter prints what the Collector receives
+([debug exporter](https://github.com/open-telemetry/opentelemetry-collector/blob/main/exporter/debugexporter/README.md)):
+
+```yaml
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+        tls:
+          cert_file: /etc/otelcol/tls/server.crt
+          key_file: /etc/otelcol/tls/server.key
+
+exporters:
+  debug:
+    verbosity: detailed
+
+service:
+  pipelines:
+    logs:
+      receivers: [otlp]
+      exporters: [debug]
+```
+
+Create the sink, run `seamless audit-sinks test <id>`, then sign in to the app. The Collector logs
+a record with `seamless.audit.test = true`, then one per audit event with scope
+`seamless-auth.audit`. Replace `debug` with one of the exporters below, or keep both.
+
+### Splunk
+
+The `splunk_hec` exporter sends to an HTTP Event Collector endpoint with a HEC token, and takes an
+optional `source`, `sourcetype` and `index`
+([splunk_hec exporter](https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/exporter/splunkhecexporter/README.md)):
+
+```yaml
+exporters:
+  splunk_hec:
+    token: ${env:SPLUNK_HEC_TOKEN}
+    endpoint: https://splunk.example.com:8088/services/collector
+    source: seamless-auth
+    sourcetype: seamless:audit
+    index: identity
+
+service:
+  pipelines:
+    logs:
+      receivers: [otlp]
+      exporters: [splunk_hec]
+```
+
+### Elastic
+
+The `elasticsearch` exporter takes one of `endpoint`, `endpoints` or `cloudid`, and an `api_key` in
+Elastic's encoded format. Without `logs_index` it routes logs to a data stream named from the
+record's data stream attributes
+([elasticsearch exporter](https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/exporter/elasticsearchexporter/README.md)):
+
+```yaml
+exporters:
+  elasticsearch:
+    endpoint: https://elastic.example.com:9200
+    api_key: ${env:ELASTIC_API_KEY}
+
+service:
+  pipelines:
+    logs:
+      receivers: [otlp]
+      exporters: [elasticsearch]
+```
+
+### Datadog
+
+The `datadog` exporter takes `api.key` and `api.site`, which defaults to `datadoghq.com`; set
+`datadoghq.eu` or your own site
+([datadog exporter](https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/exporter/datadogexporter/README.md),
+[example configuration](https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/exporter/datadogexporter/examples/collector.yaml)).
+Datadog also documents sending through the Collector's OTLP HTTP exporter to its OTLP intake
+([Datadog docs](https://docs.datadoghq.com/opentelemetry/setup/collector_exporter/)).
+
+```yaml
+exporters:
+  datadog:
+    api:
+      key: ${env:DD_API_KEY}
+      site: datadoghq.com
+
+service:
+  pipelines:
+    logs:
+      receivers: [otlp]
+      exporters: [datadog]
+```
+
+These keys live on the Collector, not in Seamless Auth. The Seamless sink only needs
+`headersFromEnv` when the receiver it posts to checks a header itself.
+
+### Syslog To A Generic Collector
+
+Any collector that accepts RFC 5424 over TLS with octet-counted framing on a TCP port works. With
+rsyslog, the `imtcp` input with the `gtls` driver in TLS-only mode
+([rsyslog TLS tutorial](https://docs.rsyslog.com/doc/tutorials/tls_cert_server.html),
+[imtcp](https://docs.rsyslog.com/doc/configuration/modules/imtcp.html)):
+
+```
+global(
+  DefaultNetstreamDriver="gtls"
+  DefaultNetstreamDriverCAFile="/etc/rsyslog.d/tls/ca.pem"
+  DefaultNetstreamDriverCertFile="/etc/rsyslog.d/tls/cert.pem"
+  DefaultNetstreamDriverKeyFile="/etc/rsyslog.d/tls/key.pem"
+)
+
+module(load="imtcp" StreamDriver.Name="gtls" StreamDriver.Mode="1" StreamDriver.Authmode="anon")
+input(type="imtcp" port="6514")
+```
+
+Route what arrives from APP-NAME `seamless-auth` as you route your other syslog input.
+
+Then create the sink with `--kind syslog --host <collector> --port 6514`, and `--tls-ca-env` if the
+collector's certificate is from a private CA. The syslog path has been tested against a TLS
+listener in the API's own tests, not against rsyslog or a commercial collector yet. Check that your
+collector closes the connection when the sender ends it (see [Syslog Settings](#syslog-settings)).
+
+Each message looks like this, where `MSG` is the export line:
+
+```
+<86>1 2026-11-08T02:12:32.000Z api-host seamless-auth - audit [seamless@<enterprise number> seq="1" hash="5340e7c4..."] {"seq":1,...}
+```
+
+<Aside type="caution" title="The syslog SD-ID will change">
+RFC 5424 requires a private structured data ID to end in an IANA Private Enterprise Number. Fells
+Code's number has not been assigned yet, so the SD-ID shown here is `seamless@<enterprise number>`.
+The final value will be in the v0.23 release notes. Do not key parse rules on the number until
+then; key them on `MSGID` `audit` or on the JSON in `MSG`.
+</Aside>
+
+---
+
+## Event Field Reference
+
+### The Export Line
+
+Every record's body (OTLP) or `MSG` (syslog) is one `seamless-auth-events/1` line,
+`AuditExportEventSchema` in `@seamless-auth/types` 0.39.0:
+
+| Field          | Type                 | Meaning |
+| -------------- | -------------------- | ------- |
+| `seq`          | integer              | Position in the chain, gapless and increasing |
+| `id`           | string               | The event's id |
+| `createdAt`    | string               | ISO 8601 time, milliseconds |
+| `type`         | string               | The audit event type, such as `session_created`, `login_suspicious` or `admin_webhook_created`. See [Auth Events and Auditing](/understand/authevents) |
+| `userId`       | string or null       | The user the event is about |
+| `actorUserId`  | string or null       | Who did it, when that is someone else, such as an administrator |
+| `sessionId`    | string or null       | The session involved |
+| `attemptId`    | string or null       | The sign-in or registration attempt: every step taken on one ephemeral token carries the same id |
+| `ipAddress`    | string or null       | The caller's address, or `unknown` |
+| `userAgent`    | string or null       | The caller's user agent, or `unknown` |
+| `deploymentId` | string or null       | The deployment that wrote it (the server's `APP_ID`) |
+| `deviceClass`  | string or null       | The platform family of the user agent: `ios`, `android`, `macos`, `windows`, `linux`, `chromeos`, `bot` or `unknown` |
+| `mailProvider` | string or null       | The subject's mail provider (`gmail`, `outlook`, `other`, ...), never the domain |
+| `owner`        | boolean or null      | Whether the subject is a configured owner of the deployment. Null when the subject is unknown |
+| `metadata`     | object or null       | Event-specific detail |
+| `prevHash`     | string or null       | The previous event's `hash`. Null only for the first event ever written |
+| `hash`         | string               | Hex SHA-256 of `prevHash` (empty when null) followed by `payload`, in UTF-8 |
+| `payload`      | string               | The exact text the database hashed: a JSON array of the event's columns |
+
+`type`, `metadata` and the readable fields are what you search on. `payload` and the two hashes are
+what you verify with: only `payload` is hashed, so a verifier checks that the readable fields
+match it.
+
+### OTLP Records
+
+One `ExportLogsServiceRequest` per batch, with resource attribute `service.name`, scope
+`seamless-auth.audit`, and one log record per event:
+
+| Field                  | Value |
+| ---------------------- | ----- |
+| `timeUnixNano`         | The event's `createdAt` |
+| `observedTimeUnixNano` | When it was sent |
+| `severityNumber`, `severityText` | `13` and `WARN` for a `*_suspicious` event, otherwise `9` and `INFO` |
+| `body.stringValue`     | The export line |
+| `seamless.audit.seq`   | `seq`, as an integer |
+| `seamless.audit.id`, `seamless.audit.type`, `seamless.audit.hash` | `id`, `type`, `hash` |
+| `seamless.audit.prev_hash` | `prevHash`, when set |
+| `user.id`, `seamless.audit.actor_user_id`, `session.id` | `userId`, `actorUserId`, `sessionId`, when set |
+
+### Syslog Messages
+
+| Part       | Value |
+| ---------- | ----- |
+| PRI        | facility times 8, plus severity 4 (warning) for a `*_suspicious` event or 6 (informational) otherwise |
+| TIMESTAMP  | The event's `createdAt` |
+| HOSTNAME   | The API host's name |
+| APP-NAME   | `appName` |
+| PROCID     | `-` |
+| MSGID      | `audit`, or `test` for a test record |
+| SD         | `[seamless@<enterprise number> seq="..." hash="..."]`, or `test="true"` |
+| MSG        | The export line, UTF-8, with no byte order mark |
+
+---
+
+## Step 4: Verify The Hash Chain
+
+Each event's `hash` is `sha256(prevHash + payload)`, and each `prevHash` is the previous event's
+`hash`. So a run of events proves itself: change one byte of any event, drop one, or reorder them,
+and the check fails from that point on. The SIEM's copy verifies the same way as an export.
+
+This script checks an export file, or lines pulled from a SIEM. It needs Python 3 and nothing else:
+
+```python
+#!/usr/bin/env python3
+"""Verify a run of seamless-auth-events/1 lines: an export file, or lines pulled from a SIEM."""
+import hashlib
+import json
+import sys
+
+# The order public.auth_event_payload() builds the hashed array in.
+FIELDS = [
+    "seq", "id", "userId", "actorUserId", "sessionId", "type", "ipAddress", "userAgent",
+    "deploymentId", "deviceClass", "mailProvider", "owner", "attemptId", "metadata", "createdAt",
+]
+
+
+def verify(lines, anchor=None):
+    events, manifest = {}, None
+    for raw in lines:
+        raw = raw.strip()
+        if not raw:
+            continue
+        record = json.loads(raw)
+        if record.get("type") == "manifest":
+            manifest = record
+        elif record.get("test") is True:
+            continue  # a sink test record is not part of the chain
+        elif record["seq"] in events:
+            # Sinks deliver at least once, so a SIEM can hold a line twice.
+            if events[record["seq"]]["hash"] != record["hash"]:
+                raise SystemExit(f"seq {record['seq']}: two different events")
+        else:
+            events[record["seq"]] = record
+
+    if not events:
+        raise SystemExit("no events")
+
+    events = [events[seq] for seq in sorted(events)]
+    if manifest is not None:
+        anchor = manifest["anchorHash"]
+
+    previous = None
+    for event in events:
+        expected = hashlib.sha256(
+            ((event["prevHash"] or "") + event["payload"]).encode("utf-8")
+        ).hexdigest()
+        if expected != event["hash"]:
+            raise SystemExit(f"seq {event['seq']}: hash_mismatch")
+        # Only `payload` is hashed, so the readable fields must match it.
+        hashed = dict(zip(FIELDS, json.loads(event["payload"])))
+        created_at = hashed.pop("createdAt")
+        if any(event[name] != value for name, value in hashed.items()) or (
+            created_at[:23] != event["createdAt"][:23]
+        ):
+            raise SystemExit(f"seq {event['seq']}: fields differ from payload")
+        if previous is None:
+            if anchor is not None and event["prevHash"] != anchor:
+                raise SystemExit(f"seq {event['seq']}: does not follow the anchor")
+        else:
+            if event["seq"] != previous["seq"] + 1:
+                raise SystemExit(f"seq {previous['seq'] + 1}: sequence_gap")
+            if event["prevHash"] != previous["hash"]:
+                raise SystemExit(f"seq {event['seq']}: broken_link")
+        previous = event
+
+    if manifest is not None:
+        if manifest["count"] != len(events) or manifest["lastHash"] != previous["hash"]:
+            raise SystemExit("manifest does not match the events")
+
+    print(f"ok: seq {events[0]['seq']} to {previous['seq']}, head {previous['hash']}")
+
+
+if __name__ == "__main__":
+    anchor = sys.argv[2] if len(sys.argv) > 2 else None
+    with open(sys.argv[1], encoding="utf-8") as source:
+        verify(source, anchor)
+```
+
+```bash
+python3 verify_chain.py export.ndjson                 # an export: the manifest gives the anchor
+python3 verify_chain.py siem-lines.ndjson <prevHash>  # SIEM lines, anchored on the event before them
+```
+
+### Pull The Lines Out Of Your SIEM
+
+Search your SIEM for a contiguous `seq` range and save the raw export lines, one per line: the
+OTLP log body, or the syslog `MSG` (everything after the structured data element). Which field
+holds the raw body depends on the SIEM and its mapping. Order does not matter: the script sorts by
+`seq` and drops repeats.
+
+### What A Pass Proves, And What It Does Not
+
+- A pass proves the lines are an unaltered, gapless run, and that each line's readable fields match
+  what was hashed.
+- It proves the run continues from the anchor you gave. Without one it proves only that the run is
+  consistent with itself, so anchor on a hash you trust: the previous run's last `hash`, or the
+  manifest of an export.
+- To prove the SIEM has everything up to now, compare its newest `hash` with the `head` from
+  `GET /admin/auth-events/integrity` (admin read), which also reports the database's own check.
+  Record that head somewhere the database cannot reach, as
+  [Security](/understand/security#integrity-check) recommends.
+- A gap the script reports is usually a sink that is still catching up (`lagEvents` above zero) or a
+  search range that cut off. If the sink has caught up and the gap remains, replay the range into a
+  new sink with `startAfterSeq`, or export it with `GET /admin/auth-events/export`.
+
+### A Real Run To Test Against
+
+These lines are a real export from the API (the audit sinks branch, against Postgres 18): a sign-in,
+a suspicious sign-in and a sign-out, then the manifest. The same three events, taken from the OTLP
+bodies and from the syslog messages the sinks sent in the same run, also pass the script; changing
+a field, changing the payload, dropping a line, or giving the wrong anchor fails it.
+
+```json
+{"seq":1,"id":"f4d7cf79-d7a9-48b6-9fa9-5bd0af97e30f","createdAt":"2026-11-08T02:12:32.000Z","type":"session_created","userId":"11111111-1111-4111-8111-111111111111","actorUserId":null,"sessionId":"22222222-2222-4222-8222-222222222222","attemptId":null,"ipAddress":"203.0.113.9","userAgent":"Mozilla/5.0 (Ünïcødé)","deploymentId":null,"deviceClass":"unknown","mailProvider":null,"owner":null,"metadata":{"method":"passkey","organizationId":null},"prevHash":null,"hash":"5340e7c477d6e47089d24a22386dae428ba0d594575ebfd8a9f00d9f9218da93","payload":"[1, \"f4d7cf79-d7a9-48b6-9fa9-5bd0af97e30f\", \"11111111-1111-4111-8111-111111111111\", null, \"22222222-2222-4222-8222-222222222222\", \"session_created\", \"203.0.113.9\", \"Mozilla/5.0 (Ünïcødé)\", null, \"unknown\", null, null, null, {\"method\": \"passkey\", \"organizationId\": null}, \"2026-11-08T02:12:32.000000Z\"]"}
+{"seq":2,"id":"bc99551c-c8b0-40f7-ab4c-10470f1cded4","createdAt":"2026-11-08T02:12:32.004Z","type":"login_suspicious","userId":"11111111-1111-4111-8111-111111111111","actorUserId":null,"sessionId":null,"attemptId":null,"ipAddress":"unknown","userAgent":"curl/8","deploymentId":null,"deviceClass":"bot","mailProvider":null,"owner":null,"metadata":{"reason":"impossible_travel"},"prevHash":"5340e7c477d6e47089d24a22386dae428ba0d594575ebfd8a9f00d9f9218da93","hash":"06239c4d91108f7d8e8f5a1c4069520cee75cefac057f1d23d08bfc4b366d65a","payload":"[2, \"bc99551c-c8b0-40f7-ab4c-10470f1cded4\", \"11111111-1111-4111-8111-111111111111\", null, null, \"login_suspicious\", \"unknown\", \"curl/8\", null, \"bot\", null, null, null, {\"reason\": \"impossible_travel\"}, \"2026-11-08T02:12:32.004000Z\"]"}
+{"seq":3,"id":"d2090243-88d4-45e4-94e3-f3b39a0d4d10","createdAt":"2026-11-08T02:12:32.005Z","type":"logout_success","userId":"11111111-1111-4111-8111-111111111111","actorUserId":null,"sessionId":"22222222-2222-4222-8222-222222222222","attemptId":null,"ipAddress":"unknown","userAgent":"unknown","deploymentId":null,"deviceClass":"unknown","mailProvider":null,"owner":null,"metadata":{"scope":"current_session"},"prevHash":"06239c4d91108f7d8e8f5a1c4069520cee75cefac057f1d23d08bfc4b366d65a","hash":"8c6801d345a2b1caa5e4e38f0edddf4c08f8a20a711ddba467a935c0e8965c81","payload":"[3, \"d2090243-88d4-45e4-94e3-f3b39a0d4d10\", \"11111111-1111-4111-8111-111111111111\", null, \"22222222-2222-4222-8222-222222222222\", \"logout_success\", \"unknown\", \"unknown\", null, \"unknown\", null, null, null, {\"scope\": \"current_session\"}, \"2026-11-08T02:12:32.005000Z\"]"}
+{"type":"manifest","format":"seamless-auth-events/1","generatedAt":"2026-11-08T02:12:32.023Z","from":null,"to":null,"reason":"export","firstSeq":1,"lastSeq":3,"count":3,"anchorHash":null,"lastHash":"8c6801d345a2b1caa5e4e38f0edddf4c08f8a20a711ddba467a935c0e8965c81"}
+```
+
+Saved as `export.ndjson`, it prints
+`ok: seq 1 to 3, head 8c6801d345a2b1caa5e4e38f0edddf4c08f8a20a711ddba467a935c0e8965c81`.
+
+---
+
+## Versions
+
+| Component                         | First version                 | Status |
+| --------------------------------- | ----------------------------- | ------ |
+| `seamless-auth-api` (audit sinks) | v0.23.0                       | Not released. v0.22.0 is the latest |
+| `seamless-auth-api` (export, integrity check, hash chain) | v0.19.1 | Released |
+| `@seamless-auth/types`            | 0.39.0                        | Published |
+| `seamless-auth-admin-dashboard`   | The release after v0.13.0 (Audit streaming page) | Not released (seamless-auth-admin-dashboard#343) |
+| `seamless-cli`                    | The release after 0.29.0 (`seamless audit-sinks`) | Not released (seamless-cli#359) |
+
+---
+
+## Common Mistakes
+
+| Mistake                                                 | Fix |
+| ------------------------------------------------------- | --- |
+| Typing an API key into the sink                         | Sinks take env var names ending `_AUDIT_SINK_SECRET`. Set the value on the API host |
+| Pointing `endpoint` at `.../v1/logs`                    | Give the base URL. `/v1/logs` is appended |
+| A Collector on a private address in production          | List its host in `CALLOUT_PRIVATE_HOSTS` and serve `https` |
+| Leaving a sink disabled for good                        | It holds audit retention. Delete it when you are done with it |
+| Treating a repeated `seq` as tampering                  | Delivery is at least once. Two lines with the same `seq` and `hash` are one event |
+| Verifying parsed fields instead of `payload`            | Only `payload` is hashed. Check that the fields match it, as the script does |
+| Keying parse rules on the syslog SD-ID number           | It will change before release. Key on `MSGID` or the JSON |
+| Expecting webhooks to carry the same detail             | Webhooks carry a small catalog without network detail. The sink carries every audit event |
+
+---
+
+## Related Docs
+
+- [Auth Events and Auditing](/understand/authevents)
+- [Security: audit logging](/understand/security#audit-logging)
+- [How To Receive Webhooks](/build/webhooks)
+- [Production Checklist](/operate/production-checklist)
+- [Environment Variables](/reference/environment-variables)
