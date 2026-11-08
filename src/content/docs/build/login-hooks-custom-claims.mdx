@@ -1,0 +1,586 @@
+---
+title: "How To Use Login Hooks And Custom Claims"
+description: "Allow or deny sign-ins with a post_login hook, add claims with a pre_token hook, set static custom claims per role and OpenID client, and port Auth0 Actions and Rules to them."
+sidebar:
+  order: 11.7
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Use this guide when a sign-in has to ask your own system something before it completes, such as
+"is this account suspended in billing", or when tokens need values your backend reads, such as a
+plan or a tenant id. It is also the guide for porting Auth0 Actions and Rules.
+
+There are two tools, and most apps need only the second:
+
+- **Static custom claims**: a fixed JSON object attached to an instance role, an organization role
+  or an OpenID Provider client. Everyone holding the role gets the claims. No code runs.
+- **Login hooks**: an HTTPS endpoint you run that the auth API calls during sign-in. `post_login`
+  allows or denies. `pre_token` allows, denies, or adds claims computed per user.
+
+Hook calls are signed the same way as [webhooks](/build/webhooks), so your hook service can prove a
+call came from your Seamless Auth instance.
+
+<Aside type="caution" title="Needs auth API v0.23.0, not released yet">
+Login hooks, custom claims and every route on this page need `seamless-auth-api` v0.23.0. The
+latest release is v0.22.0, which has none of them. The console's **Login hooks** and **Custom
+claims** pages and the CLI's `seamless hooks` and `seamless claims` commands are not released yet,
+and neither are custom claims in OpenID Provider tokens (see [Versions](#versions)).
+</Aside>
+
+---
+
+## Where Each Runs
+
+| Moment                                            | `post_login` | `pre_token` | Static claims |
+| ------------------------------------------------- | ------------ | ----------- | ------------- |
+| Sign-in, once the factor is proven, before the session exists | Called | Called right after `post_login` | Resolved |
+| Organization switch (`POST /organizations/:id/switch`) | Not called | Called, with the new organization | Resolved |
+| Token refresh                                     | Not called   | **Not called**. The claims it gave are kept on the session | **Resolved again** |
+| Session exchange (a child session)                | Not called   | Not called. The child copies the parent's hook claims | Resolved |
+| Break-glass administrator sign-in                 | **Never**    | **Never**   | Resolved |
+| Recovery session (account recovery, recovery code) | **Never**   | **Never**   | None. A recovery token carries no custom claims |
+
+Two consequences to plan around:
+
+- **`pre_token` claims are as fresh as the session, not the token.** A value your hook returned at
+  sign-in stays in every token of that session until the user signs in again or switches
+  organization. If the value can change during a session (a plan upgrade, a suspension), either
+  read it live in your backend or accept that it applies at the next sign-in.
+- **Static claims follow the user's roles at each token.** They are resolved on every mint,
+  including refresh, so a changed set or role reaches the user within `access_token_ttl`.
+
+Break-glass and recovery never call a hook so that a hook which is down cannot lock out the
+administrator who would fix it, or a user enrolling a new factor.
+
+---
+
+## Login Hooks
+
+One hook per trigger (`post_login`, `pre_token`), each with its own URL, timeout, failure mode and
+signing secret.
+
+### The Call
+
+The auth API sends a `POST` with the three signature headers (`webhook-id`, `webhook-timestamp`,
+`webhook-signature`) and this body, `LoginHookCallSchema` in `@seamless-auth/types` 0.39.0:
+
+```json
+{
+  "id": "3f2e1d0c-9b8a-4765-8432-10fedcba9876",
+  "trigger": "pre_token",
+  "timestamp": "2026-11-07T12:00:00.000Z",
+  "user": {
+    "id": "11111111-1111-4111-8111-111111111111",
+    "email": "ana@example.com",
+    "phone": null,
+    "roles": ["user"]
+  },
+  "method": "passkey",
+  "organization": { "id": "44444444-4444-4444-8444-444444444444", "roles": ["admin"] },
+  "client": null,
+  "request": { "ipAddress": "203.0.113.9", "userAgent": "Mozilla/5.0 ..." }
+}
+```
+
+| Field          | Meaning |
+| -------------- | ------- |
+| `id`           | The invocation id, equal to `webhook-id` |
+| `trigger`      | `post_login` or `pre_token` |
+| `user`         | The user and their instance roles |
+| `method`       | How the sign-in completed, such as `passkey`, `email_otp`, `phone_otp`, `totp`, `magic_link` or `oauth`. `null` on an organization switch |
+| `organization` | The organization the session is in and the member's roles there, or `null` |
+| `client`       | Always `null` for now. No first-party sign-in knows which OpenID Provider client it is for (seamless-auth-oidc-provider#47) |
+| `request`      | The caller's IP address and user agent |
+
+The body is parsed through the schema before it is sent, so it never carries a token, code,
+cookie or secret.
+
+### The Answer
+
+Answer `200` with JSON. `post_login` (`PostLoginHookResultSchema`):
+
+```json
+{ "decision": "allow" }
+```
+
+```json
+{
+  "decision": "deny",
+  "reason": "account is suspended in billing (ticket 4411)",
+  "userMessage": "Your account is suspended. Contact your administrator."
+}
+```
+
+`pre_token` (`PreTokenHookResultSchema`) takes the same fields plus `claims`:
+
+```json
+{ "decision": "allow", "claims": { "plan": "enterprise", "tenant": "44444444-4444-4444-8444-444444444444" } }
+```
+
+| Field         | Rules |
+| ------------- | ----- |
+| `decision`    | `allow` or `deny`. Required |
+| `reason`      | Up to 500 characters. Written to the audit log (`login_hook_denied`) and **never shown** to the user, so it can hold internal detail |
+| `userMessage` | Up to 200 characters of plain text. **Shown** to the user as the refusal's `message` |
+| `claims`      | `pre_token` only. An object of custom claims, held to the [claim rules](#claim-names-and-reserved-claims). A `post_login` answer with `claims` has failed |
+
+A deny's `claims` are ignored. Reserved claim names in an allow are stripped and the stripping is
+audited (`login_hook_claims_stripped`). Any other claim that breaks the rules (a name outside the
+pattern, nesting past depth 3, more than 1 KiB) fails the hook rather than being dropped.
+
+### What The User Sees
+
+The sign-in completion routes (`/webauthn/login/finish`, `/otp/verify-email-otp`,
+`/otp/verify-login-email-otp`, `/otp/verify-login-phone-otp`, `/totp/verify-login`,
+`/magic-link/check`, `/oauth/:providerId/callback`) and `POST /organizations/:id/switch` can answer:
+
+| Situation                              | Status | Body |
+| -------------------------------------- | ------ | ---- |
+| A hook denied                          | 403    | `{"error":"login_denied","message":"<userMessage>"}`, with `message` only when the hook sent one |
+| A hook with failure mode `closed` failed | 503  | `{"error":"login_hook_unavailable"}` |
+
+No session is created on either, and the concurrent session limit has not run yet, so a refused
+sign-in never costs the user a session they already had. Server adapters pass both bodies through
+unchanged. In `@seamless-auth/react` and `@seamless-auth/client` the error's `message` is the
+`error` code, and the hook's text is at `err.body.message`; the built-in views show fixed text, so
+show `userMessage` yourself if you want it on screen.
+
+### Timeouts And Failure Modes
+
+- **Timeout:** 2000 ms by default, from 100 to 5000 ms. One attempt, never retried. The deadline
+  covers the whole request, so a slow trickle of bytes cannot hold a sign-in open.
+- **A failure** is a timeout, a connection that fails, a status outside 2xx (a redirect is never
+  followed), a body that is not JSON or does not parse, a response over 64 KiB, or claims that
+  break the rules.
+- **`closed`** (the default): a failure refuses the sign-in with `503 login_hook_unavailable`.
+- **`open`**: a failure is ignored, and the sign-in continues as if the hook did not exist, without
+  its claims.
+
+Every call is recorded with its outcome (`allowed`, `denied`, `failed_open`, `failed_closed`) in
+the invocation log for 30 days, and audited as `login_hook_success`, `login_hook_denied` or
+`login_hook_failed` (with the failure reason and status code).
+
+| Pick     | When |
+| -------- | ---- |
+| `closed` | The hook enforces something: suspension, licensing, a compliance gate, an allow list. A sign-in your hook could not check should not complete. Also for a `pre_token` hook whose claims your backend authorizes with, unless your backend treats a missing claim as a denial |
+| `open`   | The hook only adds convenience: claims your app can do without, or a soft check. Sign-in should keep working while your service is down |
+
+With `open`, anything that makes your service slow or unreachable switches its denials off, so do
+not use it for a deny that matters. With `closed`, your hook's availability is your sign-in's
+availability for everyone except break-glass administrators and recovery. Keep it fast, run more
+than one instance, and watch `failed_closed` in the invocation log.
+
+### Set Up A Hook
+
+Configure `CALLOUT_SECRET_ENCRYPTION_KEY` (required in production once a hook exists) and, for a
+hook service on a private address, `CALLOUT_PRIVATE_HOSTS`, as for webhooks
+([Step 1 there](/build/webhooks#step-1-configure-the-auth-api)). The same URL rules apply: `https`
+only in production, never the API's own host, and link-local addresses never.
+
+**Console:** the **Login hooks** page (`/login-hooks` in `seamless-auth-admin-dashboard`) has one
+section per trigger with the URL, timeout, failure mode, a test call, secret rotation and the
+invocation log. It is not in a console release yet (seamless-auth-admin-dashboard#343).
+
+**CLI:** not in a CLI release yet (seamless-cli#359). With it:
+
+```bash
+seamless hooks set post_login --url https://hooks.example.com/seamless   # prints the secret once
+seamless hooks set pre_token --url https://hooks.example.com/seamless --failure-mode open
+seamless hooks test post_login                                          # exits 1 when it fails
+seamless hooks invocations post_login --outcome denied
+seamless hooks set pre_token --disable                                  # changes only that setting
+```
+
+**Admin API:** reads need `admin:read`; writes, including the test call, need `admin:write` and a
+fresh step-up ([How To Use TOTP And Step-Up](/build/totp-step-up)).
+
+| Method   | Route                                        | Body or query                                   | Purpose |
+| -------- | -------------------------------------------- | ----------------------------------------------- | ------- |
+| `GET`    | `/admin/login-hooks`                         |                                                 | Both hooks (`{ hooks }`) |
+| `PUT`    | `/admin/login-hooks/:trigger`                | `{ url, timeoutMs?, failureMode?, enabled? }`   | Create (`201`, with `secret` once) or replace (`200`, secret kept) |
+| `GET`    | `/admin/login-hooks/:trigger`                |                                                 | One hook |
+| `DELETE` | `/admin/login-hooks/:trigger`                |                                                 | Delete it. Sign-ins stop calling it |
+| `POST`   | `/admin/login-hooks/:trigger/secret`         |                                                 | Rotate: `{ secret, previousSecretExpiresAt }` |
+| `POST`   | `/admin/login-hooks/:trigger/test`           |                                                 | One signed call: `{ ok, failure, statusCode, durationMs }` |
+| `GET`    | `/admin/login-hooks/:trigger/invocations`    | `limit` (1 to 100), `outcome`                   | Recent calls, newest first |
+
+A `PUT` replaces every setting and fills the defaults for any you leave out (2000 ms, `closed`,
+enabled), so send all four. The CLI's `hooks set` reads the current hook first and changes only
+what you name. A disabled or deleted hook is skipped: sign-ins complete as if it did not exist.
+
+The test call sends a placeholder user (`00000000-0000-4000-8000-000000000000`, no email, no
+roles), no organization and no request details, and is not recorded as an invocation. It passes
+when your service answers a body that parses.
+
+Rotation works as it does for webhooks: the old secret keeps signing beside the new one for 24
+hours, two `v1` signatures in one header, and rotating again during the overlap ends it at once.
+
+---
+
+## Example Hook Service
+
+A complete hook service in Node.js with no dependencies. It verifies every call, denies suspended
+accounts on `post_login`, and adds a plan and tenant on `pre_token`. Run it with the hook's secret
+(both, comma-separated, while it rotates):
+
+```bash
+SEAMLESS_HOOK_SECRETS=whsec_... PORT=8787 node hook-service.mjs
+```
+
+```js
+// hook-service.mjs
+import { createHmac, timingSafeEqual } from 'node:crypto'
+import { createServer } from 'node:http'
+
+const SECRETS = process.env.SEAMLESS_HOOK_SECRETS.split(',')
+const TOLERANCE_SECONDS = 300
+
+function verified(headers, body) {
+  const id = headers['webhook-id']
+  const timestamp = headers['webhook-timestamp']
+  const signatures = headers['webhook-signature']
+  if (!id || !/^\d+$/.test(timestamp ?? '') || !signatures) return false
+  if (Math.abs(Date.now() / 1000 - Number(timestamp)) > TOLERANCE_SECONDS) return false
+
+  const signed = Buffer.concat([Buffer.from(`${id}.${timestamp}.`), body])
+  const expected = SECRETS.map((secret) =>
+    createHmac('sha256', Buffer.from(secret.slice('whsec_'.length), 'base64')).update(signed).digest(),
+  )
+  let valid = false
+  for (const entry of signatures.split(' ')) {
+    const [version, value] = entry.split(',')
+    if (version !== 'v1' || !value) continue
+    const received = Buffer.from(value, 'base64')
+    for (const digest of expected) {
+      if (received.length === digest.length && timingSafeEqual(received, digest)) valid = true
+    }
+  }
+  return valid
+}
+
+// Your own rules. These two stand in for a lookup in your database.
+const suspended = new Set(['33333333-3333-4333-8333-333333333333'])
+const plans = { '11111111-1111-4111-8111-111111111111': 'enterprise' }
+
+function decide(call) {
+  if (call.trigger === 'post_login') {
+    if (suspended.has(call.user.id)) {
+      return {
+        decision: 'deny',
+        reason: `account ${call.user.id} is suspended in billing`,
+        userMessage: 'Your account is suspended. Contact your administrator.',
+      }
+    }
+    return { decision: 'allow' }
+  }
+  return {
+    decision: 'allow',
+    claims: {
+      plan: plans[call.user.id] ?? 'free',
+      ...(call.organization ? { tenant: call.organization.id } : {}),
+    },
+  }
+}
+
+createServer((req, res) => {
+  const chunks = []
+  req.on('data', (chunk) => chunks.push(chunk))
+  req.on('end', () => {
+    const body = Buffer.concat(chunks)
+    if (req.method !== 'POST' || !verified(req.headers, body)) {
+      res.writeHead(401).end()
+      return
+    }
+    res.writeHead(200, { 'content-type': 'application/json' })
+    res.end(JSON.stringify(decide(JSON.parse(body.toString('utf8')))))
+  })
+}).listen(Number(process.env.PORT ?? 8787))
+```
+
+This service was run against calls signed by the auth API's own signer and bodies built with
+`LoginHookCallSchema`: an allow, a deny, and a `pre_token` call signed by two secrets parsed with
+`PostLoginHookResultSchema` and `PreTokenHookResultSchema`, and the claims passed the API's claim
+screen unchanged. A call signed with another secret, or with a timestamp 400 seconds old, got
+`401`. A `401` is a failure to the auth API, so a `closed` hook refuses a sign-in it cannot verify.
+
+Do not use `verifyWebhook` from `@seamless-auth/core/webhook` for hook calls: it checks the body
+against the webhook event catalog and refuses a hook call as `invalid_payload`. Use a verifier like
+the one above, or any of the hand-written ones in the
+[webhooks guide](/build/webhooks#step-3-verify-every-request) with the same secret rules.
+
+---
+
+## Static Custom Claims
+
+A claim set is a JSON object attached to a source:
+
+| Source kind          | Source name           | Reaches |
+| -------------------- | --------------------- | ------- |
+| `instance_role`      | A role in `available_roles` | First-party tokens and provider tokens of everyone holding the role |
+| `organization_role`  | A role in the organization role catalogue | Tokens of members holding it, only while that organization is active |
+| `oidc_client`        | An OpenID Provider client id | That client's provider tokens only |
+
+The source must exist when the set is written. Retiring the role or deleting the client deletes its
+set, so adding the name back later restores nothing.
+
+### Precedence
+
+When two sources set the same name, the later one wins:
+
+1. Instance role sets, in role name order
+2. Organization role sets for the active organization, in role name order
+3. The OpenID Provider client's set (provider tokens only)
+4. The `pre_token` hook's claims
+
+Role name order means a user holding `billing` and `support` gets `support`'s value for a name
+both set, whatever order the roles were granted in.
+
+### Set Them
+
+**Console:** the **Custom claims** page (`/custom-claims` in `seamless-auth-admin-dashboard`)
+edits each source's set as JSON, shows the reserved names and the budget the API reports, and
+refuses a reserved name, nesting past depth 3 or an oversized set before step-up. It is not in a
+console release yet (seamless-auth-admin-dashboard#343).
+
+**CLI:** not in a CLI release yet (seamless-cli#359). `claims set` replaces the whole set and asks
+before removing a claim:
+
+```bash
+seamless claims set instance_role user '{"plan":"free"}'
+seamless claims set organization_role billing '{"can_invoice":true,"limits":{"seats":25}}'
+seamless claims set oidc_client grafana --file grafana-claims.json
+seamless claims list
+seamless claims delete organization_role billing
+```
+
+**Admin API:** reads need `admin:read`; writes need `admin:write` and a fresh step-up.
+
+| Method   | Route                                          | Body                | Purpose |
+| -------- | ---------------------------------------------- | ------------------- | ------- |
+| `GET`    | `/admin/custom-claims`                         |                     | Every set, plus `reservedNames`, `reservedPrefixes` and `budgetBytes` |
+| `GET`    | `/admin/custom-claims/:sourceKind/:sourceName` |                     | One set. `404` when none |
+| `PUT`    | `/admin/custom-claims/:sourceKind/:sourceName` | `{ "claims": {...} }` | Replace the whole set. `404` when the source does not exist |
+| `DELETE` | `/admin/custom-claims/:sourceKind/:sourceName` |                     | Delete the set |
+
+```bash
+curl -X PUT "$AUTH_SERVER_URL/admin/custom-claims/organization_role/billing" \
+  -H "Authorization: Bearer $ADMIN_ACCESS_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"claims":{"can_invoice":true,"limits":{"seats":25}}}'
+```
+
+Writes are audited as `admin_custom_claims_updated` and `admin_custom_claims_deleted`, naming the
+claims but not their values.
+
+### Claim Names And Reserved Claims
+
+- **Names** match `^[a-z][a-z0-9_]{0,63}$`: lower case, starting with a letter, up to 64
+  characters. No URLs, dots or hyphens.
+- **Values** are literal JSON (strings, numbers, booleans, null, arrays, objects), nested at most 3
+  levels. There is no templating.
+- **Each set** is at most 1024 bytes serialized as UTF-8 JSON, refused when written over it. A hook's
+  claims are held to the same limit.
+
+Reserved names are refused when written and stripped (and audited) when a hook returns them. The
+list is `RESERVED_CLAIM_NAMES` and `RESERVED_CLAIM_PREFIXES` in `@seamless-auth/types` 0.39.0
+(`customClaim/reserved`), and `GET /admin/custom-claims` returns it:
+
+| Group | Names |
+| ----- | ----- |
+| JWT registered claims | `iss`, `sub`, `aud`, `exp`, `nbf`, `iat`, `jti` |
+| Protocol and session  | `azp`, `nonce`, `at_hash`, `c_hash`, `s_hash`, `auth_time`, `acr`, `amr`, `sid`, `scope`, `client_id`, `cnf`, `typ`, `act`, `may_act` |
+| Seamless Auth's own   | `roles`, `permissions`, `permissions_omitted`, `org_id`, `org_roles`, `org_permissions`, `recovery` |
+| OpenID standard identity claims | `name`, `given_name`, `family_name`, `middle_name`, `nickname`, `preferred_username`, `profile`, `picture`, `website`, `email`, `email_verified`, `gender`, `birthdate`, `zoneinfo`, `locale`, `phone_number`, `phone_number_verified`, `address`, `updated_at` |
+| Prefixes              | Any name starting `seamless_` or `org_` |
+
+The identity claims are reserved so that no source can assert an email address or name the user
+never proved.
+
+---
+
+## What Reaches The Token
+
+Custom claims sit at the top level of the access token beside the claims Seamless Auth sets, which
+always win:
+
+```json
+{
+  "plan": "enterprise",
+  "tenant": "44444444-4444-4444-8444-444444444444",
+  "can_invoice": true,
+  "sub": "11111111-1111-4111-8111-111111111111",
+  "sid": "session uuid",
+  "typ": "access",
+  "roles": ["user"],
+  "permissions": ["reports:read"],
+  "org_id": "44444444-4444-4444-8444-444444444444",
+  "org_roles": ["admin", "billing"],
+  "org_permissions": ["projects:write"]
+}
+```
+
+### One Shared 1 KiB Budget
+
+A server adapter keeps the whole access token in a signed cookie under the browser's 4 KiB limit,
+so the permission claims (`permissions`, `org_roles`, `org_permissions`) and the merged custom
+claims share **one 1024-byte budget**, serialized together. Each token is built by these rules, in
+order:
+
+1. If the permission claims and the custom claims fit together, the token carries both.
+2. Otherwise **permissions give way first**: the three permission claims are replaced with
+   `"permissions_omitted": true`, and the custom claims stay, if they fit beside that marker.
+   Permission guards then read `GET /users/me/permissions` live (see
+   [How To Use Roles And Permissions](/build/roles-and-permissions#when-the-set-does-not-fit)).
+3. Only if the custom claims do not fit even beside the marker are **all** of them dropped. The
+   token carries just the marker, and the mint writes the audit event `custom_claims_omitted` with
+   the size.
+4. Nothing is ever trimmed partially. A recovery token carries neither.
+
+Custom claims have no live fallback, so keep sets small. A hook whose claims alone are over 1 KiB
+has failed, and follows its failure mode.
+
+### Provider Tokens
+
+OpenID Provider tokens carry the same values under the same names, released by scope:
+
+| Scope           | Claims |
+| --------------- | ------ |
+| `permissions`   | `roles`, `permissions`, `org_id`, `org_roles`, `org_permissions`, or `permissions_omitted` |
+| `custom_claims` | Every custom claim resolved for the user and this client, including the client's own set and the session's `pre_token` claims |
+| `seamless`      | `roles`, `org_id`, unchanged |
+
+ID tokens and `/userinfo` carry them for the scopes granted. A user's access token for a resource
+carries them when the grant holds the scope. Session exchange and client credentials tokens carry
+none. The auth API computes every value and signs only what it computed, so the provider cannot add
+or change a claim. The budget is computed over everything the account has, so a client that asks
+only for `permissions` can see `permissions_omitted` because of custom claims it did not ask for.
+
+If a role or claim set changes between the provider reading the claims and the API signing them,
+the API refuses the sign. The provider is to retry once and then fail the token request with
+`server_error` (decided on 2026-11-07; seamless-auth-oidc-provider#63 does not retry yet).
+
+Provider claims need `seamless-auth-api` v0.23.0 (seamless-auth-api#585) and the provider release
+with seamless-auth-oidc-provider#63. Neither is released.
+
+---
+
+## Porting Auth0 Actions
+
+Auth0's post-login Actions run JavaScript inside Auth0. Seamless Auth runs no code of yours inside
+the auth server: the logic moves into your hook service, or into static claims when it only reads
+roles.
+
+| Auth0                                                         | Seamless Auth |
+| ------------------------------------------------------------- | ------------- |
+| A post-login Action that runs after authentication ([Auth0 docs](https://auth0.com/docs/customize/actions/explore-triggers/signup-and-login-triggers/login-trigger)) | A `post_login` hook to allow or deny, a `pre_token` hook to add claims |
+| `api.access.deny(reason)`, whose reason "may be presented directly in end-user interfaces" ([Auth0 docs](https://auth0.com/docs/customize/actions/explore-triggers/signup-and-login-triggers/login-trigger/post-login-api-object)) | `{"decision":"deny","reason":"...","userMessage":"..."}`. Seamless splits the two: `reason` is audited and never shown, `userMessage` is shown |
+| `api.idToken.setCustomClaim` and `api.accessToken.setCustomClaim` ([Auth0 docs](https://auth0.com/docs/customize/actions/explore-triggers/signup-and-login-triggers/login-trigger/post-login-api-object)) | `claims` in a `pre_token` answer, or a static set. One set of claims reaches the first-party access token and, with the `custom_claims` scope, provider ID and access tokens alike |
+| Claims derived from `event.authorization.roles`, the user's assigned role names ([Auth0 docs](https://auth0.com/docs/customize/actions/explore-triggers/signup-and-login-triggers/login-trigger/post-login-event-object)) | A static set on each role. No code |
+| Namespaced claim names such as `https://example.com/plan`, which Auth0 recommends ([Auth0 docs](https://auth0.com/docs/secure/tokens/json-web-tokens/create-custom-claims)) | Rename to the claim alphabet, such as `plan`. URL names are refused |
+| Auth0's restricted claims, such as `roles`, `permissions` and `org_id` ([Auth0 docs](https://auth0.com/docs/secure/tokens/json-web-tokens/create-custom-claims)) | The [reserved list](#claim-names-and-reserved-claims). Seamless also reserves the OpenID identity claims such as `email` and `name` |
+| A custom claims payload of up to 100 KB ([Auth0 docs](https://auth0.com/docs/secure/tokens/json-web-tokens/create-custom-claims)) | 1 KiB, shared with the permission claims |
+| An Action must finish within 20 seconds ([Auth0 docs](https://auth0.com/docs/customize/actions/limitations)) | 2 seconds by default, 5 at most, one attempt, with `open` or `closed` on failure |
+| `event.secrets`                                               | Your hook service's own configuration |
+| `event.organization`                                          | `organization` in the call: id and the member's roles |
+| `api.multifactor.enable` ([Auth0 docs](https://auth0.com/docs/customize/actions/explore-triggers/signup-and-login-triggers/login-trigger/post-login-api-object)) | No hook equivalent. Use Seamless Auth's own sign-in policy and [step-up](/build/totp-step-up) |
+| `api.redirect.sendUserTo` ([Auth0 docs](https://auth0.com/docs/customize/actions/explore-triggers/signup-and-login-triggers/login-trigger/post-login-api-object)) | No equivalent. A hook is a server to server call and cannot redirect the browser |
+| `api.user.setAppMetadata` ([Auth0 docs](https://auth0.com/docs/customize/actions/explore-triggers/signup-and-login-triggers/login-trigger/post-login-api-object)) | No equivalent. Write to your own database from the hook |
+| The post-user-registration trigger, which is asynchronous and cannot affect signup ([Auth0 docs](https://auth0.com/docs/customize/actions/explore-triggers/signup-and-login-triggers/post-user-registration-trigger)) | The [`user.created` webhook](/build/webhooks#event-catalog) |
+| Rules, read-only since November 18, 2024 and removed after January 31, 2028 ([Auth0 docs](https://auth0.com/docs/customize/rules)) | The same mapping as Actions |
+
+### The Difference On Refresh
+
+**Auth0 runs post-login Actions on refresh. Seamless Auth does not run `pre_token` on refresh.**
+Auth0's post-login trigger runs when a user authenticates and also when a refresh token is
+exchanged
+([Auth0 docs](https://auth0.com/docs/customize/actions/explore-triggers/signup-and-login-triggers/login-trigger)),
+and `oauth2-refresh-token` is one of the values of `event.transaction.protocol`
+([Auth0 docs](https://auth0.com/docs/customize/actions/explore-triggers/signup-and-login-triggers/login-trigger/post-login-event-object)).
+So an Auth0 Action can recompute a claim, or deny, at every refresh.
+
+In Seamless Auth the `pre_token` claims are fixed for the session, and a refresh never waits on your
+server. When you port an Action:
+
+- Move claims that only depend on roles to static sets. Those are recomputed at every token,
+  refresh included.
+- Keep claims that need your data in `pre_token`, knowing they change at the next sign-in or
+  organization switch.
+- If the Action denies at refresh (for example a suspension check that should end sessions), do it
+  another way: revoke the user's sessions from your system when the account is suspended
+  (`DELETE /admin/sessions/:userId/revoke-all`, or the console), and keep the `post_login` hook to
+  stop the next sign-in.
+- If the Action skips work on refresh by checking `event.transaction.protocol`, drop the check.
+
+### A Ported Action
+
+An Auth0 Action like this:
+
+```js
+exports.onExecutePostLogin = async (event, api) => {
+  const account = await lookup(event.user.user_id)
+  if (account.suspended) {
+    api.access.deny('Your account is suspended. Contact your administrator.')
+    return
+  }
+  api.accessToken.setCustomClaim('https://example.com/plan', account.plan)
+}
+```
+
+becomes the [example hook service](#example-hook-service): the suspension check in `post_login`
+with the message as `userMessage`, and the plan in `pre_token` as the claim `plan`. Your backend
+reads `plan` from the access token instead of `https://example.com/plan`.
+
+---
+
+## Check It End To End
+
+1. Run the example service and point both hooks at it with `failureMode: "closed"`.
+2. Send a test call to each. Expect `ok: true`.
+3. Sign in as a normal user. Decode the access token and expect `plan` (and `tenant` in an
+   organization). The invocation log shows two `allowed` calls.
+4. Add the user's id to `suspended` and sign in again. Expect `403` with
+   `{"error":"login_denied","message":"Your account is suspended. Contact your administrator."}`
+   and a `login_hook_denied` audit event carrying the `reason`.
+5. Stop the service and sign in again. Expect `503 {"error":"login_hook_unavailable"}`. Switch the
+   hook to `open` and expect the sign-in to complete, without `plan`.
+6. Set a static set on a role you hold, refresh the session, and expect the claim in the new token
+   without signing in again.
+
+---
+
+## Versions
+
+| Component                         | First version                 | Status |
+| --------------------------------- | ----------------------------- | ------ |
+| `seamless-auth-api`               | v0.23.0                       | Not released. v0.22.0 is the latest |
+| `@seamless-auth/types`            | 0.39.0                        | Published |
+| OpenID Provider (`permissions` and `custom_claims` scopes) | The release with seamless-auth-oidc-provider#63 | Not released |
+| `seamless-auth-admin-dashboard`   | The release after v0.13.0 (Login hooks and Custom claims pages) | Not released (seamless-auth-admin-dashboard#343) |
+| `seamless-cli`                    | The release after 0.29.0 (`seamless hooks`, `seamless claims`) | Not released (seamless-cli#359) |
+
+---
+
+## Common Mistakes
+
+| Mistake                                                     | Fix |
+| ----------------------------------------------------------- | --- |
+| Expecting `pre_token` to run on refresh, as an Auth0 Action does | It runs at sign-in and organization switch. Use static claims for values that must follow role changes |
+| Putting internal detail in `userMessage`                    | `userMessage` is shown. Put detail in `reason`, which is only audited |
+| A `closed` hook with no redundancy                          | Its outage is a sign-in outage. Run more than one instance, or pick `open` for non-essential hooks |
+| A denial that matters on an `open` hook                     | An outage turns it off. Use `closed` |
+| Returning `email` or `sub` from a hook                      | Reserved names are stripped. Use your own name |
+| Namespaced names like `https://example.com/plan`            | Names match `^[a-z][a-z0-9_]{0,63}$` |
+| Large claim sets                                            | One 1 KiB budget is shared with permissions; past it, permissions go first, then every custom claim |
+| `PUT /admin/login-hooks/:trigger` with only the field you changed | A `PUT` resets the others to defaults. Send all four, or use `seamless hooks set` |
+| Verifying hook calls with `verifyWebhook`                   | It only accepts webhook events. Use the hook service's verifier |
+
+---
+
+## Related Docs
+
+- [How To Receive Webhooks](/build/webhooks), signed the same way
+- [How To Use Roles And Permissions](/build/roles-and-permissions)
+- [OpenID Provider](/build/openid-provider)
+- [Migrate From Auth0](/operate/migrate-from-auth0)
+- [How To Use TOTP And Step-Up](/build/totp-step-up)
+- [Cookies, Sessions And Tokens](/reference/cookies-sessions-tokens)
