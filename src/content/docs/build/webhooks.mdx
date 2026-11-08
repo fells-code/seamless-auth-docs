@@ -33,7 +33,8 @@ they only need the language's standard crypto.
   has committed, and nothing is lost between the event and the queue. It polls once a second.
 - **No history on first run.** When webhooks start for the first time the cursor starts at the
   newest audit row, so turning webhooks on does not replay old events. An endpoint receives events
-  that happen while it exists and is enabled.
+  that happen while it exists, including while it is turned off (see
+  [When An Endpoint Is Turned Off](#when-an-endpoint-is-turned-off)).
 - **At least once.** A receiver can see the same delivery more than once: a retry after a timeout
   it actually processed, or a redelivery an administrator sent. Dedupe on `webhook-id`.
 - **Unordered.** Deliveries are sent concurrently and retried on their own schedules, so a
@@ -43,9 +44,9 @@ they only need the language's standard crypto.
 - **Success is a 2xx within 15 seconds.** Anything else, including a redirect (never followed), is
   a failed attempt. The response body is read only for its status and capped at 64 KiB.
 
-What is not guaranteed: ordering, exactly-once delivery, delivery of events that happened while an
-endpoint was disabled, and that `webhook-id` is the same across two endpoints (each endpoint's
-delivery of an event has its own id).
+What is not guaranteed: ordering, exactly-once delivery, delivery of anything older than 30 days
+when a disabled endpoint is turned back on, and that `webhook-id` is the same across two endpoints
+(each endpoint's delivery of an event has its own id).
 
 ---
 
@@ -638,11 +639,21 @@ The API disables an endpoint and writes the audit event `webhook_endpoint_disabl
   clock, and the next failure three days or more later disables it (`disabledReason: "failing"`).
   Any success resets the clock.
 
-An administrator turning it off records `disabledReason: "manual"`. While an endpoint is disabled:
+An administrator turning it off records `disabledReason: "manual"`. Whichever way it was turned
+off:
 
-- events are not queued for it, and are not sent later when it is turned back on;
-- deliveries already queued are held, not dropped, and are not resumed automatically when it is
-  turned back on. Redeliver them.
+- new events it subscribes to are still queued for it, held with no attempt due;
+- a delivery already queued when it was turned off is held the same way;
+- turning it back on (`PATCH /admin/webhooks/:id` with `{"enabled": true}`,
+  `seamless webhooks enable <id>`, or the console) releases everything held, so the endpoint
+  catches up on what happened while it was off. Released deliveries are due at once and keep their
+  attempt counts and retry schedule. The `admin_webhook_updated` audit event records how many were
+  released (`releasedDeliveries`);
+- deliveries are kept for 30 days, so a catch-up reaches back that far and no further;
+- a `dead` delivery stays dead. Redeliver it if you want it sent.
+
+A catch-up arrives as a burst, in no particular order, so the receiver's dedupe and ordering rules
+above matter most then.
 
 A test event is never retried and never disables an endpoint.
 
@@ -678,12 +689,12 @@ the network the API runs on.
 **Redeliver** (`POST /admin/webhook-deliveries/:deliveryId/redeliver`,
 `seamless webhooks redeliver <deliveryId>`, or the console) makes one attempt now, with the same
 `webhook-id` and the exact bytes of the original body, and a fresh `webhook-timestamp` and
-signature. It works on a delivery in any status, including one held for a disabled endpoint. It
+signature. It works on a delivery in any status, including a held one. It
 counts as an attempt: if it fails while scheduled attempts remain, the delivery goes back on the
 schedule.
 
-The log keeps 30 days. For anything older, or events that happened while an endpoint was
-disabled, read the audit log (`GET /admin/auth-events` or the export) and replay them yourself.
+The log keeps 30 days. Anything older is no longer in it; the audit log (`GET /admin/auth-events`
+or the export) still holds the events themselves.
 
 ---
 
@@ -741,7 +752,7 @@ once, so a receiver still holding only that one starts failing. The CLI asks bef
 | Acting on every delivery                                  | Dedupe on `webhook-id`. Delivery is at least once |
 | Doing slow work before answering                          | Answer `2xx` within 15 seconds, then work. A slow answer is a failure and a retry |
 | Answering `410` for a temporary problem                   | `410` turns the endpoint off. Answer `503`, with `Retry-After` if you know when |
-| Expecting events from while an endpoint was off           | They were never queued. Replay them from the audit log |
+| Leaving an endpoint off for more than 30 days             | Turning it back on only catches up on the last 30 days of deliveries |
 | Rotating twice in a day                                   | The second rotation ends the first secret's overlap. Wait out the 24 hours |
 
 ---
