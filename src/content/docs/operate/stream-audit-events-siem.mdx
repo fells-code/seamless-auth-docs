@@ -1,6 +1,6 @@
 ---
 title: "How To Stream Audit Events To A SIEM"
-description: "Stream the Seamless Auth audit log over OTLP or syslog, route it through an OpenTelemetry Collector to Splunk, Elastic or Datadog, look up every event field, and verify the hash chain from the events your SIEM holds."
+description: "Stream the Seamless Auth audit log over OTLP (syslog arrives in v0.23.1), route it through an OpenTelemetry Collector to Splunk, Elastic or Datadog, look up every event field, and verify the hash chain from the events your SIEM holds."
 sidebar:
   order: 4.65
 ---
@@ -11,7 +11,7 @@ Use this guide when your security team wants Seamless Auth's sign-ins, refusals,
 session changes in the SIEM they already watch, and wants to know the copy there was not altered.
 
 An **audit sink** sends every audit event to one destination as it is written: OTLP over HTTP to
-an OpenTelemetry Collector or any OTLP endpoint, or RFC 5424 syslog over TLS. Each record carries
+an OpenTelemetry Collector or any OTLP endpoint, or, from v0.23.1, RFC 5424 syslog over TLS. Each record carries
 the event's `seamless-auth-events/1` line, the same line the export writes, with its `seq`,
 `prevHash`, `hash` and `payload`, so the hash chain verifies from the SIEM's copy alone.
 
@@ -20,6 +20,13 @@ Audit sinks and every route on this page need `seamless-auth-api` v0.23.0. The l
 v0.22.0, which has none of them. The console's **Audit streaming** page and the CLI's
 `seamless audit-sinks` commands are not released yet either (see [Versions](#versions)). The
 export and the integrity check this page also uses are in v0.19.1 and later.
+</Aside>
+
+<Aside type="note" title="Syslog sinks arrive in v0.23.1">
+v0.23.0 streams over OTLP only. It refuses to create or update a syslog sink with a 400 until
+v0.23.1, whose syslog records carry Fells Code's registered structured data ID. The syslog
+sections below describe v0.23.1. Until then, send to an OpenTelemetry Collector, which can forward
+to syslog itself.
 </Aside>
 
 ---
@@ -76,6 +83,8 @@ retrying a rejection would stall the sink for good. A redirect is a failure and 
 
 ### Syslog Settings
 
+Syslog sinks need v0.23.1 or later.
+
 | Setting            | Default         | Meaning |
 | ------------------ | --------------- | ------- |
 | `kind`             |                 | `syslog` |
@@ -109,7 +118,7 @@ seamless audit-sinks create collector --kind otlp --endpoint https://otel.intern
 seamless audit-sinks create gateway --kind otlp --endpoint https://otel.example.com \
   --header Authorization=COLLECTOR_AUDIT_SINK_SECRET   # for a receiver that checks a header
 seamless audit-sinks create siem --kind syslog --host syslog.internal --port 6514 \
-  --tls-ca-env SYSLOG_CA_AUDIT_SINK_SECRET
+  --tls-ca-env SYSLOG_CA_AUDIT_SINK_SECRET   # v0.23.1 and later
 seamless audit-sinks test <id>          # exits 1 when it fails
 seamless audit-sinks list               # with how far behind each sink is
 seamless audit-sinks update <id> --disable
@@ -258,7 +267,7 @@ These keys live on the Collector, not in Seamless Auth. The Seamless sink only n
 
 ### Syslog To A Generic Collector
 
-Any collector that accepts RFC 5424 over TLS with octet-counted framing on a TCP port works. With
+This needs v0.23.1 or later; v0.23.0 refuses syslog sinks. Any collector that accepts RFC 5424 over TLS with octet-counted framing on a TCP port works. With
 rsyslog, the `imtcp` input with the `gtls` driver in TLS-only mode
 ([rsyslog TLS tutorial](https://docs.rsyslog.com/doc/tutorials/tls_cert_server.html),
 [imtcp](https://docs.rsyslog.com/doc/configuration/modules/imtcp.html)):
@@ -288,11 +297,11 @@ Each message looks like this, where `MSG` is the export line:
 <86>1 2026-11-08T02:12:32.000Z api-host seamless-auth - audit [seamless@<enterprise number> seq="1" hash="5340e7c4..."] {"seq":1,...}
 ```
 
-<Aside type="caution" title="The syslog SD-ID will change">
+<Aside type="note" title="The syslog SD-ID">
 RFC 5424 requires a private structured data ID to end in an IANA Private Enterprise Number. Fells
-Code's number has not been assigned yet, so the SD-ID shown here is `seamless@<enterprise number>`.
-The final value will be in the v0.23 release notes. Do not key parse rules on the number until
-then; key them on `MSGID` `audit` or on the JSON in `MSG`.
+Code's number is being assigned, so the SD-ID is shown here as `seamless@<enterprise number>`.
+v0.23.1 ships with the final value and its release notes give it. Keying parse rules on `MSGID`
+`audit` or on the JSON in `MSG` works either way.
 </Aside>
 
 ---
@@ -495,6 +504,7 @@ Saved as `export.ndjson`, it prints
 | Component                         | First version                 | Status |
 | --------------------------------- | ----------------------------- | ------ |
 | `seamless-auth-api` (audit sinks) | v0.23.0                       | Not released. v0.22.0 is the latest |
+| `seamless-auth-api` (syslog sinks) | v0.23.1                     | Not released. Waits on the IANA enterprise number (seamless-auth-api#586) |
 | `seamless-auth-api` (export, integrity check, hash chain) | v0.19.1 | Released |
 | `@seamless-auth/types`            | 0.39.0                        | Published |
 | `seamless-auth-admin-dashboard`   | The release after v0.13.0 (Audit streaming page) | Not released (seamless-auth-admin-dashboard#343) |
@@ -512,7 +522,7 @@ Saved as `export.ndjson`, it prints
 | Leaving a sink disabled for good                        | It holds audit retention. Delete it when you are done with it |
 | Treating a repeated `seq` as tampering                  | Delivery is at least once. Two lines with the same `seq` and `hash` are one event |
 | Verifying parsed fields instead of `payload`            | Only `payload` is hashed. Check that the fields match it, as the script does |
-| Keying parse rules on the syslog SD-ID number           | It will change before release. Key on `MSGID` or the JSON |
+| Creating a syslog sink on v0.23.0                       | Syslog arrives in v0.23.1. Use OTLP until then            |
 | Expecting webhooks to carry the same detail             | Webhooks carry a small catalog without network detail. The sink carries every audit event |
 
 ---
