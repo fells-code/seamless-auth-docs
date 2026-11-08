@@ -455,9 +455,19 @@ none. The auth API computes every value and signs only what it computed, so the 
 or change a claim. The budget is computed over everything the account has, so a client that asks
 only for `permissions` can see `permissions_omitted` because of custom claims it did not ask for.
 
-If a role or claim set changes between the provider reading the claims and the API signing them,
-the API refuses the sign. The provider is to retry once and then fail the token request with
-`server_error` (decided on 2026-11-07; seamless-auth-oidc-provider#63 does not retry yet).
+If a role, membership or claim set changes between the provider reading the account and the API
+signing the token, the API refuses the sign with `claims_mismatch`. The provider then reads the
+account again and signs once more. A second mismatch, or an account that has gone, fails the token
+request with:
+
+```json
+{
+  "error": "server_error",
+  "error_description": "the account changed while the token was being issued, try again"
+}
+```
+
+with status `500`. The client can retry the request. No other sign refusal is retried.
 
 Provider claims need `seamless-auth-api` v0.23.0 (seamless-auth-api#585) and the provider release
 with seamless-auth-oidc-provider#63. Neither is released.
