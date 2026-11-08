@@ -111,11 +111,11 @@ page. Where the Seamless Auth column says **Planned**, the feature does not exis
 | Inbound provisioning | CSV import and `seamless migrate`; SCIM server **planned for v1.2** | Profile sourcing from HR apps and directories |
 | Lifecycle automation | **Planned for v2.0** | Lifecycle Management, Workflows, Okta Identity Governance |
 | Policy | Instance sign-in settings, staged sign-in policy, step-up | Global session policy, app sign-in policies, device assurance |
-| Roles and permissions in the token | Organization membership roles today. A permission catalogue, role-to-permission mapping and organization roles in the token **need API v0.23.0, which is not released** | Custom authorization servers with scopes and claims (API Access Management) |
+| Roles and permissions in the token | A permission catalogue mapped to instance and organization roles; tokens carry `permissions`, `org_roles` and `org_permissions` (API v0.23.0 and later) | Custom authorization servers with scopes and claims (API Access Management) |
 | Tokens for your own APIs | Yes, through the OpenID Provider: authorization code with `S256` PKCE, client credentials, device grant (first-party), RFC 9068 JWT access tokens | Custom authorization servers, which need the API Access Management add-on; client credentials; built-in org authorization server in every org |
-| Extensibility | Logic in your own backend, behind the server adapter. Webhooks and login hooks are planned for v0.23 | Inline hooks (synchronous), event hooks (asynchronous, up to 25 per org), Okta Workflows (5 in Starter, 50 in Essentials) |
+| Extensibility | Signed webhooks, `post_login` and `pre_token` login hooks, and static custom claims (API v0.23.0 and later). Other logic lives in your own backend, behind the server adapter | Inline hooks (synchronous), event hooks (asynchronous, up to 25 per org), Okta Workflows (5 in Starter, 50 in Essentials) |
 | Desktop, RADIUS and LDAP access | **Planned for v2.1** (RADIUS, LDAP, forward-auth) | Okta Device Access (Desktop MFA for macOS and Windows), RADIUS agent, LDAP Interface |
-| Audit trail | Append-only, hash-chained auth events; NDJSON export with an integrity check | System Log, 90 days; log streaming to Amazon EventBridge or Splunk Cloud |
+| Audit trail | Append-only, hash-chained auth events; NDJSON export with an integrity check; streaming to a SIEM over OTLP (API v0.23.0 and later) | System Log, 90 days; log streaming to Amazon EventBridge or Splunk Cloud |
 | User export | No bulk export endpoint; self-hosted, the data is in your own Postgres. Paginated admin user list and a passkey coverage report (CSV) | Users API, User Accounts report as CSV; password hashes only in limited cases, by request, for a move to Auth0 |
 | Third-party compliance attestations | None for Seamless Auth itself | FedRAMP High and Moderate, DoD IL5, SOC 1/2/3, ISO/IEC 27001, 27017, 27018, HIPAA, and others on Okta's trust center |
 | Maturity | 0.x, small community | Established commercial product, large community |
@@ -193,7 +193,6 @@ If any of these is a hard requirement today, stay on Okta or choose another prod
   equivalent.
 - **You need desktop MFA, RADIUS or LDAP.** Out of scope today; RADIUS, LDAP and forward-auth are
   planned for v2.1.
-- **You need permissions in the token now.** That needs API v0.23.0, which is not released.
 - **Other apps need a certified identity provider.** The OpenID Provider is new and not OpenID
   certified.
 - **You need a vendor's FedRAMP authorization or SOC 2 report for the auth service itself.** Seamless
@@ -266,12 +265,12 @@ Seamless Auth details (Seamless Auth API v0.22.0, OpenID Provider v0.3.0, checke
 
 - [What Is Seamless Auth?](/start/overview), including [When Seamless Auth Is Not The Right Choice](/start/overview#when-seamless-auth-is-not-the-right-choice)
 - [OpenID Provider](/build/openid-provider) and the [oauth2-proxy guide](/build/oidc-oauth2-proxy)
-- [How To Use Roles And Permissions](/build/roles-and-permissions) (needs API v0.23.0, not released)
+- [How To Use Roles And Permissions](/build/roles-and-permissions), [How To Receive Webhooks](/build/webhooks) and [How To Use Login Hooks And Custom Claims](/build/login-hooks-custom-claims)
 - [How To Use Organizations And Memberships](/build/organizations-memberships)
 - [OAuth Login](/build/oauth-login)
 - [Migrate Users From Another Identity System](/operate/migrate-users)
-- [v0.20 Release Notes](/reference/release-v0-20) (recovery) and [v0.21 Release Notes](/reference/release-v0-21) (OpenID Provider)
+- [v0.20 Release Notes](/reference/release-v0-20) (recovery), [v0.21 Release Notes](/reference/release-v0-21) (OpenID Provider) and [v0.23 Release Notes](/reference/release-v0-23) (roles, permissions and hooks)
 - [Environment Variables](/reference/environment-variables) (`PHISHING_RESISTANT_ONLY`)
 - [Auth Events and Auditing](/understand/authevents)
-- Planned features: the Seamless Auth roadmap milestones v0.23, v1.1, v1.2, v2.0 and v2.1 in [seamless-auth-api](https://github.com/fells-code/seamless-auth-api/milestones)
+- Planned features: the Seamless Auth roadmap milestones v1.0, v1.1, v1.2, v2.0 and v2.1 in [seamless-auth-api](https://github.com/fells-code/seamless-auth-api/milestones)
 - Source: [fells-code on GitHub](https://github.com/fells-code)

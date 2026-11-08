@@ -21,11 +21,10 @@ There are two tools, and most apps need only the second:
 Hook calls are signed the same way as [webhooks](/build/webhooks), so your hook service can prove a
 call came from your Seamless Auth instance.
 
-<Aside type="caution" title="Needs auth API v0.23.0, not released yet">
-Login hooks, custom claims and every route on this page need `seamless-auth-api` v0.23.0. The
-latest release is v0.22.0, which has none of them. The console's **Login hooks** and **Custom
-claims** pages and the CLI's `seamless hooks` and `seamless claims` commands are not released yet,
-and neither are custom claims in OpenID Provider tokens (see [Versions](#versions)).
+<Aside type="note" title="Needs auth API v0.23.0">
+Login hooks, custom claims and every route on this page need `seamless-auth-api` v0.23.0 or later.
+Custom claims in OpenID Provider tokens also need the provider at 0.4.0 (see
+[Versions](#versions)).
 </Aside>
 
 ---
@@ -180,9 +179,9 @@ only in production, never the API's own host, and link-local addresses never.
 
 **Console:** the **Login hooks** page (`/login-hooks` in `seamless-auth-admin-dashboard`) has one
 section per trigger with the URL, timeout, failure mode, a test call, secret rotation and the
-invocation log. It is not in a console release yet (seamless-auth-admin-dashboard#343).
+invocation log. It is in the console from v0.14.0.
 
-**CLI:** not in a CLI release yet (seamless-cli#359). With it:
+**CLI:** `seamless-cli` 0.30.0 and later:
 
 ```bash
 seamless hooks set post_login --url https://hooks.example.com/seamless   # prints the secret once
@@ -340,10 +339,10 @@ both set, whatever order the roles were granted in.
 
 **Console:** the **Custom claims** page (`/custom-claims` in `seamless-auth-admin-dashboard`)
 edits each source's set as JSON, shows the reserved names and the budget the API reports, and
-refuses a reserved name, nesting past depth 3 or an oversized set before step-up. It is not in a
-console release yet (seamless-auth-admin-dashboard#343).
+refuses a reserved name, nesting past depth 3 or an oversized set before step-up. It is in the
+console from v0.14.0.
 
-**CLI:** not in a CLI release yet (seamless-cli#359). `claims set` replaces the whole set and asks
+**CLI:** `seamless-cli` 0.30.0 and later. `claims set` replaces the whole set and asks
 before removing a claim:
 
 ```bash
@@ -562,11 +561,11 @@ reads `plan` from the access token instead of `https://example.com/plan`.
 
 | Component                         | First version                 | Status |
 | --------------------------------- | ----------------------------- | ------ |
-| `seamless-auth-api`               | v0.23.0                       | Not released. v0.22.0 is the latest |
+| `seamless-auth-api`               | v0.23.0                       | Released |
 | `@seamless-auth/types`            | 0.39.0                        | Published |
-| OpenID Provider (`permissions` and `custom_claims` scopes) | The release with seamless-auth-oidc-provider#63 | Not released |
-| `seamless-auth-admin-dashboard`   | The release after v0.13.0 (Login hooks and Custom claims pages) | Not released (seamless-auth-admin-dashboard#343) |
-| `seamless-cli`                    | The release after 0.29.0 (`seamless hooks`, `seamless claims`) | Not released (seamless-cli#359) |
+| OpenID Provider (`permissions` and `custom_claims` scopes) | 0.4.0 | Published |
+| `seamless-auth-admin-dashboard`   | v0.14.0 (Login hooks and Custom claims pages) | Released |
+| `seamless-cli`                    | 0.30.0 (`seamless hooks`, `seamless claims`) | Published |
 
 ---
 

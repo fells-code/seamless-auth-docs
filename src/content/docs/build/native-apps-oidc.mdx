@@ -19,11 +19,10 @@ the registry and the token model. This page covers what is different for native 
 
 <Aside type="note" title="Status">
   Sign-in ships in v0.21 with the OpenID Provider, including sign-out and the device authorization
-  grant for CLIs on machines without a browser. Part of [An App With Its Own
-  Backend](#an-app-with-its-own-backend) is not released: account notices through a client link need
-  Seamless Auth API v0.23.0, which is not published yet. See [Versions](#versions). So does `seamless
-  profile login` through the provider, described in [A Runnable CLI
-  Example](#a-runnable-cli-example).
+  grant for CLIs on machines without a browser. Account notices through a client link, in [An App
+  With Its Own Backend](#an-app-with-its-own-backend), need Seamless Auth API v0.23.0. See
+  [Versions](#versions). So does `seamless profile login` through the provider, described in [A
+  Runnable CLI Example](#a-runnable-cli-example).
 </Aside>
 
 ---
@@ -299,7 +298,7 @@ where a feature first shipped sooner.
 | Public client, loopback redirect, PKCE, API tokens, refresh, revocation   | The provider, from v0.21                                                                                                   | Edge image `seamless-auth-oidc-provider:v0.3.0`                                                  |
 | `acr`, `amr` and `auth_time` on an access token for a resource            | `@seamless-auth/oidc-provider` 0.3.0                                                                                       | Edge image `v0.3.0`                                                                              |
 | Verify-only guards (`createResourceServer`)                               | `@seamless-auth/express` 0.23.0, with the same guards in the Fastify, Next.js, Go, Python and Rust adapters                | `@seamless-auth/express` 0.24.0                                                                  |
-| Client links and `clientId` on account notices                            | **Seamless Auth API v0.23.0, which is not published.** API v0.22.0 has no link routes.                                     | The API built from source at [`bcab4d1`](https://github.com/fells-code/seamless-auth-api/commit/bcab4d1b62ebb1f14e9b3eda8297ede01e38962f) |
+| Client links and `clientId` on account notices                            | Seamless Auth API v0.23.0. API v0.22.0 has no link routes.                                                                           | The API built from source at [`bcab4d1`](https://github.com/fells-code/seamless-auth-api/commit/bcab4d1b62ebb1f14e9b3eda8297ede01e38962f) |
 
 ### Register Three Records
 
@@ -384,7 +383,7 @@ nobody. A link fixes that. The backend gets a client credentials token with its 
 the desktop app in `clientId`. The template names the app the user knows, not the backend.
 
 <Aside type="caution" title="Needs API v0.23.0">
-  `clientId` and the link routes are not in a published API yet. On API v0.22.0, an application can
+  `clientId` and the link routes are in API v0.23.0 and later. On API v0.22.0, an application can
   only send to users who hold a grant with that same application. See
   [Account Notices](/build/openid-provider#account-notices-from-an-application).
 </Aside>
@@ -462,11 +461,10 @@ keychain, or a device code that expires. The README lists exactly what it does a
 
 ### Signing In To Seamless With The Seamless CLI
 
-<Aside type="caution" title="Merged, not released">
-  What this section describes is merged in
-  [seamless-cli#349](https://github.com/fells-code/seamless-cli/pull/349), but no published
-  `seamless-cli` has it yet, and it needs Seamless Auth API v0.23.0 and the provider edge. API v0.23.0
-  is not published. The published CLI (0.27.2) signs in to an instance with an email code.
+<Aside type="note" title="Needs CLI 0.28.0 and API v0.23.0">
+  What this section describes is in `seamless-cli` 0.28.0 and later, and needs Seamless Auth API
+  v0.23.0 and the provider edge. With no provider configured, `seamless profile login` keeps the
+  email code.
 </Aside>
 
 `seamless profile login` follows the same rules for one more purpose: an operator signing in to an

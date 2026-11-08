@@ -15,11 +15,10 @@ a catalogue of permissions, maps each role to a set of them, and the auth API pu
 permissions in the access token. Your backend checks them with `requirePermission`, and your React
 app can read them to show or hide UI.
 
-<Aside type="caution" title="Needs auth API v0.23.0, not released yet">
+<Aside type="note" title="Needs auth API v0.23.0">
 Permissions, organization roles in the token, and every route on this page need
-`seamless-auth-api` v0.23.0. The latest release is v0.22.0, which has none of them. The adapter
-guards are already published (see [Versions](#versions)), and against API v0.22 they deny every
-request, because no token carries permissions. Nothing fails open.
+`seamless-auth-api` v0.23.0 or later (see [Versions](#versions)). Against an older API the adapter
+guards deny every request, because no token carries permissions. Nothing fails open.
 </Aside>
 
 ---
@@ -530,7 +529,7 @@ none: every check answers `false`, and `permissions`, `organizationRoles` and
 
 | Component                       | First version with permissions | Status |
 | ------------------------------- | ------------------------------ | ------ |
-| `seamless-auth-api`             | v0.23.0                        | Not released. v0.22.0 is the latest |
+| `seamless-auth-api`             | v0.23.0                        | Released |
 | `@seamless-auth/core`, `express`| 0.25.0                         | Published |
 | `@seamless-auth/fastify`        | 0.16.0                         | Published |
 | `@seamless-auth/nextjs`         | 0.9.0                          | Published |
