@@ -148,6 +148,7 @@ Check each of these before you upgrade the auth API.
 | `PATCH /organizations/:id/members/:userId` needs step-up, and only an owner or an instance `admin:write` can grant or remove `owner` | Organization admins | Organization admins step up first. They can no longer make themselves owner |
 | Provider tokens' `org_id` is the active organization | Provider clients that read `org_id` | Read it as the active organization, or switch organization first |
 | Applications with a `backchannel_logout_uri` get logout tokens for one-app logouts too | Provider clients with back-channel logout | Treat it like a full logout for that `sid` |
+| The Express, Fastify and Next.js adapters (0.25 and later) answer 415 to a body-less `POST` or `DELETE` on the auth routes with no JSON content type and no `x-seamless-auth-transport` header | Browser apps whose lockfile holds `@seamless-auth/client` 0.8.2 or earlier, and clients of your own | Update to `@seamless-auth/client` 0.8.3 or later (`npm ls @seamless-auth/client`). Otherwise passkey step-up, authenticator app enrollment, organization switch and account deletion are refused |
 
 ---
 
@@ -167,7 +168,8 @@ dashboard and the CLI. Clients need no change.
 3. **Upgrade the OpenID Provider** to 0.4.0, if you run it. It speaks the same `/oidc/*` contract as
    API 0.22.0 and 0.23.0, but needs 0.23.0 for the new scopes.
 4. **Upgrade the server adapters**: `@seamless-auth/express` 0.26.0, `@seamless-auth/fastify`
-   0.17.0, `@seamless-auth/nextjs` 0.10.0, or the Go, Python or Rust adapter 0.6.0.
+   0.17.0, `@seamless-auth/nextjs` 0.10.0, or the Go, Python or Rust adapter 0.6.0. With a Node adapter,
+   check that the browser app has `@seamless-auth/client` 0.8.3 or later.
 5. **Upgrade the dashboard** to 0.14.0 if you deploy it separately, and the **CLI** to 0.30.0.
 6. **Define permissions and map roles** before you add guards. A guard on a permission no role
    grants refuses everyone.
