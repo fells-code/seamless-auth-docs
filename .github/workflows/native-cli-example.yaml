@@ -20,9 +20,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # The recipe builds the API from source until API v0.23.0 is published
-  # (fells-code/seamless-auth-api#561), though this example uses nothing new in it.
-  RECIPE_REF: 30be59b557ad109a93aff68695f0fb21ff2ef84d
+  # The recipe runs the published API v0.23.0 and edge v0.4.0 images.
+  RECIPE_REF: c0fd8da32b672da01b81b714d967ee1ddd1deae3
 
 jobs:
   example:
