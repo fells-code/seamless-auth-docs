@@ -525,11 +525,9 @@ variable.
 
 ### Signing in through the OpenID Provider
 
-<Aside type="caution" title="Merged, not released">
-  The flags below are merged in
-  [seamless-cli#349](https://github.com/fells-code/seamless-cli/pull/349), and are not in a published
-  `seamless-cli`. The latest published version is 0.27.2, whose `profile login` signs in with an email
-  code. They also need Seamless Auth API v0.23.0, which is not published, and the provider edge.
+<Aside type="note" title="Needs CLI 0.28.0 and API v0.23.0">
+  The flags below are in `seamless-cli` 0.28.0 and later. They need Seamless Auth API v0.23.0 and the
+  provider edge. Before 0.28.0, `profile login` signs in with an email code.
 </Aside>
 
 When the profile has a provider, `profile login` signs in through it and exchanges the sign-in at

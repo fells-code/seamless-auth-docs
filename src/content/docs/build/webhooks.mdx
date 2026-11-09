@@ -16,12 +16,10 @@ scheme, so any Standard Webhooks verifier checks them, and the server adapters s
 Events are built from the committed audit log, delivery is retried for about 42 hours, and every
 attempt is in a delivery log you can read and redeliver from.
 
-<Aside type="caution" title="Needs auth API v0.23.0, not released yet">
-Webhooks and every route on this page need `seamless-auth-api` v0.23.0. The latest release is
-v0.22.0, which has none of them. `verifyWebhook` and the adapter helpers are not published yet,
-and neither are the console's **Webhooks** page or the CLI's `seamless webhooks` commands (see
-[Versions](#versions)). The hand-written verifiers for Go, Python and Rust work today, because
-they only need the language's standard crypto.
+<Aside type="note" title="Needs auth API v0.23.0">
+Webhooks and every route on this page need `seamless-auth-api` v0.23.0 or later, and
+`verifyWebhook` needs `@seamless-auth/core` 0.26.0 (see [Versions](#versions)). The hand-written
+verifiers for Go, Python and Rust need only the language's standard crypto.
 </Aside>
 
 ---
@@ -185,12 +183,12 @@ and when it is rotated. It cannot be read back.
 The console's **Webhooks** page (`/webhooks` in `seamless-auth-admin-dashboard`) creates, edits,
 turns off and on, and deletes endpoints, shows why the API turned one off, rotates its secret,
 sends a test event, and has the delivery log with a dead letter view and redeliver. Every write,
-including a test and a redelivery, asks for step-up first. The page is not in a console release
-yet (seamless-auth-admin-dashboard#343). Against an API older than v0.23 it says it needs v0.23.
+including a test and a redelivery, asks for step-up first. It is in the console from v0.14.0.
+Against an API older than v0.23 it says it needs v0.23.
 
 ### With The CLI
 
-The `seamless webhooks` commands are not in a CLI release yet (seamless-cli#359). With them:
+The `seamless webhooks` commands are in `seamless-cli` 0.30.0 and later:
 
 ```bash
 seamless webhooks create https://app.example.com/webhooks/seamless \
@@ -733,11 +731,11 @@ once, so a receiver still holding only that one starts failing. The CLI asks bef
 
 | Component                         | First version with webhooks | Status |
 | --------------------------------- | --------------------------- | ------ |
-| `seamless-auth-api`               | v0.23.0                     | Not released. v0.22.0 is the latest |
+| `seamless-auth-api`               | v0.23.0                     | Released |
 | `@seamless-auth/types`            | 0.39.0                      | Published |
-| `@seamless-auth/core`, `express`, `fastify`, `nextjs` (`verifyWebhook` and helpers) | The next minor after core and express 0.25.0, fastify 0.16.0, nextjs 0.9.0 | Not published (seamless-auth-server#279) |
-| `seamless-auth-admin-dashboard`   | The release after v0.13.0 (Webhooks page) | Not released (seamless-auth-admin-dashboard#343) |
-| `seamless-cli`                    | The release after 0.29.0 (`seamless webhooks`) | Not released (seamless-cli#359) |
+| `@seamless-auth/core`, `express`, `fastify`, `nextjs` (`verifyWebhook` and helpers) | core and express 0.26.0, fastify 0.17.0, nextjs 0.10.0 | Published |
+| `seamless-auth-admin-dashboard`   | v0.14.0 (Webhooks page)     | Released |
+| `seamless-cli`                    | 0.30.0 (`seamless webhooks`) | Published |
 | Go, Python, Rust                  | No adapter helper. Use the verifiers above | Standard crypto only |
 
 ---

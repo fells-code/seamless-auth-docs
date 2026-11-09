@@ -15,11 +15,10 @@ an OpenTelemetry Collector or any OTLP endpoint, or, from v0.23.1, RFC 5424 sysl
 the event's `seamless-auth-events/1` line, the same line the export writes, with its `seq`,
 `prevHash`, `hash` and `payload`, so the hash chain verifies from the SIEM's copy alone.
 
-<Aside type="caution" title="Needs auth API v0.23.0, not released yet">
-Audit sinks and every route on this page need `seamless-auth-api` v0.23.0. The latest release is
-v0.22.0, which has none of them. The console's **Audit streaming** page and the CLI's
-`seamless audit-sinks` commands are not released yet either (see [Versions](#versions)). The
-export and the integrity check this page also uses are in v0.19.1 and later.
+<Aside type="note" title="Needs auth API v0.23.0">
+Audit sinks and every route on this page need `seamless-auth-api` v0.23.0 or later (see
+[Versions](#versions)). The export and the integrity check this page also uses are in v0.19.1 and
+later.
 </Aside>
 
 <Aside type="note" title="Syslog sinks arrive in v0.23.1">
@@ -106,12 +105,11 @@ be sent again.
 The console's **Audit streaming** page (`/audit-streaming` in `seamless-auth-admin-dashboard`)
 creates, edits, turns off and on, tests and deletes sinks, takes credentials only as env var names
 (a value typed in their place is refused before anything is sent), and shows each sink's lag, last
-delivery and last failure, refreshed every 30 seconds. It is not in a console release yet
-(seamless-auth-admin-dashboard#343).
+delivery and last failure, refreshed every 30 seconds. It is in the console from v0.14.0.
 
 ### With The CLI
 
-The `seamless audit-sinks` commands are not in a CLI release yet (seamless-cli#359). With them:
+The `seamless audit-sinks` commands are in `seamless-cli` 0.30.0 and later:
 
 ```bash
 seamless audit-sinks create collector --kind otlp --endpoint https://otel.internal:4318
@@ -503,12 +501,12 @@ Saved as `export.ndjson`, it prints
 
 | Component                         | First version                 | Status |
 | --------------------------------- | ----------------------------- | ------ |
-| `seamless-auth-api` (audit sinks) | v0.23.0                       | Not released. v0.22.0 is the latest |
+| `seamless-auth-api` (audit sinks) | v0.23.0                       | Released |
 | `seamless-auth-api` (syslog sinks) | v0.23.1                     | Not released. Waits on the IANA enterprise number (seamless-auth-api#586) |
 | `seamless-auth-api` (export, integrity check, hash chain) | v0.19.1 | Released |
 | `@seamless-auth/types`            | 0.39.0                        | Published |
-| `seamless-auth-admin-dashboard`   | The release after v0.13.0 (Audit streaming page) | Not released (seamless-auth-admin-dashboard#343) |
-| `seamless-cli`                    | The release after 0.29.0 (`seamless audit-sinks`) | Not released (seamless-cli#359) |
+| `seamless-auth-admin-dashboard`   | v0.14.0 (Audit streaming page) | Released |
+| `seamless-cli`                    | 0.30.0 (`seamless audit-sinks`) | Published |
 
 ---
 
