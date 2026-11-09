@@ -1,0 +1,188 @@
+---
+title: 'v0.23 Release Notes'
+description: 'What changed in Seamless Auth v0.23: roles and permissions in tokens, organization roles, custom claims, login hooks, signed webhooks, SIEM streaming, native app sign-in, security fixes, breaking changes and upgrade steps.'
+sidebar:
+  order: 7
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+v0.23 makes Seamless Auth answer "what may this user do" as well as "who is this". Roles grant
+permissions, tokens carry them per organization, every adapter can guard on them, and the auth
+server calls out to your systems: signed webhooks, login hooks that can deny or add claims, static
+custom claims, and audit streaming to a SIEM. It also finishes v0.21's native app work and the
+fixes from its security review.
+
+It shipped as auth API 0.23.0 and OpenID Provider 0.4.0, with releases of the shared types (0.40.0),
+server adapters (core and Express 0.26.0, Fastify 0.17.0, Next.js 0.10.0), the admin dashboard
+(0.14.0) and the CLI (0.30.0). The Go, Python and Rust adapters' permission guards shipped in 0.6.0.
+The versions that go together are in the
+[Compatibility Matrix](/build/ecosystem#compatibility-matrix). Full details are in each package's
+changelog and GitHub release.
+
+<Aside type="caution" title="Read the breaking changes first">
+  Most of v0.23 is additive, but a few changes can refuse requests that used to pass. They are
+  listed in [Breaking Changes](#breaking-changes), each with what to check before you upgrade.
+</Aside>
+
+---
+
+## Roles And Permissions
+
+- **Permissions in the access token.** An admin defines a permission catalogue and maps instance
+  roles to permissions. Access tokens carry a `permissions` claim, matched exactly with no
+  wildcards. See [How To Use Roles And Permissions](/build/roles-and-permissions).
+- **Organization roles.** Organization roles are a catalogue now, seeded with `owner`, `admin` and
+  `member` plus every value memberships already hold. Inside an active organization, tokens carry
+  `org_id`, `org_roles` and `org_permissions`. Organization roles never appear in `roles`, so a
+  guard on `admin` does not pass for an organization admin.
+- **Guards in every adapter.** `requirePermission` in `@seamless-auth/express`, and the matching
+  guards in Fastify, Next.js, Go, Python and Rust, check `permissions` and `org_permissions`.
+  `usePermissions()` in `@seamless-auth/react` 0.20.0 gates UI. Guards deny every request against an auth API
+  older than 0.23.0, since no token carries permissions there.
+- **A token budget.** Permission and custom claims share 1 KiB
+  (`AUTHORIZATION_CLAIMS_BUDGET_BYTES`), which keeps an adapter's session cookie under the browser
+  limit. Over it, the token carries `permissions_omitted: true` and a guard reads
+  `GET /users/me/permissions` instead.
+- **Admin tools.** The console's Roles page, and `seamless permissions` and `seamless roles` in
+  the CLI.
+
+## Extensibility
+
+- **Signed webhooks.** Endpoints under `/admin/webhooks`, signed with the Standard Webhooks scheme,
+  retried eight times over about 42 hours and then dead-lettered, with redelivery. Verify them with
+  `verifyWebhook` from `@seamless-auth/core/webhook`, or any Standard Webhooks library. See
+  [How To Receive Webhooks](/build/webhooks).
+- **Login hooks.** A `post_login` hook runs once the factor is proven and may deny the sign-in. A
+  `pre_token` hook runs for a new session and on organization switch, and may add claims or deny.
+  Each hook fails open or closed, as you choose. Break-glass administrators and recovery sessions
+  never call a hook.
+- **Custom claims.** Static claims per instance role, organization role or OpenID Provider client,
+  under `/admin/custom-claims`. See
+  [How To Use Login Hooks And Custom Claims](/build/login-hooks-custom-claims), which also maps
+  Auth0 Actions to them.
+- **SIEM streaming.** Audit sinks under `/admin/audit-sinks` stream every audit event over
+  OTLP/HTTP, carrying the hash chain so it verifies from the SIEM's copy. Audit retention never
+  deletes an event a sink has yet to deliver. See
+  [How To Stream Audit Events To A SIEM](/operate/stream-audit-events-siem).
+- **One set of reachability rules.** Webhooks, hooks and sinks refuse link-local, multicast and the
+  API's own host, never follow redirects, and in production refuse private addresses unless the
+  host is listed in `CALLOUT_PRIVATE_HOSTS`.
+- **Admin tools.** The console groups Webhooks, Login hooks and Audit streaming under
+  Integrations. The CLI adds `seamless webhooks`, `seamless hooks`, `seamless claims` and
+  `seamless audit-sinks`.
+
+<Aside type="note" title="Syslog arrives in 0.23.1">
+  Auth API 0.23.0 streams audit events over OTLP only and refuses a syslog sink with a 400. Syslog
+  records carry a structured data ID that needs Fells Code's IANA enterprise number, and changing
+  it after you write parse rules would break them, so syslog ships in 0.23.1 with the final value.
+  An OpenTelemetry Collector can forward to syslog in the meantime.
+</Aside>
+
+## OpenID Provider
+
+- **Roles, permissions and custom claims in provider tokens.** New scopes `permissions` and
+  `custom_claims` put them in ID tokens, `/userinfo` and RFC 9068 access tokens. The API signs only
+  values it computes again, so the edge cannot add or change one.
+- **`org_id` is the active organization.** For provider tokens it now names the session's active
+  organization, not the user's oldest membership.
+- **Key rotation without a restart.** The edge re-reads the signing keys every five minutes, and at
+  once when the API refuses a key as unknown.
+- **`TRUST_PROXY` takes a hop count or addresses**, so the edge forwards the right client IP behind
+  more than one proxy.
+- **Back-channel logout for one app.** An application whose grant ends while the first-party
+  session goes on now gets a logout token too.
+- **Device codes.** A client polling an expired device code gets `expired_token`, as RFC 8628 says.
+- **Hosted pages** meet WCAG 2.2 AA with the default palette, and errors the provider cannot send
+  back to the app render on them with your branding.
+
+## Native And Desktop Apps
+
+- **Session exchange.** A first-party native client that signs in through the OpenID Provider can
+  exchange the sign-in once for a first-party session of its own at `POST /sessions/exchange`, and
+  reach the admin API with it. A device-grant session needs a fresh step-up before admin and
+  organization routes, reads included.
+- **CLI sign-in through the provider.** `seamless profile login` opens the system browser with a
+  loopback redirect, or uses the device grant with `--device`, which brings passkey sign-in to the
+  CLI. An instance can advertise the provider and the CLI's client in
+  `GET /system-config/public` (`oidc_cli_client_id`).
+- **A confirmation for native clients.** The hosted pages ask the user to confirm "Continue to" the app for every native
+  client request, so a program listening on a loopback port cannot get a code without a click.
+
+## Security Fixes
+
+From the post-v0.21 security review:
+
+- A passkey's backup eligibility must match the one stored at registration, and hardware assurance
+  (`acr=phrh`, `amr=hwk`) comes from the registered credential.
+- Application account notice text can no longer carry its own links, and the attribution is the
+  first line.
+- `third_party_clients_enabled` gates existing third-party clients, not only new ones.
+- External delivery needs a service token with subject `seamless-auth-external-delivery`.
+- Every API response is `Cache-Control: no-store` unless its route sets its own caching.
+- Provider requests go through the address guard in every mode.
+- The per-user notice limit folds the user id to lower case before counting.
+- The edge no longer leaves a grant behind when finishing a login fails, and `/session/end` no
+  longer signs a browser out of the hosted pages when there was no provider sign-in.
+
+Sharing rate limit counters across instances moved to v1.0
+([seamless-auth-api#581](https://github.com/fells-code/seamless-auth-api/issues/581)). Until then each
+instance keeps its own counters, so several instances allow several times the budget, as
+[Security](/understand/security) describes.
+
+---
+
+## Breaking Changes
+
+Check each of these before you upgrade the auth API.
+
+| Change | Who it affects | What to do |
+| ------ | -------------- | ---------- |
+| Sign-in completion and `POST /organizations/:id/switch` can answer 403 `login_denied` or 503 `login_hook_unavailable` | Only instances that configure a login hook | Show the 403 `message` when present, and offer a retry for the 503 |
+| A passkey whose backup eligibility changed since registration is refused with 401 | Rare. Usually a credential that moved between a device-bound and a synced store | The user signs in with another factor and registers the passkey again |
+| `acr=phrh` and `amr=hwk` need attestation verified against the FIDO Metadata Service | Deployments on the default `none` attestation, and credentials registered before attestation was recorded | They now get `phr` and `swk`. Relax any guard that required `phrh`, or turn on attestation |
+| `third_party_clients_enabled` off now stops existing third-party clients | Instances that turned the flag off after registering third-party clients | Turn the flag back on, or mark those applications first-party |
+| External delivery needs the `seamless-auth-external-delivery` service token subject | Only callers that mint their own service token for external delivery | Set `sub` to `seamless-auth-external-delivery`. Current adapters already do |
+| Account notice `text` with a URL, domain or email address is refused with 400 | Applications calling `POST /applications/account-notices` | Put the link in `actionUrl`. Adapters rendering notices receive the attribution as the first line |
+| Assigning an organization role outside the catalogue answers 400 | Admin tools that assign free-form roles | Create the role first. Existing memberships are seeded into the catalogue |
+| `PATCH /organizations/:id/members/:userId` needs step-up, and only an owner or an instance `admin:write` can grant or remove `owner` | Organization admins | Organization admins step up first. They can no longer make themselves owner |
+| Provider tokens' `org_id` is the active organization | Provider clients that read `org_id` | Read it as the active organization, or switch organization first |
+| Applications with a `backchannel_logout_uri` get logout tokens for one-app logouts too | Provider clients with back-channel logout | Treat it like a full logout for that `sid` |
+| The Express, Fastify and Next.js adapters (0.25 and later) answer 415 to a body-less `POST` or `DELETE` on the auth routes with no JSON content type and no `x-seamless-auth-transport` header | Browser apps whose lockfile holds `@seamless-auth/client` 0.8.2 or earlier, and clients of your own | Update to `@seamless-auth/client` 0.8.3 or later (`npm ls @seamless-auth/client`). Otherwise passkey step-up, authenticator app enrollment, organization switch and account deletion are refused |
+
+---
+
+## Upgrading
+
+Upgrade the auth API first, then the OpenID Provider, the server adapters, the
+dashboard and the CLI. Clients need no change.
+
+1. **Upgrade the auth API** to 0.23.0. It runs eight additive migrations on start unless
+   `RUN_MIGRATIONS=false`: application links, session exchange, permissions, organization roles,
+   webhooks, audit sinks, login hooks and custom claims. If you set `RUN_MIGRATIONS=false`, run them
+   first, because the server refuses to start while any migration is pending. No setting is
+   required to upgrade.
+2. **Set `CALLOUT_SECRET_ENCRYPTION_KEY`** before you create a webhook or a login hook in
+   production, which requires it once one exists. It encrypts their stored signing secrets. Credentials for audit sinks
+   are env vars ending `_AUDIT_SINK_SECRET`, named by the sink and never stored.
+3. **Upgrade the OpenID Provider** to 0.4.0, if you run it. It speaks the same `/oidc/*` contract as
+   API 0.22.0 and 0.23.0, but needs 0.23.0 for the new scopes.
+4. **Upgrade the server adapters**: `@seamless-auth/express` 0.26.0, `@seamless-auth/fastify`
+   0.17.0, `@seamless-auth/nextjs` 0.10.0, or the Go, Python or Rust adapter 0.6.0. With a Node adapter,
+   check that the browser app has `@seamless-auth/client` 0.8.3 or later.
+5. **Upgrade the dashboard** to 0.14.0 if you deploy it separately, and the **CLI** to 0.30.0.
+6. **Define permissions and map roles** before you add guards. A guard on a permission no role
+   grants refuses everyone.
+
+## Not In v0.23
+
+- Syslog audit sinks, in 0.23.1
+  ([seamless-auth-api#586](https://github.com/fells-code/seamless-auth-api/issues/586)).
+- Rate limit counters are per instance
+  ([seamless-auth-api#581](https://github.com/fells-code/seamless-auth-api/issues/581)).
+- The server adapter's cookie holds the token budget at 1 KiB. A larger budget waits on the cookie
+  change in [seamless-auth-server#278](https://github.com/fells-code/seamless-auth-server/issues/278),
+  planned for v1.0.
+- OpenID certification is not done. The provider passes the OpenID conformance suite in CI, and
+  the certification fee waiver is pending
+  ([seamless-auth-api#412](https://github.com/fells-code/seamless-auth-api/issues/412)).
