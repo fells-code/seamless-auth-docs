@@ -433,10 +433,10 @@ it does and does not check.
 is a small standalone CLI that does the client side of this page against a local instance: `login`
 through the system browser with a loopback redirect and PKCE `S256`, `login --device` with the device
 grant, refresh, and `logout` with revocation. It is a public client with no secret, and its tokens
-are in the OS keychain with no file fallback. It uses nothing new in API v0.23.0, but the
-[local recipe](https://github.com/fells-code/seamless-auth-oidc-provider/tree/main/local) it runs on
-builds that unpublished API from source, for its seed's client links, so it has not been run against
-a published API.
+are in the OS keychain with no file fallback. It uses nothing new in API v0.23.0. It was run on the
+[local recipe](https://github.com/fells-code/seamless-auth-oidc-provider/tree/main/local) while that
+recipe built the API from source, before v0.23.0 was published. The recipe now runs the published
+API v0.23.0 and provider v0.4.1 images.
 
 A CLI differs from a desktop app in three ways, and each one is easy to get wrong:
 

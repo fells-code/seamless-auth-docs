@@ -155,7 +155,7 @@ Seamless Auth does today.
 | MFA | TOTP and passkey step-up | Email OTP, SMS (add-on), TOTP, passkeys; enforced with Conditional Access |
 | Sign-in UI | Built-in auth routes in your app (React, Angular, Vue, Svelte), headless, or the OpenID Provider's hosted pages | Hosted user flows with branding; native authentication through MSAL for Android, iOS, macOS and web (local accounts only) |
 | Custom domain | Your own domain, always | Custom URL domains through a reverse proxy such as Azure Front Door, billed separately |
-| Hooks | Your own backend | Custom authentication extensions on token issuance, attribute collection and OTP send |
+| Hooks | Signed webhooks, `post_login` and `pre_token` login hooks, and static custom claims (API v0.23.0 and later) | Custom authentication extensions on token issuance, attribute collection and OTP send |
 | Machine-to-machine | Client credentials through the OpenID Provider | M2M Premium add-on |
 | Log retention | Your own Postgres, as long as you keep it | 7 days on the Basic plan |
 | Pricing model | Free to self-host; managed plans in the portal | Free for the first 50,000 MAU, then $0.03 per MAU; SMS, M2M and Go-Local are paid add-ons; admins in an external tenant count toward MAU |

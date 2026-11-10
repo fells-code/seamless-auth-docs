@@ -2,7 +2,7 @@
 title: 'v0.23 Release Notes'
 description: 'What changed in Seamless Auth v0.23: roles and permissions in tokens, organization roles, custom claims, login hooks, signed webhooks, SIEM streaming, native app sign-in, security fixes, breaking changes and upgrade steps.'
 sidebar:
-  order: 7
+  order: 6
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -155,7 +155,9 @@ Check each of these before you upgrade the auth API.
 ## Upgrading
 
 Upgrade the auth API first, then the OpenID Provider, the server adapters, the
-dashboard and the CLI. Clients need no change.
+dashboard and the CLI. Clients need no change. Coming from v0.21, read the
+[v0.22 Release Notes](/reference/release-v0-22) first: provider sign-ins made before the upgrade
+sign in again.
 
 1. **Upgrade the auth API** to 0.23.0. It runs eight additive migrations on start unless
    `RUN_MIGRATIONS=false`: application links, session exchange, permissions, organization roles,

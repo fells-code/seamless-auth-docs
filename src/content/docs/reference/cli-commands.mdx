@@ -577,9 +577,8 @@ subcommands and flags.
 public native client, which is what lets that client sign in the CLI with
 [`profile login`](#signing-in-through-the-openid-provider). `clients get` shows the setting. Turning it
 off revokes the sessions the client exchanged for, including the one running the command if it signed
-in through that client. These flags are merged in
-[seamless-cli#349](https://github.com/fells-code/seamless-cli/pull/349), and are not in a published
-`seamless-cli` yet. They need Seamless Auth API v0.23.0, which is not published.
+in through that client. These flags are in `seamless-cli` 0.30.0 and later, and need Seamless Auth
+API v0.23.0 or later.
 
 ```bash
 seamless clients create "Seamless CLI" --public --first-party --auth-method none \

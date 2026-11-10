@@ -133,8 +133,8 @@ When you add someone who belongs to more than one organization, give the members
 
 ## Step 1: Define Permissions And Map Roles
 
-You can do this in the admin console or through the admin API. The CLI does not manage permissions
-or role mappings yet.
+You can do this in the admin console, through the admin API, or with `seamless permissions` and
+`seamless roles` in `seamless-cli` 0.30.0 and later.
 
 ### In The Admin Console
 
@@ -465,9 +465,9 @@ router, it refuses everyone.
 
 The verify-only guards for OpenID Provider tokens (`createResourceServer` in Express and Fastify,
 the resource server in Next.js, `Verifier` in Go, `ResourceServer` in Python, verify-only mode in
-Rust) have a permission guard with the same rules, but **it denies every provider token today**.
-Provider tokens do not carry these claims yet
-([seamless-auth-oidc-provider#47](https://github.com/fells-code/seamless-auth-oidc-provider/issues/47)).
+Rust) have a permission guard with the same rules. A user's provider access token carries these
+claims from `seamless-auth-oidc-provider` 0.4.0 with API 0.23.0, when the application asked for the
+`permissions` scope. Without that scope, or against older versions, the guard denies the token.
 
 ---
 
@@ -537,7 +537,7 @@ none: every check answers `false`, and `permissions`, `organizationRoles` and
 | `@seamless-auth/react`          | 0.20.0                         | Published |
 | Go, Python, Rust adapters       | 0.6.0 (`v0.6.0` for Go)        | Published |
 | `seamless-auth-admin-dashboard` | v0.13.0 (Roles page)           | Published |
-| `seamless-cli`                  | None                           | No permission or role mapping commands |
+| `seamless-cli`                  | 0.30.0 (`seamless permissions`, `seamless roles`) | Published |
 
 ---
 

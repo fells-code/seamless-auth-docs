@@ -1,0 +1,59 @@
+---
+title: 'v0.22 Release Notes'
+description: 'What changed in Seamless Auth v0.22: OpenID Provider sessions bound to their clients, provider contract version 3, step-up claims in provider access tokens, breaking changes and upgrade steps.'
+sidebar:
+  order: 7
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+v0.22 is a small release for the OpenID Provider. The auth API now decides which sessions a
+provider sign-in was made on, and a user's access token for your API carries how the user signed
+in. It shipped as auth API 0.22.0 on 2026-11-02 and OpenID Provider 0.3.0 the same day. The
+versions that go together are in the [Compatibility Matrix](/build/ecosystem#compatibility-matrix).
+Full details are in each package's changelog and GitHub release.
+
+<Aside type="caution" title="Upgrade the API and the OpenID Provider together">
+  API 0.22.0 speaks provider contract version 3, and the edge refuses to start against an API that
+  speaks a different version. If you run the OpenID Provider, deploy auth API 0.22.0 and provider
+  0.3.0 together. Instances that do not run the provider are not affected.
+</Aside>
+
+---
+
+## OpenID Provider
+
+- **Sessions bound to their clients.** The provider binds a session to a client with
+  `POST /oidc/sessions/:id/bind`, presenting the user's own access token for that session. The API
+  answers account and auth context lookups, signs provider tokens, and accepts a session revoke
+  only for bound sessions. Account notices need the same binding.
+- **Provider contract version 3.** The binding raises the contract between the API and the edge,
+  so `seamless-auth-oidc-provider` must be upgraded with the API.
+- **Step-up claims in access tokens (provider 0.3.0).** A user's RFC 9068 access token for a
+  resource carries the session's `acr`, `amr` and `auth_time`, the same values the ID token states,
+  and introspection returns them. A resource server can require a recent phishing-resistant sign-in
+  from the token alone (RFC 9470), and a refreshed token shows a step-up.
+- **No `amr` or `auth_time` on device-flow tokens.** They already carried no `acr`. The API refuses
+  to sign any of the three onto a device-flow token, and provider 0.3.0 no longer puts them in
+  device-flow ID tokens. Client credentials tokens carry none of them either.
+
+---
+
+## Breaking Changes
+
+| Change | Who it affects | What to do |
+| ------ | -------------- | ---------- |
+| Provider contract version 3 | Instances that run the OpenID Provider | Deploy auth API 0.22.0 and provider 0.3.0 together |
+| Sessions signed in to provider clients before the upgrade get no new provider tokens | Users of OpenID Provider apps | They sign in again |
+| Device-flow tokens no longer carry `amr` or `auth_time` | Device clients that read either claim | Stop relying on them |
+
+---
+
+## Upgrading
+
+1. **Upgrade the auth API** to 0.22.0. It adds no migrations and needs no new setting.
+2. **Upgrade the OpenID Provider** to 0.3.0 at the same time, if you run it.
+3. **Expect provider sign-ins to repeat once.** Users signed in to provider apps before the upgrade
+   sign in again to get new provider tokens.
+
+To go on to v0.23, follow the [v0.23 Release Notes](/reference/release-v0-23#upgrading).

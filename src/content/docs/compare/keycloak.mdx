@@ -19,7 +19,7 @@ self-hosted identity. Every Keycloak statement below links to a Keycloak-owned p
 the `keycloak/keycloak` GitHub repository), and the [Sources](#sources) list gives the date each
 page was checked. Keycloak details reflect Keycloak 26.8.1, the release listed on Keycloak's
 downloads page on 2026-10-20. Seamless Auth details were checked against the source repositories
-at Seamless Auth API v0.21.1 on 2026-11-01; the [Footprint](#footprint) figures were measured at
+at Seamless Auth API v0.23.0 on 2026-11-10; the [Footprint](#footprint) figures were measured at
 v0.19.1. Keycloak ships often, so check its release notes for anything newer.
 
 ---
@@ -37,8 +37,8 @@ v0.19.1. Keycloak ships often, so check its release notes for anything newer.
   provider library can sign in through it, and one Keycloak realm can give many applications single
   sign-on. Seamless Auth has shipped an OpenID Provider since v0.21: a separate service, off by
   default, with discovery, the authorization code flow with `S256` PKCE, client credentials, the
-  device grant for first-party apps, and hosted login and consent pages. It is new (provider 0.3.0,
-  released 2026-11-02), not OpenID certified, and has no SAML side.
+  device grant for first-party apps, and hosted login and consent pages. It is new (provider 0.4.1,
+  released 2026-11-10), not OpenID certified, and has no SAML side.
 - **You need SCIM provisioning.** Keycloak 26.8.0 promoted its SCIM API from preview to supported.
   It exposes SCIM 2.0 user and group endpoints per realm, once you turn the SCIM API on in that
   realm's settings. Seamless Auth has no SCIM endpoints.
@@ -97,7 +97,7 @@ Keycloak column as of Keycloak 26.8.1, checked 2026-10-20.
 | SAML | No | Yes, SAML 2.0 for applications and for identity brokering |
 | LDAP / Active Directory federation | No | Yes, plus Kerberos and a User Storage SPI |
 | SCIM | No | Yes, SCIM 2.0 users and groups per realm; supported since 26.8.0 (preview in 26.7.0) |
-| Organizations | Yes: memberships, scoped roles, active organization on the session | Yes, supported since 26.0: domains, members, groups, linked identity providers, invitations |
+| Organizations | Yes: memberships, scoped roles, active organization on the session; organization roles and permissions in the token (API v0.23.0 and later) | Yes, supported since 26.0: domains, members, groups, linked identity providers, invitations |
 | Multi-tenancy | One user directory and one configuration per instance | Realms, isolated from one another, each managing its own users, credentials, roles, and groups; organizations within a realm |
 | Sign-in UI | Rendered in your app by the SDK (`AuthRoutes` in React; equivalents in Angular, Vue, Svelte) or fully custom on the headless client | Server-rendered login, account, and email themes built from FreeMarker templates |
 | Theming | CSS custom properties on the built-in screens, or your own components | Custom themes that extend a built-in theme; templates, messages, and styles can be overridden |
@@ -262,13 +262,14 @@ Keycloak details, each page checked on 2026-10-20:
 - [Importing and exporting realms](https://www.keycloak.org/server/importExport) (checked 2026-10-20): `kc.sh export`, server must not be running
 - [keycloak/keycloak on GitHub](https://github.com/keycloak/keycloak) (checked 2026-10-20): Apache-2.0 license
 
-Seamless Auth details (Seamless Auth API v0.21.1, checked 2026-11-01; footprint measured at v0.19.1):
+Seamless Auth details (Seamless Auth API v0.23.0, checked 2026-11-10; footprint measured at v0.19.1):
 
 - [What Is Seamless Auth?](/start/overview), including [When Seamless Auth Is Not The Right Choice](/start/overview#when-seamless-auth-is-not-the-right-choice)
 - [System Config Reference](/reference/system-config) and [Environment Variables](/reference/environment-variables)
 - [How To Use Organizations And Memberships](/build/organizations-memberships)
 - [OAuth Login](/build/oauth-login)
 - [OpenID Provider](/build/openid-provider)
-- [v0.21 Release Notes](/reference/release-v0-21)
+- [How To Use Roles And Permissions](/build/roles-and-permissions)
+- [v0.21 Release Notes](/reference/release-v0-21) (OpenID Provider) and [v0.23 Release Notes](/reference/release-v0-23) (roles and permissions)
 - [Custom Auth UI](/build/custom-auth-ui)
 - Source: [fells-code on GitHub](https://github.com/fells-code)
