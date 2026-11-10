@@ -174,7 +174,7 @@ packages, which require Node.js 18 or later.
 | Package                           | Latest release | Declares on other Seamless packages                                                  | Other peer ranges                                                             |
 | --------------------------------- | -------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
 | `seamless-auth-api`               | 0.23.0         | `@seamless-auth/types` ^0.40.0, `@seamless-auth/messaging`, `-aws`, `-twilio` ^0.3.1 | None                                                                          |
-| `@seamless-auth/oidc-provider`    | 0.4.0          | `@seamless-auth/express` and `core` ^0.26.0, `@seamless-auth/types` ^0.40.0          | None                                                                          |
+| `@seamless-auth/oidc-provider`    | 0.4.1          | `@seamless-auth/express` and `core` ^0.26.0, `@seamless-auth/types` ^0.40.0          | None                                                                          |
 | `@seamless-auth/core`             | 0.26.0         | `@seamless-auth/types` ^0.40.0                                                       | None                                                                          |
 | `@seamless-auth/express`          | 0.26.0         | `@seamless-auth/core` ^0.26.0                                                        | `express` >=5.0.0                                                             |
 | `@seamless-auth/fastify`          | 0.17.0         | `@seamless-auth/core` ^0.26.0                                                        | `fastify` >=5.0.0                                                             |
@@ -204,8 +204,9 @@ How to read it:
   `nextjs`, the CLI and the dashboard declare ^0.40.0. `client`, `react` and `react-native` declare
   ^0.38.0, and the messaging packages ^0.34.0. An app that installs packages from more than one
   group gets more than one copy of it.
-- `@seamless-auth/oidc-provider` 0.4.0 speaks OpenID Provider contract version 3, as auth API
-  0.22.0 and 0.23.0 do. Its `permissions` and `custom_claims` scopes need auth API 0.23.0; against
+- `@seamless-auth/oidc-provider` 0.4.0 and 0.4.1 speak OpenID Provider contract version 3, as auth
+  API 0.22.0 and 0.23.0 do. Run 0.4.1 with native or desktop clients: on 0.4.0 a step-up or second
+  sign-in shares the first sign-in's grant, so revoking the replaced refresh token ends both. Its `permissions` and `custom_claims` scopes need auth API 0.23.0; against
   0.22.0 those claims are not released.
 - The adapters' permission guards (`requirePermission` and the framework equivalents) need auth API
   0.23.0. Against an older API they deny every request, since no token carries permissions.

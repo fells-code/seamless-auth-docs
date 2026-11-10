@@ -13,7 +13,7 @@ server calls out to your systems: signed webhooks, login hooks that can deny or 
 custom claims, and audit streaming to a SIEM. It also finishes v0.21's native app work and the
 fixes from its security review.
 
-It shipped as auth API 0.23.0 and OpenID Provider 0.4.0, with releases of the shared types (0.40.0),
+It shipped as auth API 0.23.0 and OpenID Provider 0.4.0 (0.4.1 is the patch to run), with releases of the shared types (0.40.0),
 server adapters (core and Express 0.26.0, Fastify 0.17.0, Next.js 0.10.0), the admin dashboard
 (0.14.0) and the CLI (0.30.0). The Go, Python and Rust adapters' permission guards shipped in 0.6.0.
 The versions that go together are in the
@@ -165,8 +165,10 @@ dashboard and the CLI. Clients need no change.
 2. **Set `CALLOUT_SECRET_ENCRYPTION_KEY`** before you create a webhook or a login hook in
    production, which requires it once one exists. It encrypts their stored signing secrets. Credentials for audit sinks
    are env vars ending `_AUDIT_SINK_SECRET`, named by the sink and never stored.
-3. **Upgrade the OpenID Provider** to 0.4.0, if you run it. It speaks the same `/oidc/*` contract as
-   API 0.22.0 and 0.23.0, but needs 0.23.0 for the new scopes.
+3. **Upgrade the OpenID Provider** to 0.4.1, if you run it. It speaks the same `/oidc/*` contract as
+   API 0.22.0 and 0.23.0, but needs 0.23.0 for the new scopes. Skip 0.4.0 if you have native or
+   desktop clients: it gives a step-up or second sign-in the first sign-in's grant, so an app that
+   revokes the refresh token it replaced signs itself out.
 4. **Upgrade the server adapters**: `@seamless-auth/express` 0.26.0, `@seamless-auth/fastify`
    0.17.0, `@seamless-auth/nextjs` 0.10.0, or the Go, Python or Rust adapter 0.6.0. With a Node adapter,
    check that the browser app has `@seamless-auth/client` 0.8.3 or later.
