@@ -388,7 +388,9 @@ it returns to and the requested scopes on every authorization.
 | `openid`         | `sub`, `acr`, `amr`, `auth_time`                       |
 | `email`          | `email`, `email_verified`                              |
 | `phone`          | `phone_number`, `phone_number_verified`                |
-| `seamless`       | `roles`, `org_id` (the user's default organization)    |
+| `seamless`       | `roles`, `org_id` (the session's active organization from provider 0.4.0; before, the user's oldest membership) |
+| `permissions`    | `roles`, `permissions`, `org_id`, `org_roles`, `org_permissions`, or `permissions_omitted` (provider 0.4.0 and API 0.23.0) |
+| `custom_claims`  | The [custom claims](/build/login-hooks-custom-claims#provider-tokens) resolved for the user and the application (provider 0.4.0 and API 0.23.0) |
 | `offline_access` | A refresh token. See [Refresh tokens](#refresh-tokens) |
 
 `sub` is the user's Seamless user ID. Every ID token carries the `acr`, `amr` and `auth_time` the
@@ -492,8 +494,9 @@ const url = oidc.buildAuthorizationUrl(config, {
 })
 ```
 
-The `acr`, `amr` and `auth_time` an app can rely on are the ones in the ID token. Access tokens for
-an API do not carry them yet (see [Verify tokens in your API](#verify-tokens-in-your-api)).
+From provider 0.3.0 (with API 0.22.0 or later), a user's access token for an API carries the same
+`acr`, `amr` and `auth_time` as the ID token, and a refreshed one carries the session's current
+values (see [Verify tokens in your API](#verify-tokens-in-your-api)).
 
 ---
 
@@ -517,6 +520,9 @@ The access token is then an RFC 9068 JWT (header `typ: at+jwt`, RS256) with:
 - `aud` equal to the resource identifier, exactly as registered.
 - `scope` cut to the scopes the application is allowed on that resource.
 - `client_id`, `sub`, `iss`, `iat`, `exp` and `jti`.
+- For a user's token, `acr`, `amr` and `auth_time` (provider 0.3.0 and later), and the claims of the
+  `permissions` and `custom_claims` scopes the grant holds (provider 0.4.0 and API
+  0.23.0). Device-flow and client credentials tokens carry no `acr`, `amr` or `auth_time`.
 - The resource's own lifetime.
 
 The API checks the same links again before it signs, so a token for one resource can never carry
@@ -764,8 +770,9 @@ An application registered for `refresh_token` gets a refresh token when it asks 
 
 Device-flow tokens never carry `acr`, after a refresh too. The passkey proves who approved the code,
 not who holds the device, so a device token cannot satisfy a `phr` or `phrh` check. A device request
-with `acr_values` or `max_age` is refused with `invalid_request`, and the API refuses to sign `acr`
-onto any token from the device grant. `amr` still lists the methods the approver used.
+with `acr_values` or `max_age` is refused with `invalid_request`. From API 0.22.0 the API refuses to
+sign `acr`, `amr` or `auth_time` onto any token from the device grant, and provider 0.3.0 no longer
+puts them there.
 
 ---
 
@@ -853,7 +860,7 @@ per application and 10 an hour per application and user.
 
 A backend that serves a public client, such as a desktop app, cannot reach that app's users this way,
 because users hold grants with the app and not with the backend. Client links solve that, and they
-need Seamless Auth API v0.23.0, which is not published yet. See
+need Seamless Auth API v0.23.0 or later. See
 [Send A Notice Through The Client Link](/build/native-apps-oidc#send-a-notice-through-the-client-link).
 
 ---
@@ -885,12 +892,11 @@ The step-up guard takes `acr_values` (any of, and `phr` is also met by `phrh`), 
 `max_age` (seconds since `auth_time`). A client credentials token verifies, and fails role and
 step-up guards.
 
-<Aside type="caution" title="Role and step-up guards need claims the access tokens do not carry yet">
+<Aside type="caution" title="Role and step-up guards need claims in the access token">
   The role guard reads `roles`, and the step-up guard reads `acr`, `amr` and `auth_time`, from the
-  access token. The provider's access tokens for an API carry `iss`, `sub`, `aud`, `client_id`,
-  `scope`, `jti`, `iat` and `exp` only, so today those two guards refuse every provider token. Use
-  scope checks for provider tokens, and read the user's `acr` and roles from the ID token in the app
-  that signed the user in.
+  access token. A user's access token carries `acr`, `amr` and `auth_time` from provider 0.3.0, and
+  `roles` from provider 0.4.0 with API 0.23.0 when the grant holds the `permissions` scope. Against older versions, or without that scope, those guards refuse the token. Device-flow
+  and client credentials tokens never pass the step-up guard.
 </Aside>
 
 **Express, Fastify and Next.js** (`@seamless-auth/express`, `@seamless-auth/fastify`,

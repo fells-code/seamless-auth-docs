@@ -17,7 +17,7 @@ languages.
 This page is for an engineer choosing between the two. Better Auth details were checked against its
 official docs, pricing page, and GitHub repository as of October 2026, and each one links to its
 source at the bottom. Seamless Auth details were checked against the source repositories at
-Seamless Auth API v0.21.1 on 2026-11-01.
+Seamless Auth API v0.23.0 on 2026-11-10.
 
 ---
 
@@ -33,8 +33,8 @@ Seamless Auth API v0.21.1 on 2026-11-01.
   Auth has neither.
 - **You want your app itself to be an OAuth or OIDC provider for other apps.** Better Auth has an
   `oauth-provider` plugin that runs inside your server. Seamless Auth has shipped an OpenID Provider
-  since v0.21, but as a separate service that is off by default, and it is new (provider 0.3.0,
-  released 2026-11-02) and not OpenID certified.
+  since v0.21, but as a separate service that is off by default, and it is new (provider 0.4.1,
+  released 2026-11-10) and not OpenID certified.
 - **You want a large ecosystem and a 1.x release line.** Better Auth is on its 1.7 release line, has
   about 30,000 GitHub stars, and lists dozens of first-party and community plugins (payments,
   API keys, multi-session, anonymous users, Sign-In With Ethereum, and more). Seamless Auth is 0.x
@@ -86,7 +86,7 @@ Better Auth column as of October 2026.
 | SAML enterprise SSO | No | Yes, `@better-auth/sso` plugin |
 | SCIM directory sync | No | Yes, `@better-auth/scim` plugin |
 | Acts as an OAuth/OIDC provider | Yes, since v0.21, as a separate OpenID Provider service (off by default); not OpenID certified | Yes, `oauth-provider` plugin |
-| Organizations | Yes: memberships with per-organization roles and scopes, and an active organization on the session | Yes, `organization` plugin: roles, invitations, teams, custom access control |
+| Organizations | Yes: memberships with per-organization roles and scopes, and an active organization on the session; organization roles and permissions in the token (API v0.23.0 and later) | Yes, `organization` plugin: roles, invitations, teams, custom access control |
 | Prebuilt UI | Built-in auth routes (`AuthRoutes` in React; equivalents in Angular, Vue, Svelte), or headless | No official components in the core docs; community projects such as Better Auth UI exist |
 | Admin dashboard | Yes, open source app you run | `admin` plugin APIs; dashboard via Better Auth Infrastructure (paid service, free Starter tier) |
 | Third-party compliance attestations | None for Seamless Auth itself | Not applicable to the library; it runs inside your own boundary |
@@ -169,13 +169,13 @@ Better Auth details checked October 2026:
 - [Better Auth pricing](https://better-auth.com/pricing)
 - [Better Auth UI](https://better-auth-ui.com/): community UI components
 
-Seamless Auth details (Seamless Auth API v0.21.1, checked 2026-11-01):
+Seamless Auth details (Seamless Auth API v0.23.0, checked 2026-11-10):
 
 - [What Is Seamless Auth?](/start/overview), including [When Seamless Auth Is Not The Right Choice](/start/overview#when-seamless-auth-is-not-the-right-choice)
 - [What You Give Up Or Must Plan For](/operate/migrate-from-auth0#what-you-give-up-or-must-plan-for)
 - [Server SDKs](/build/server-sdks) and [Next.js](/build/nextjs)
 - [Environment Variables](/reference/environment-variables) (`LOGIN_METHODS`, SMS providers)
-- [How To Use Organizations And Memberships](/build/organizations-memberships)
+- [How To Use Organizations And Memberships](/build/organizations-memberships) and [How To Use Roles And Permissions](/build/roles-and-permissions)
 - [OpenID Provider](/build/openid-provider)
-- [v0.21 Release Notes](/reference/release-v0-21)
+- [v0.21 Release Notes](/reference/release-v0-21) (OpenID Provider) and [v0.23 Release Notes](/reference/release-v0-23) (roles and permissions)
 - Source: [fells-code on GitHub](https://github.com/fells-code)
