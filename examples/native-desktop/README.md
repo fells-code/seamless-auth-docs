@@ -21,7 +21,7 @@ Nothing in it is specific to one product. "Desk Notes" is a stand-in.
 
 - Node 22.12 or newer, and Docker with Compose for the local instance.
 - The [local recipe](https://github.com/fells-code/seamless-auth-oidc-provider/pull/60) of
-  `seamless-auth-oidc-provider`, at commit `16fe6e5`.
+  `seamless-auth-oidc-provider`, at commit `f1d1b05`.
 - Seamless Auth API v0.23.0 or later for the notice, since earlier versions have no client link
   routes. Sign-in, refresh, revocation and step-up do not depend on links.
 - Edge image `v0.3.0` or later (the first with `acr`, `amr` and `auth_time` on access tokens), and

@@ -21,7 +21,7 @@ concurrency:
 
 env:
   # The recipe runs the published API v0.23.0 and edge v0.4.1 images.
-  RECIPE_REF: 16fe6e5203a979e7e8fe3f41b277af76eab115bb
+  RECIPE_REF: f1d1b05cf916e36b951ff47ae68ab596a3d7687f
 
 jobs:
   example:

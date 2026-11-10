@@ -41,7 +41,7 @@ check. Nothing in it is specific to one product. "Notes" is a stand-in.
 
 - Node 22.12 or newer, and Docker with Compose for the local instance.
 - The [local recipe](https://github.com/fells-code/seamless-auth-oidc-provider/tree/main/local) of
-  `seamless-auth-oidc-provider`, at commit `16fe6e5`.
+  `seamless-auth-oidc-provider`, at commit `f1d1b05`.
 - The recipe runs the published Seamless Auth API v0.23.0 and edge v0.4.1 images.
 
 ## Run it
