@@ -20,8 +20,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # The recipe runs the published API v0.23.0 and edge v0.4.0 images.
-  RECIPE_REF: c0fd8da32b672da01b81b714d967ee1ddd1deae3
+  # The recipe runs the published API v0.23.0 and edge v0.4.1 images.
+  RECIPE_REF: 16fe6e5203a979e7e8fe3f41b277af76eab115bb
 
 jobs:
   example:
