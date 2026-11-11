@@ -111,7 +111,7 @@ Authentication with Identity Platform, the paid upgrade.
 | Prebuilt UI | Built-in auth routes (`AuthRoutes` in React; equivalents in Angular, Vue, Svelte), or headless | FirebaseUI, open source drop-in UI, or the SDK with your own UI |
 | User import | `seamless migrate csv`, `seamless migrate entra-id`, `POST /admin/users/import`; identities only, no credentials | `firebase auth:import`, including password hashes in many algorithms |
 | User export | No bulk export endpoint; self-hosted, the data is in your own Postgres. Paginated admin user list and a passkey coverage report (CSV) | `firebase auth:export` to JSON or CSV, including scrypt password hashes and salts; hash parameters in the console |
-| Audit trail | Append-only, hash-chained auth events; NDJSON export with an integrity check; streaming to a SIEM over OTLP (API v0.23.0 and later, syslog in 0.23.1) | Admin activity and user activity audit logs in Cloud Logging, with Identity Platform |
+| Audit trail | Append-only, hash-chained auth events; NDJSON export with an integrity check; streaming to a SIEM over OTLP (API v0.23.0 and later, syslog from v0.23.1) | Admin activity and user activity audit logs in Cloud Logging, with Identity Platform |
 | Third-party compliance attestations | None for Seamless Auth itself | ISO 27001/27017/27018 and SOC 1/2/3; BAA, PCI DSS, and TISAX with Identity Platform |
 | SLA | None | 99.95% uptime with Identity Platform |
 | Maturity | 0.x, small community | Established Google product |

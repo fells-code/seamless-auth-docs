@@ -1,6 +1,6 @@
 ---
 title: "How To Stream Audit Events To A SIEM"
-description: "Stream the Seamless Auth audit log over OTLP (syslog arrives in v0.23.1), route it through an OpenTelemetry Collector to Splunk, Elastic or Datadog, look up every event field, and verify the hash chain from the events your SIEM holds."
+description: "Stream the Seamless Auth audit log over OTLP or syslog, route it through an OpenTelemetry Collector to Splunk, Elastic or Datadog, look up every event field, and verify the hash chain from the events your SIEM holds."
 sidebar:
   order: 4.65
 ---
@@ -21,11 +21,9 @@ Audit sinks and every route on this page need `seamless-auth-api` v0.23.0 or lat
 later.
 </Aside>
 
-<Aside type="note" title="Syslog sinks arrive in v0.23.1">
-v0.23.0 streams over OTLP only. It refuses to create or update a syslog sink with a 400 until
-v0.23.1, whose syslog records carry Fells Code's registered structured data ID. The syslog
-sections below describe v0.23.1. Until then, send to an OpenTelemetry Collector, which can forward
-to syslog itself.
+<Aside type="note" title="Syslog sinks need v0.23.1">
+v0.23.0 streams over OTLP only and refuses to create or update a syslog sink with a 400. Syslog
+sinks need v0.23.1 or later.
 </Aside>
 
 ---
@@ -292,14 +290,14 @@ collector closes the connection when the sender ends it (see [Syslog Settings](#
 Each message looks like this, where `MSG` is the export line:
 
 ```
-<86>1 2026-11-08T02:12:32.000Z api-host seamless-auth - audit [seamless@<enterprise number> seq="1" hash="5340e7c4..."] {"seq":1,...}
+<86>1 2026-11-08T02:12:32.000Z api-host seamless-auth - audit [seamless@67592 seq="1" hash="5340e7c4..."] {"seq":1,...}
 ```
 
 <Aside type="note" title="The syslog SD-ID">
 RFC 5424 requires a private structured data ID to end in an IANA Private Enterprise Number. Fells
-Code's number is being assigned, so the SD-ID is shown here as `seamless@<enterprise number>`.
-v0.23.1 ships with the final value and its release notes give it. Keying parse rules on `MSGID`
-`audit` or on the JSON in `MSG` works either way.
+Code's number is 67592, so `seq` and `hash` are in the element `seamless@67592`. It does not
+change between releases, so you can key parse rules on it, on `MSGID` `audit`, or on the JSON in
+`MSG`.
 </Aside>
 
 ---
@@ -362,7 +360,7 @@ One `ExportLogsServiceRequest` per batch, with resource attribute `service.name`
 | APP-NAME   | `appName` |
 | PROCID     | `-` |
 | MSGID      | `audit`, or `test` for a test record |
-| SD         | `[seamless@<enterprise number> seq="..." hash="..."]`, or `test="true"` |
+| SD         | `[seamless@67592 seq="..." hash="..."]`, or `test="true"` |
 | MSG        | The export line, UTF-8, with no byte order mark |
 
 ---
@@ -502,7 +500,7 @@ Saved as `export.ndjson`, it prints
 | Component                         | First version                 | Status |
 | --------------------------------- | ----------------------------- | ------ |
 | `seamless-auth-api` (audit sinks) | v0.23.0                       | Released |
-| `seamless-auth-api` (syslog sinks) | v0.23.1                     | Not released. Waits on the IANA enterprise number (seamless-auth-api#586) |
+| `seamless-auth-api` (syslog sinks) | v0.23.1                     | Released |
 | `seamless-auth-api` (export, integrity check, hash chain) | v0.19.1 | Released |
 | `@seamless-auth/types`            | 0.39.0                        | Published |
 | `seamless-auth-admin-dashboard`   | v0.14.0 (Audit streaming page) | Released |

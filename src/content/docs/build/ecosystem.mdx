@@ -214,7 +214,7 @@ How to read it:
   does not install them.
 - The auth API exposes an HTTP contract, not a package range. No package declares a range on
   `seamless-auth-api`, so pair the API and the server SDK from the same release window.
-- Auth API 0.23.0 streams audit events over OTLP only. Syslog sinks arrive in 0.23.1
+- Auth API 0.23.0 streams audit events over OTLP only. Syslog sinks need 0.23.1 or later
   ([How To Stream Audit Events To A SIEM](/operate/stream-audit-events-siem)).
 
 ### Python, Go, And Rust Adapters

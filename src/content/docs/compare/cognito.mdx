@@ -108,7 +108,7 @@ pool feature plans.
 | AWS integration | None; your backend verifies sessions with a server adapter | Identity pools for AWS credentials, API Gateway authorizers, Amplify |
 | User import | `seamless migrate cognito` (reads `list-users` output), `csv`, `entra-id`, `POST /admin/users/import`; identities only, no credentials | CSV import jobs (up to 500,000 users per file), optionally with password hashes; user migration Lambda trigger |
 | User export | No bulk export endpoint; self-hosted, the data is in your own Postgres. Paginated admin user list and a passkey coverage report (CSV) | No bulk export job; `ListUsers`, 60 users per call, with no password field |
-| Audit trail | Append-only, hash-chained auth events; NDJSON export with an integrity check; streaming to a SIEM over OTLP (API v0.23.0 and later, syslog in 0.23.1) | User activity and risk logs with export on Plus |
+| Audit trail | Append-only, hash-chained auth events; NDJSON export with an integrity check; streaming to a SIEM over OTLP (API v0.23.0 and later, syslog from v0.23.1) | User activity and risk logs with export on Plus |
 | Third-party compliance attestations | None for Seamless Auth itself | In scope for AWS programs including SOC, PCI, FedRAMP, and HIPAA |
 | Maturity | 0.x, small community | Established AWS service |
 | Pricing model | Free to self-host; managed plans in the portal | Per MAU by plan, federated MAUs priced separately, M2M billed per token request, add-ons for multi-Region replication and higher quotas |
