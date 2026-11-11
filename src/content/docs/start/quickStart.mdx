@@ -97,9 +97,12 @@ npx seamless-cli --help
 
 This will show:
 
-- Every command (`init`, `templates`, `check`, `verify`, and the instance commands such as
-  `users` and `config`)
+- Every command (`init`, `templates`, `check`, and the instance commands such as `users` and
+  `config`)
 - Usage patterns
+
+`check` is the command for validating a project `init` generated. `verify` is a conformance suite
+for Seamless contributors and needs a clone of the auth server's source.
 
 Every command also documents itself, for example `npx seamless-cli init --help`.
 
@@ -207,10 +210,33 @@ You should see the starter UI with:
 
 ---
 
+## Troubleshooting
+
+If `http://localhost:5173` shows a different app, another dev server (often Vite, whose default port
+is also 5173) holds the port on `[::1]`, and your browser reaches it before the stack. Stop that
+server, or find it with:
+
+```bash
+lsof -nP -iTCP:5173 -sTCP:LISTEN
+```
+
+`npx seamless-cli check`, run in the project, reports a port another program holds.
+
+If the API container exits with an error such as
+`does not provide an export named 'requirePermission'`, Docker reused images built for an older
+project in a folder with the same name. Rebuild them:
+
+```bash
+docker compose up --build
+```
+
+---
+
 ## Step 6: Register As The First Admin
 
 There is no separate admin command. `init` wrote the email you gave it to the auth server as
-`OWNER_EMAIL`, and the auth server grants the admin role to the account created with that address.
+`OWNER_EMAIL`, and the auth server grants `admin:write` to the account created with that address.
+The starter lists it among your roles as `admin:write`, not `admin`.
 
 1. In the web app at `http://localhost:5173`, register with the email you gave `init`.
 2. When asked for a code, get it from the project directory. The local stack sends no email:
@@ -222,6 +248,12 @@ There is no separate admin command. `init` wrote the email you gave it to the au
    It prints a code for the owner address `init` recorded.
 
 3. Enter the code, and enroll a passkey when prompted.
+
+<Aside type="note">
+  Changes in the admin console, such as creating a permission, require a passkey or authenticator
+  app. If you choose **Skip for now** here, you can still sign in and open the console, but every
+  change is refused until you enroll one from your profile.
+</Aside>
 
 You are now signed in as an admin. Open the admin console at `http://localhost:3000/console` (or
 `http://localhost:5174` if you chose a separate dashboard container).
@@ -242,7 +274,7 @@ You now have a local stack with:
 - Connected frontend and backend services
 - Passwordless authentication enabled
 - An admin account for the email you gave `init`
-- A CLI that can also check the generated stack
+- A CLI that can also check the generated stack (`npx seamless-cli check`)
 
 <Card title="What You Just Built">
   - Web app - API - Auth server - Optional admin dashboard - Local Docker-based infrastructure
