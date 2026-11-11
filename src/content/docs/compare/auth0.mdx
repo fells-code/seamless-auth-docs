@@ -107,7 +107,7 @@ page.
 | Prebuilt UI | Built-in auth routes (`AuthRoutes` in React; equivalents in Angular, Vue, Svelte), or headless | Universal Login on Auth0's authorization server, Classic Login, and embedded login |
 | User import | `seamless migrate csv`, `seamless migrate entra-id`, `POST /admin/users/import`; identities only, no credentials | Bulk import into a database connection, including supported password hashes; 500KB per file |
 | User export | No bulk export endpoint; self-hosted, the data is in your own Postgres. Paginated admin user list and a passkey coverage report (CSV) | Bulk export job (JSON or CSV), not on Free; password hashes and MFA secrets by support case |
-| Audit trail | Append-only, hash-chained auth events; NDJSON export with an integrity check; streaming to a SIEM over OTLP (API v0.23.0 and later, syslog in 0.23.1) | Tenant logs, retention by plan; log streams to many services or a webhook |
+| Audit trail | Append-only, hash-chained auth events; NDJSON export with an integrity check; streaming to a SIEM over OTLP (API v0.23.0 and later, syslog from v0.23.1) | Tenant logs, retention by plan; log streams to many services or a webhook |
 | Third-party compliance attestations | None for Seamless Auth itself | SOC 2 Type 2, ISO 27001/27017/27018, HIPAA BAA, PCI DSS, CSA STAR, FAPI certified |
 | Maturity | 0.x, small community | Established commercial product, large community |
 | Pricing model | Free to self-host; managed plans in the portal | Free plan up to 25,000 MAU; paid plans priced by MAU tier, separate B2C and B2B prices, add-ons for enterprise connections, MFA, and M2M tokens |
