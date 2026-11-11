@@ -2,29 +2,19 @@
 import Default from '@astrojs/starlight/components/Footer.astro'
 
 // Fells Code family endorsement, appended below Starlight's default footer.
-// Mirrors the canonical brand/products.json registry in the fellscode repo;
-// each product owns one accent from the logo palette.
+// Mirrors the canonical brand/products.json registry in the fellscode repo,
+// leaving out the docs (this site) and Seamless Glance, which is frozen.
 const family = [
-  { name: 'Seamless Auth', url: 'https://seamlessauth.com', accent: '#2f88c8' },
+  { name: 'Seamless Auth', url: 'https://seamlessauth.com', accent: '#edb43a' },
   {
-    name: 'Seamless Secrets',
-    url: 'https://fellscode.com/products/seamlessSecrets',
-    accent: '#2fa585',
-  },
-  {
-    name: 'Review Board',
-    url: 'https://fellscode.com/products/seamlessReviewBoard',
-    accent: '#e35a4d',
+    name: 'Seamless Admin Dashboard',
+    url: 'https://fellscode.com/products/seamlessAdminDashboard',
+    accent: '#edb43a',
   },
   {
     name: 'Seamless CLI',
-    url: 'https://fellscode.com/products/createSeamless',
-    accent: '#ffaa1a',
-  },
-  {
-    name: 'Seamless Glance',
-    url: 'https://fellscode.com/products/seamlessGlance',
-    accent: '#2bb6a6',
+    url: 'https://fellscode.com/products/seamlessCli',
+    accent: '#edb43a',
   },
 ]
 ---
